@@ -280,3 +280,55 @@
     overflow-x: auto;
   }
 }
+
+.cms-section-description {
+  margin: 0;
+  color: var(--muted);
+}
+
+.cms-settings > .cms-section:first-of-type {
+  margin-top: 1.5rem;
+}
+
+.cms-settings .cms-section h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.cms-notice-warning {
+  border-color: var(--warning);
+}
+
+.cms-admin-main > .cms-notice {
+  margin: 0 0 1rem;
+}
+
+.cms-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.cms-widget,
+.cms-panel {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.cms-widget h2,
+.cms-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.cms-widget p,
+.cms-panel p {
+  margin: 0;
+}
+
+.cms-panel {
+  margin: 1.5rem 0;
+}

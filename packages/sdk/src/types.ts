@@ -3,16 +3,21 @@ import type { ReactNode } from 'react'
 import type {
   ActionName,
   Actions,
+  CapabilityArgs,
   CapabilityName,
   FilterContext,
   FilterName,
   FilterValue,
+  MetaCapabilities,
+  MetaCapabilityName,
   Registries,
   RegistryName,
   ServiceName,
   Services,
   SettingName,
   Settings,
+  SlotName,
+  Slots,
 } from './index'
 
 /** Works with any Drizzle Postgres driver (node-postgres in production, PGlite in dev and tests). */
@@ -156,15 +161,69 @@ export interface CapabilityDefinition {
   roles?: readonly string[]
 }
 
+/**
+ * The primitive capabilities a check requires: the user needs every one. `false` denies everyone,
+ * administrators included, like WordPress's `do_not_allow`.
+ */
+export type RequiredCapabilities = readonly [CapabilityName, ...CapabilityName[]] | false
+
+export interface MetaCapabilityDefinition<K extends MetaCapabilityName> {
+  label: string
+  /**
+   * Like `map_meta_cap`. Receives the loaded object, not an id, so checks stay synchronous and a
+   * list screen can check every row without a query each.
+   */
+  map: (user: User, ...args: MetaCapabilities[K]) => RequiredCapabilities
+}
+
+/** Adjusts another plugin's meta capability, like the `map_meta_cap` filter. */
+export type CapabilityExtension<K extends MetaCapabilityName> = (
+  required: RequiredCapabilities,
+  user: User,
+  ...args: MetaCapabilities[K]
+) => RequiredCapabilities
+
 export interface AuthApi {
   /** Adds a role, like WordPress's `add_role()`. */
   role(id: string, definition: RoleDefinition): void
   /** Declares one of this plugin's capabilities. Names start with the plugin's id. */
   capability(name: CapabilityName, definition: CapabilityDefinition): void
-  can(user: User | null, capability: CapabilityName): boolean
+  /**
+   * Gives any role (including other plugins' roles) these capabilities, like `add_cap()`. Applied
+   * once every plugin has set up; a grant to a role no active plugin defines is dropped.
+   */
+  grant(role: string, capabilities: readonly CapabilityName[]): void
+  /** Takes capabilities away from a role, like `remove_cap()`. Applied after every grant. */
+  revoke(role: string, capabilities: readonly CapabilityName[]): void
+  /** Declares one of this plugin's meta capabilities. Names start with the plugin's id. */
+  metaCapability<K extends MetaCapabilityName>(
+    name: K,
+    definition: MetaCapabilityDefinition<K>,
+  ): void
+  /** Runs after the owner's `map` (and earlier extensions), in load order. */
+  extendCapability<K extends MetaCapabilityName>(name: K, extension: CapabilityExtension<K>): void
+  can<C extends CapabilityName | MetaCapabilityName>(
+    user: User | null,
+    capability: C,
+    ...args: CapabilityArgs<C>
+  ): boolean
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────
+
+/** A core menu section, or a plugin id to join that plugin's section (`add_submenu_page`). */
+export type AdminMenuParent = 'dashboard' | 'plugins' | 'users' | 'settings' | (string & {})
+
+export interface AdminMenuPlacement {
+  label: string
+  /** Lower comes first. Defaults to 10. */
+  order?: number
+  /**
+   * Defaults to this plugin's own section. A plugin id that isn't active falls back to it too,
+   * so pages placed under an optional dependency still show.
+   */
+  parent?: AdminMenuParent
+}
 
 export interface AdminPageContext {
   params: Record<string, string>
@@ -188,7 +247,7 @@ export interface AdminPage<TData = undefined> {
   title: string | ((props: AdminPageProps<TData>) => string)
   capability: CapabilityName
   /** Adds the page to the admin menu. Leave it out for pages reached from others (edit forms). */
-  menu?: { label: string; order?: number }
+  menu?: AdminMenuPlacement
   /** Return `null` to render a 404. */
   load?: (context: AdminPageContext) => TData | null | Promise<TData | null>
   component: (props: AdminPageProps<TData>) => ReactNode | Promise<ReactNode>
@@ -218,9 +277,54 @@ export interface AdminAction {
   ) => AdminActionResult | void | Promise<AdminActionResult | void>
 }
 
+/** A settings screen, like `add_options_page()` or a WooCommerce settings tab. */
+export interface SettingsPage {
+  /** Unique among this plugin's admin pages. Addressed globally as `${pluginId}.${name}`. */
+  name: string
+  /** Mounted under `/admin/{pluginId}`, like other admin pages. */
+  path: string
+  title: string
+  description?: string
+  /** Who may open and save it. Defaults to `core.manage_settings`. */
+  capability?: CapabilityName
+  /** Listed under Settings with `title` as its label unless this says otherwise. */
+  menu?: Partial<AdminMenuPlacement>
+}
+
+/** A group of fields on any settings page, including other plugins' (`add_settings_section`). */
+export interface SettingsSection {
+  /** Unique within the plugin. Addressed globally as `${pluginId}.${name}`. */
+  name: string
+  /**
+   * Qualified page name, such as `core.general` or `commerce.payments`. If that plugin isn't
+   * active, the section moves to this plugin's own settings page.
+   */
+  page: string
+  title: string
+  description?: string
+  /** Lower comes first. Defaults to 10. */
+  order?: number
+  /** This plugin's own settings, in display order. */
+  fields: readonly SettingName[]
+}
+
+/** Adds this plugin's settings to another plugin's section (`add_settings_field`). */
+export interface SettingsFields {
+  /** Qualified section name, such as `core.site`. */
+  section: string
+  fields: readonly SettingName[]
+}
+
 export interface AdminApi {
   page<TData = undefined>(page: AdminPage<TData>): void
   action(action: AdminAction): void
+  /**
+   * Settings stay declared on the plugin definition; these say where they show. Fields this
+   * plugin doesn't place get a section on its first settings page, or on one made for it.
+   */
+  settingsPage(page: SettingsPage): void
+  settingsSection(section: SettingsSection): void
+  settingsFields(fields: SettingsFields): void
   /** URL of any plugin's admin page by qualified name, e.g. `commerce.products`. */
   url(name: string, params?: Record<string, string>): string
   /** Form `action` URL for one of this plugin's admin actions. */
@@ -280,10 +384,17 @@ export interface RoutesApi {
   apiUrl(path: string): string
 }
 
-export type SlotComponent = () => ReactNode | Promise<ReactNode>
+export type SlotComponent<K extends SlotName = SlotName> = (
+  props: Slots[K],
+) => ReactNode | Promise<ReactNode>
 
 export interface SlotsApi {
-  fill(name: string, fill: { component: SlotComponent; priority?: number }): void
+  fill<K extends SlotName>(name: K, fill: { component: SlotComponent<K>; priority?: number }): void
+  /**
+   * The fills for a slot, in priority order, for plugins that offer a slot on their own screens.
+   * Call it while rendering: fills from plugins loaded later aren't registered during setup.
+   */
+  get<K extends SlotName>(name: K): SlotComponent<K>[]
 }
 
 // ── Plugins ──────────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
-import type { PluginDefinition } from './types'
+import type { PluginDefinition, User } from './types'
 
 export type * from './types'
 export { ActionError } from './action-error'
+export { ForbiddenError } from './forbidden-error'
 export { HttpError } from './http-error'
 
 /** Identity helper for type inference. The kernel validates the definition when it loads. */
@@ -19,6 +20,8 @@ export function definePlugin(definition: PluginDefinition): PluginDefinition {
  *     interface Services { commerce: CommerceService }
  *     interface Settings { 'commerce.currency': string }
  *     interface Capabilities { 'commerce.manage_orders': true }
+ *     interface MetaCapabilities { 'commerce.cancel_order': [order: Order] }
+ *     interface Slots { 'commerce.admin.order': { order: Order; user: User } }
  *   }
  *
  * Names are namespaced with the owning plugin's id to avoid collisions.
@@ -51,12 +54,34 @@ export interface Capabilities {
   'core.manage_users': true
 }
 
+/**
+ * Meta capability name -> the arguments it is checked against. Like WordPress's `edit_post`,
+ * it maps an object to the primitive capabilities it requires: `can(user, 'commerce.cancel_order', order)`.
+ */
+export interface MetaCapabilities {}
+
+/** Slot name -> the props each fill receives. */
+export interface Slots {
+  'header.nav': Record<string, never>
+  /** Top of every admin screen. */
+  'admin.notices': { user: User }
+  /** Widgets on the admin dashboard. */
+  'admin.dashboard': { user: User }
+}
+
 export type RegistryName = keyof Registries & string
 export type FilterName = keyof Filters & string
 export type ActionName = keyof Actions & string
 export type ServiceName = keyof Services & string
 export type SettingName = keyof Settings & string
 export type CapabilityName = keyof Capabilities & string
+export type MetaCapabilityName = keyof MetaCapabilities & string
+export type SlotName = keyof Slots & string
+
+/** Arguments a capability check takes: none for primitive capabilities. */
+export type CapabilityArgs<C extends string> = C extends MetaCapabilityName
+  ? MetaCapabilities[C]
+  : []
 
 export type FilterValue<K extends FilterName> = Filters[K] extends [infer V, unknown] ? V : never
 export type FilterContext<K extends FilterName> = Filters[K] extends [unknown, infer C] ? C : never

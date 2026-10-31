@@ -1,5 +1,7 @@
-import { definePlugin } from '@cms/sdk'
+import { definePlugin, type User } from '@cms/sdk'
 import { TEST_ORIGIN, type TestKernel } from '@cms/testing'
+import type { ReactElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ordersQuery } from '../src/admin'
 import { bootShop, capturingGateway, coursesPlugin, line } from './fixtures'
@@ -12,6 +14,32 @@ function redirectOf(harness: TestKernel, response: Response) {
   url.searchParams.delete('flash')
   return { status: response.status, path: url.pathname + url.search, flash }
 }
+
+/** Renders an admin screen's component the way the app does, for assertions on the markup. */
+async function renderAdmin(harness: TestKernel, path: string, user: User) {
+  const page = await harness.kernel.resolveAdminPage(path, {}, user)
+  if (page.kind !== 'page') throw new Error(`Expected a page, got ${page.kind}`)
+  return renderToStaticMarkup((await page.Component(page.props)) as ReactElement)
+}
+
+/** A gateway for payments confirmed by hand, which extends commerce's rule for that. */
+const bankTransfer = definePlugin({
+  id: 'bank-transfer',
+  version: '1.0.0',
+  requires: { commerce: '^0.1.0' },
+  setup(cms) {
+    cms.registries.get('commerce.gateways').add({
+      id: 'bank',
+      label: 'Bank transfer',
+      createPayment: async () => ({ type: 'none' }),
+    })
+    cms.auth.extendCapability('commerce.mark_order_paid', (required, _user, order) =>
+      order.gateway === 'bank' && order.status === 'pending'
+        ? ['commerce.manage_orders']
+        : required,
+    )
+  },
+})
 
 async function placeOrder(shop: Awaited<ReturnType<typeof bootShop>>, gateway = 'manual') {
   const { order } = await shop.commerce.checkout(
@@ -120,11 +148,24 @@ describe('commerce admin screens', () => {
     const manager = await shop.signIn('shop_manager')
     expect(shop.kernel.adminMenu(manager.user)).toEqual([
       {
-        pluginId: 'commerce',
+        id: 'dashboard',
+        label: 'Dashboard',
+        items: [{ key: 'core.dashboard', label: 'Home', url: '/admin' }],
+      },
+      {
+        id: 'commerce',
         label: 'Commerce',
         items: [
           { key: 'commerce.products', label: 'Products', url: '/admin/commerce/products' },
           { key: 'commerce.orders', label: 'Orders', url: '/admin/commerce/orders' },
+        ],
+      },
+      {
+        id: 'settings',
+        label: 'Settings',
+        items: [
+          { key: 'commerce.settings', label: 'Shop', url: '/admin/commerce/settings' },
+          { key: 'commerce.payments', label: 'Payments', url: '/admin/commerce/settings/payments' },
         ],
       },
     ])
@@ -158,6 +199,109 @@ describe('commerce admin screens', () => {
     for (const path of ['/admin/commerce/products/not-a-uuid', '/admin/commerce/orders/x']) {
       expect(await shop.kernel.resolveAdminPage(path, {}, user)).toEqual({ kind: 'not-found' })
     }
+  })
+})
+
+describe('commerce admin extension points', () => {
+  it('lets shop managers change shop settings but not the site’s', async () => {
+    const shop = await bootShop()
+    const { user, cookie } = await shop.signIn('shop_manager')
+    const sections = (key: string) => {
+      const page = shop.kernel.settingsPage(key, user)
+      return page.kind === 'settings'
+        ? page.view.sections.map((section) => [section.title, section.fields.map((f) => f.key)])
+        : page.kind
+    }
+    expect(sections('commerce.settings')).toEqual([['Store', ['commerce.currency']]])
+    expect(sections('commerce.payments')).toEqual([['Pay later', ['commerce.manualGateway']]])
+    expect(sections('core.general')).toBe('forbidden')
+
+    const response = await shop.request('POST', '/api/p/core/actions/save-settings', {
+      cookie,
+      form: { page: 'commerce.settings', 'commerce.currency': 'EUR' },
+    })
+    expect(redirectOf(shop, response).flash).toEqual({ kind: 'notice', message: 'Settings saved.' })
+    const next = await shop.reboot()
+    expect(next.service('commerce').currency).toBe('EUR')
+  })
+
+  it('offers only the order actions this user may take on this order', async () => {
+    const gateway = capturingGateway()
+    const shop = await bootShop([gateway.plugin])
+    const { user } = await shop.signIn('shop_manager')
+    const manual = await placeOrder(shop)
+    const card = await placeOrder(shop, 'test')
+
+    const manualHtml = await renderAdmin(shop, `/admin/commerce/orders/${manual.id}`, user)
+    expect(manualHtml).toContain('Mark as paid')
+    expect(manualHtml).toContain('Cancel order')
+    const cardHtml = await renderAdmin(shop, `/admin/commerce/orders/${card.id}`, user)
+    expect(cardHtml).not.toContain('Mark as paid')
+    expect(cardHtml).toContain('Cancel order')
+
+    await shop.commerce.cancelOrder(manual.id)
+    const cancelledHtml = await renderAdmin(shop, `/admin/commerce/orders/${manual.id}`, user)
+    expect(cancelledHtml).not.toContain('Mark as paid')
+    expect(cancelledHtml).not.toContain('Cancel order')
+  })
+
+  it('lets a gateway plugin allow confirming its own orders by hand', async () => {
+    const shop = await bootShop([bankTransfer])
+    const { cookie, user } = await shop.signIn('shop_manager')
+    const order = await placeOrder(shop, 'bank')
+    expect(await renderAdmin(shop, `/admin/commerce/orders/${order.id}`, user)).toContain(
+      'Mark as paid',
+    )
+
+    const response = await shop.request('POST', action('mark-order-paid'), {
+      cookie,
+      form: { order: order.id },
+    })
+    expect(redirectOf(shop, response).flash).toEqual({
+      kind: 'notice',
+      message: `Order #${order.number} marked as paid.`,
+    })
+    expect(await shop.commerce.getOrder(order.id)).toMatchObject({
+      status: 'paid',
+      gateway: 'bank',
+      paymentRef: `manual:${user.id}`,
+    })
+  })
+
+  it('shows panels other plugins add to the order screen', async () => {
+    const notes = definePlugin({
+      id: 'order-notes',
+      version: '1.0.0',
+      requires: { commerce: '^0.1.0' },
+      setup(cms) {
+        cms.slots.fill('commerce.admin.order', {
+          component: ({ order, user }) => (
+            <aside>
+              Note for #{order.number}, seen by {user.email}
+            </aside>
+          ),
+        })
+      },
+    })
+    const shop = await bootShop([notes])
+    const { user } = await shop.signIn('shop_manager')
+    const order = await placeOrder(shop)
+    expect(await renderAdmin(shop, `/admin/commerce/orders/${order.id}`, user)).toContain(
+      `<aside>Note for #${order.number}, seen by ${user.email}</aside>`,
+    )
+  })
+
+  it('puts an orders widget on the dashboard for users who manage orders', async () => {
+    const shop = await bootShop()
+    await placeOrder(shop)
+    await placeOrder(shop)
+    const [widget] = shop.kernel.slot('admin.dashboard')
+    const manager = await shop.signIn('shop_manager')
+    const html = renderToStaticMarkup((await widget!({ user: manager.user })) as ReactElement)
+    expect(html).toContain('href="/admin/commerce/orders?status=pending">2 awaiting payment</a>')
+
+    const customer = await shop.signIn('customer')
+    expect(await widget!({ user: customer.user })).toBeNull()
   })
 })
 

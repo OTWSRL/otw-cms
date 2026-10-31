@@ -1,6 +1,7 @@
 import type { SearchParams } from '@cms/sdk'
 import type { Metadata } from 'next'
 import { AdminScreen, adminTitle } from '@/components/admin'
+import { Slot } from '@/components/slot'
 import { getKernel } from '@/cms/kernel'
 import { requireAdmin } from '@/cms/session'
 import Link from 'next/link'
@@ -21,6 +22,9 @@ export default async function DashboardPage({
   return (
     <AdminScreen title="Dashboard" flash={kernel.readFlash(params.flash)}>
       <p>Signed in as {user.name || user.email}.</p>
+      <div className="cms-widgets">
+        <Slot name="admin.dashboard" props={{ user }} />
+      </div>
       {showPlugins && kernel.skipped.length > 0 && (
         <section className="cms-notice cms-notice-error">
           <h2>Plugins that did not load</h2>

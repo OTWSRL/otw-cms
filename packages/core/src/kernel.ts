@@ -3,6 +3,7 @@ import type {
   Actions,
   AdminPage,
   ApiRoute,
+  CapabilityArgs,
   CapabilityName,
   Database,
   FilterContext,
@@ -10,6 +11,7 @@ import type {
   FilterValue,
   HooksApi,
   Logger,
+  MetaCapabilityName,
   PageMetadata,
   PageProps,
   PageRoute,
@@ -20,27 +22,35 @@ import type {
   SearchParams,
   ServiceName,
   Services,
-  SettingDefinition,
   SettingName,
   Settings,
+  SettingsPage,
   SettingsValues,
   SlotComponent,
+  SlotName,
   User,
 } from '@cms/sdk'
-import { ActionError } from '@cms/sdk'
+import { ActionError, ForbiddenError } from '@cms/sdk'
 import {
   actionPath,
   adminPath,
   createActionHandler,
-  type AdminMenuGroup,
   type AdminPageEntry,
   type AdminResolution,
   type InternalAction,
+  type SettingsResolution,
 } from './admin'
+import { AdminMenu, type AdminMenuSection } from './admin-menu'
 import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
 import { createAuthService, type AuthService } from './auth'
-import { CapabilityStore, type RoleInfo } from './capabilities'
-import { CORE, coreActions, coreDefinition, registerCoreCapabilities } from './core-plugin'
+import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
+import {
+  CORE,
+  coreActions,
+  coreDefinition,
+  registerCoreCapabilities,
+  registerCoreSettings,
+} from './core-plugin'
 import { DatabaseContext } from './database'
 import { PluginBootError } from './errors'
 import { createFlashCodec, type Flash, type FlashCodec } from './flash'
@@ -62,16 +72,19 @@ import { paramNames, parsePattern, Router } from './router'
 import { ServiceStore } from './services'
 import {
   declaredSettings,
-  isLocked,
   loadStoredSettings,
-  parseFormValue,
   resolveSettings,
   saveSettings,
   type Env,
   type ResolvedSetting,
-  type SettingSource,
   type SettingValue,
 } from './settings'
+import {
+  pageUpdates,
+  pageView,
+  SettingsLayoutStore,
+  type ResolvedSettingsPage,
+} from './settings-pages'
 import { SlotStore } from './slots'
 import { CORE_VERSION } from './version'
 
@@ -126,27 +139,6 @@ export interface PluginStatus {
   blockers: string[]
 }
 
-export interface SettingField {
-  key: string
-  type: SettingDefinition['type']
-  label: string
-  description?: string
-  options?: readonly { value: string; label: string }[]
-  /** Never set for secrets. */
-  value?: SettingValue
-  /** Secrets only: whether the environment variable is set. */
-  configured?: boolean
-  source: SettingSource
-  locked: boolean
-  env?: string
-}
-
-export interface SettingsSection {
-  id: string
-  label: string
-  fields: SettingField[]
-}
-
 export interface Kernel {
   readonly coreVersion: string
   /** Loaded plugin ids, in load order. */
@@ -174,20 +166,26 @@ export interface Kernel {
   url(name: string, params?: Record<string, string>): string
   /** Matches a page route and runs its loader. `null` means 404. */
   resolvePage(pathname: string, searchParams?: SearchParams): Promise<ResolvedPage | null>
-  slot(name: string): SlotComponent[]
+  slot<K extends SlotName>(name: K): SlotComponent<K>[]
   handleApi(request: Request): Promise<Response>
 
   readonly auth: AuthService
-  can(user: User | null, capability: CapabilityName): boolean
+  can<C extends CapabilityName | MetaCapabilityName>(
+    user: User | null,
+    capability: C,
+    ...args: CapabilityArgs<C>
+  ): boolean
   roles(): RoleInfo[]
+  capabilities(): CapabilityInfo[]
   plugins(): PluginStatus[]
-  settingsSections(): SettingsSection[]
+  /** A settings page by qualified name, such as `core.general`, for this user. */
+  settingsPage(key: string, user: User): SettingsResolution
   resolveAdminPage(
     pathname: string,
     searchParams: SearchParams,
     user: User,
   ): Promise<AdminResolution>
-  adminMenu(user: User): AdminMenuGroup[]
+  adminMenu(user: User): AdminMenuSection[]
   adminUrl(name: string, params?: Record<string, string>): string
   actionUrl(pluginId: string, name: string): string
   readFlash(value: string | string[] | undefined): Flash | null
@@ -196,15 +194,6 @@ export interface Kernel {
 interface PageEntry {
   pluginId: string
   route: PageRoute<unknown>
-}
-
-interface MenuEntry {
-  pluginId: string
-  key: string
-  label: string
-  order: number
-  capability: CapabilityName
-  sequence: number
 }
 
 /** State read once per `createKernel()`, shared by the recovery-mode reboots. */
@@ -218,6 +207,11 @@ interface Prepared {
   stored: ReadonlyMap<string, unknown>
 }
 
+/** Used by trial boots, which test values before they are stored. */
+interface StartOptions {
+  stored?: ReadonlyMap<string, unknown>
+}
+
 const ROUTE_NAME = /^[a-z][a-z0-9-]*$/
 const RESERVED_PATHS = ['/api', '/_next', '/admin']
 const APP = 'app'
@@ -227,7 +221,11 @@ const PINNED = 'Plugins are switched on in the site configuration, so they canno
  * Boots the plugins. If one fails to migrate or set up, the kernel boots again without it (and
  * without anything that requires it), like WordPress recovery mode, unless `strict` is set.
  */
-export async function createKernel(options: KernelOptions): Promise<Kernel> {
+export function createKernel(options: KernelOptions): Promise<Kernel> {
+  return startKernel(options, {})
+}
+
+async function startKernel(options: KernelOptions, start: StartOptions): Promise<Kernel> {
   const logger = options.logger ?? consoleLogger
   const db = new DatabaseContext(options.db)
   await runMigrations(db, [coreDefinition], logger)
@@ -240,7 +238,7 @@ export async function createKernel(options: KernelOptions): Promise<Kernel> {
     generation,
     flash: createFlashCodec(options.secret ?? (await ensureSecret(db.root))),
     configured: options.active ?? (await loadActiveIds(db.root, options.plugins)),
-    stored: await loadStoredSettings(db.root),
+    stored: start.stored ?? (await loadStoredSettings(db.root)),
   }
   const failed = new Map<string, string>()
 
@@ -285,6 +283,7 @@ async function boot(
   })
   for (const warning of settings.warnings) logger.warn(warning)
   const values = settings.values as SettingsValues
+  const settingsByKey = new Map(settings.settings.map((setting) => [setting.key, setting]))
 
   let sealed = false
   const assertOpen = (what: string) => {
@@ -295,12 +294,20 @@ async function boot(
     registries: new RegistryStore(assertOpen),
     services: new ServiceStore(assertOpen),
     slots: new SlotStore(assertOpen),
-    capabilities: new CapabilityStore(assertOpen),
+    capabilities: new CapabilityStore(assertOpen, (capability, pluginId, error) =>
+      logger.error('Capability check failed; denying', { capability, plugin: pluginId, error }),
+    ),
     pages: new Router<PageEntry>(),
     apis: new Router<ApiEntry>(),
     adminPages: new Router<AdminPageEntry>(),
-    menu: [] as MenuEntry[],
+    menu: new AdminMenu(),
+    settingsLayout: new SettingsLayoutStore(
+      assertOpen,
+      new Map(settings.settings.map((setting) => [setting.key, setting.pluginId])),
+    ),
   }
+  // Placed once every plugin has set up; actions read it only after boot.
+  let settingsPages = new Map<string, ResolvedSettingsPage>()
   const installed = new Map(options.plugins.map((plugin) => [plugin.id, plugin]))
   const activeSet = new Set(resolution.order.map((plugin) => plugin.id))
   const overridesUsed = new Set<string>()
@@ -363,15 +370,21 @@ async function boot(
     stores.adminPages.add(key, path, { pluginId, page })
     requiredCapabilities.push({ what: `Admin page "${key}"`, capability: page.capability })
     if (page.menu) {
-      stores.menu.push({
-        pluginId,
-        key,
-        label: page.menu.label,
-        order: page.menu.order ?? 10,
-        capability: page.capability,
-        sequence: stores.menu.length,
-      })
+      stores.menu.add({ ...page.menu, key, pluginId, url: path, capability: page.capability })
     }
+  }
+
+  const registerSettingsPage = (pluginId: string, page: SettingsPage) => {
+    const path = adminPath(pluginId, page.path)
+    if (paramNames(parsePattern(path)).length > 0) {
+      throw new Error(`Settings page "${pluginId}.${page.name}" cannot have parameters`)
+    }
+    const entry = stores.settingsLayout.page(pluginId, page, path)
+    stores.adminPages.add(entry.key, path, { pluginId, settingsPage: entry.key })
+    requiredCapabilities.push({
+      what: `Settings page "${entry.key}"`,
+      capability: entry.capability,
+    })
   }
 
   const registerAction = (pluginId: string, action: InternalAction) => {
@@ -401,6 +414,19 @@ async function boot(
     )
   }
 
+  // A trial boot's warnings repeat the running kernel's; its errors are the point of the trial.
+  const trialOptions: KernelOptions = {
+    ...options,
+    strict: false,
+    onChange: undefined,
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: (message, context) => logger.error(message, context),
+    },
+  }
+
   const changed = async () => {
     await bumpGeneration(db.root)
     options.onChange?.()
@@ -420,12 +446,7 @@ async function boot(
       if (blockers.length > 0) throw new ActionError(blockers.join(' '))
 
       // Boot once with it switched on, as WordPress does, so a fatal error never reaches visitors.
-      const trial = await createKernel({
-        ...options,
-        active: [...current, id],
-        strict: false,
-        onChange: undefined,
-      })
+      const trial = await createKernel({ ...trialOptions, active: [...current, id] })
       if (!trial.isActive(id)) {
         const reason = trial.skipped.find((entry) => entry.id === id)?.reason ?? 'it did not load'
         throw new ActionError(`${name} could not be activated. ${reason}`)
@@ -445,22 +466,39 @@ async function boot(
       await changed()
       return `${name} deactivated.`
     },
-    async saveSettings(section, form) {
-      const editable = settings.settings.filter(
-        (setting) => setting.pluginId === section && !isLocked(setting),
-      )
-      if (editable.length === 0) throw new ActionError('There is nothing to save in that section.')
-      const updates = new Map<string, SettingValue | undefined>()
-      for (const setting of editable) {
-        const parsed = parseFormValue(setting.definition, form.get(setting.key))
-        if (!parsed.ok) throw new ActionError(`${setting.definition.label}: ${parsed.error}.`)
-        updates.set(setting.key, parsed.value)
-      }
+    async saveSettings(key, user, form) {
+      const page = settingsPages.get(key)
+      if (!page) throw new ActionError('That settings page does not exist.')
+      if (!stores.capabilities.can(user, page.capability)) throw new ForbiddenError()
+      const updates = pageUpdates(page, settingsByKey, form)
+      await trialSettings(updates)
       await saveSettings(db.root, updates)
       await changed()
     },
   })
   for (const action of actions) registerAction(CORE, action)
+
+  /**
+   * Boots once with the new values, as activation does, so a value a plugin rejects at startup
+   * never reaches visitors. Field validation can't catch these: they depend on other values or
+   * on what the plugin does with them.
+   */
+  const trialSettings = async (updates: ReadonlyMap<string, SettingValue | undefined>) => {
+    const stored = new Map(await loadStoredSettings(db.root))
+    for (const [key, value] of updates) {
+      if (value === undefined) stored.delete(key)
+      else stored.set(key, value)
+    }
+    const trial = await startKernel(trialOptions, { stored })
+    const broken = trial.skipped.filter((plugin) => activeSet.has(plugin.id))
+    if (broken.length > 0) {
+      const names = broken.map((plugin) => displayName(installed.get(plugin.id), plugin.id))
+      throw new ActionError(
+        `Settings not saved: ${names.join(', ')} could not start with them. ${broken[0]!.reason}`,
+      )
+    }
+  }
+  registerCoreSettings(stores.settingsLayout)
 
   const hooksFor = (pluginId: string): HooksApi => ({
     addFilter: (name, handler, opts) =>
@@ -498,17 +536,28 @@ async function boot(
         apiUrl: (path) => apiPath(plugin.id, path),
       },
       slots: {
-        fill: (name, fill) => stores.slots.fill(plugin.id, name, fill.component, fill.priority),
+        fill: (name, fill) =>
+          stores.slots.fill(plugin.id, name, fill.component as SlotComponent, fill.priority),
+        get: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
       },
       settings: { get: (key) => values[key] },
       auth: {
         role: (id, definition) => stores.capabilities.role(plugin.id, id, definition),
         capability: (name, definition) =>
           stores.capabilities.capability(plugin.id, name, definition),
-        can: (user, capability) => stores.capabilities.can(user, capability),
+        grant: (role, capabilities) => stores.capabilities.grant(plugin.id, role, capabilities),
+        revoke: (role, capabilities) => stores.capabilities.revoke(plugin.id, role, capabilities),
+        metaCapability: (name, definition) =>
+          stores.capabilities.metaCapability(plugin.id, name, definition as never),
+        extendCapability: (name, extension) =>
+          stores.capabilities.extendCapability(plugin.id, name, extension as never),
+        can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
       },
       admin: {
         page: (page) => registerAdminPage(plugin.id, page as AdminPage<unknown>),
+        settingsPage: (page) => registerSettingsPage(plugin.id, page),
+        settingsSection: (section) => stores.settingsLayout.section(plugin.id, section),
+        settingsFields: (fields) => stores.settingsLayout.fields(plugin.id, fields),
         action: (action) => {
           requiredCapabilities.push({
             what: `Admin action "${plugin.id}.${action.name}"`,
@@ -550,9 +599,42 @@ async function boot(
   }
   sealed = true
   stores.capabilities.seal()
+  const label = (pluginId: string) => displayName(installed.get(pluginId), pluginId)
+  const layout = stores.settingsLayout.resolve({
+    isActive: (pluginId) => activeSet.has(pluginId),
+    label,
+    automaticUrl: (pluginId) => adminPath(pluginId, '/settings'),
+  })
+  for (const page of layout.pages) {
+    if (page.automatic) {
+      try {
+        stores.adminPages.add(page.key, page.url, {
+          pluginId: page.pluginId,
+          settingsPage: page.key,
+        })
+      } catch (error) {
+        throw new PluginBootError(page.pluginId, 'setup', error)
+      }
+    }
+    stores.menu.add({
+      ...page.menu,
+      key: page.key,
+      pluginId: page.pluginId,
+      url: page.url,
+      capability: page.capability,
+    })
+  }
+  settingsPages = new Map(layout.pages.map((page) => [page.key, page]))
+  const menuWarnings = stores.menu.seal({
+    active: resolution.order.map((plugin) => plugin.id),
+    installed: new Set(installed.keys()),
+    label,
+  })
 
   const registrationWarnings = [
     ...unusedOverrideWarnings(options.routes, overridesUsed),
+    ...layout.warnings,
+    ...menuWarnings,
     ...requiredCapabilities
       .filter(({ capability }) => !stores.capabilities.isDefined(capability))
       .map(
@@ -571,7 +653,8 @@ async function boot(
     warnings,
     stores,
     values,
-    settings: settings.settings,
+    settingsByKey,
+    settingsPages,
     installed,
     auth,
   })
@@ -601,10 +684,11 @@ function buildKernel(input: {
     pages: Router<PageEntry>
     apis: Router<ApiEntry>
     adminPages: Router<AdminPageEntry>
-    menu: MenuEntry[]
+    menu: AdminMenu
   }
   values: SettingsValues
-  settings: ResolvedSetting[]
+  settingsByKey: ReadonlyMap<string, ResolvedSetting>
+  settingsPages: ReadonlyMap<string, ResolvedSettingsPage>
   installed: ReadonlyMap<string, PluginDefinition>
   auth: AuthService
 }): Kernel {
@@ -613,8 +697,16 @@ function buildKernel(input: {
   const active = input.resolution.order.map((plugin) => plugin.id)
   const activeSet = new Set(active)
   const configured = new Set(prepared.configured)
-  const loadOrder = new Map(active.map((id, index) => [id, index]))
   const capabilities = stores.capabilities
+
+  const settingsPage = (key: string, user: User): SettingsResolution => {
+    const page = input.settingsPages.get(key)
+    if (!page) return { kind: 'not-found' }
+    if (!capabilities.can(user, 'core.access_admin') || !capabilities.can(user, page.capability)) {
+      return { kind: 'forbidden' }
+    }
+    return { kind: 'settings', key, title: page.title, view: pageView(page, input.settingsByKey) }
+  }
 
   return {
     coreVersion: input.coreVersion,
@@ -651,12 +743,13 @@ function buildKernel(input: {
         metadata: async () => (route.metadata ? route.metadata(props) : {}),
       }
     },
-    slot: (name) => stores.slots.get(name).map((fill) => fill.component),
+    slot: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
     handleApi: (request) => dispatchApi(stores.apis, request, logger, options.allowedOrigins ?? []),
 
     auth: input.auth,
-    can: (user, capability) => capabilities.can(user, capability),
+    can: (user, capability, ...args) => capabilities.can(user, capability, ...args),
     roles: () => capabilities.roles(),
+    capabilities: () => capabilities.capabilities(),
 
     plugins: () =>
       options.plugins.map((plugin): PluginStatus => {
@@ -679,28 +772,14 @@ function buildKernel(input: {
         }
       }),
 
-    settingsSections: () => {
-      const sections = new Map<string, SettingsSection>()
-      for (const setting of input.settings) {
-        const label =
-          setting.pluginId === CORE
-            ? (coreDefinition.name ?? CORE)
-            : displayName(installed.get(setting.pluginId), setting.pluginId)
-        const section = sections.get(setting.pluginId) ?? {
-          id: setting.pluginId,
-          label,
-          fields: [],
-        }
-        sections.set(setting.pluginId, section)
-        section.fields.push(toField(setting))
-      }
-      return [...sections.values()]
-    },
+    settingsPage,
 
     async resolveAdminPage(pathname, searchParams, user) {
       const match = stores.adminPages.match(pathname)
       if (!match) return { kind: 'not-found' }
-      const { pluginId, page } = match.route.value
+      const entry = match.route.value
+      if ('settingsPage' in entry) return settingsPage(entry.settingsPage, user)
+      const { pluginId, page } = entry
       if (
         !capabilities.can(user, 'core.access_admin') ||
         !capabilities.can(user, page.capability)
@@ -708,7 +787,13 @@ function buildKernel(input: {
         return { kind: 'forbidden' }
       }
       const context = { params: match.params, searchParams, user }
-      const data = page.load ? await page.load(context) : undefined
+      let data: unknown
+      try {
+        data = page.load ? await page.load(context) : undefined
+      } catch (error) {
+        if (error instanceof ForbiddenError) return { kind: 'forbidden' }
+        throw error
+      }
       if (data === null) return { kind: 'not-found' }
       const props = { ...context, data }
       return {
@@ -721,54 +806,11 @@ function buildKernel(input: {
       }
     },
 
-    adminMenu(user) {
-      if (!capabilities.can(user, 'core.access_admin')) return []
-      const entries = stores.menu
-        .filter((entry) => capabilities.can(user, entry.capability))
-        .sort(
-          (a, b) =>
-            loadOrder.get(a.pluginId)! - loadOrder.get(b.pluginId)! ||
-            a.order - b.order ||
-            a.sequence - b.sequence,
-        )
-      const groups = new Map<string, AdminMenuGroup>()
-      for (const entry of entries) {
-        const group = groups.get(entry.pluginId) ?? {
-          pluginId: entry.pluginId,
-          label: displayName(installed.get(entry.pluginId), entry.pluginId),
-          items: [],
-        }
-        groups.set(entry.pluginId, group)
-        group.items.push({
-          key: entry.key,
-          label: entry.label,
-          url: stores.adminPages.url(entry.key),
-        })
-      }
-      return [...groups.values()]
-    },
+    adminMenu: (user) =>
+      stores.menu.build(user, (u, capability) => capabilities.can(u, capability)),
 
     adminUrl: (name, params) => stores.adminPages.url(name, params),
     actionUrl: (pluginId, name) => actionPath(pluginId, name),
     readFlash: (value) => prepared.flash.decode(value),
-  }
-}
-
-function toField(setting: ResolvedSetting): SettingField {
-  const { key, definition, value, source } = setting
-  const base = {
-    key,
-    type: definition.type,
-    label: definition.label,
-    description: definition.description,
-    source,
-    locked: isLocked(setting),
-    env: definition.env,
-  }
-  if (definition.type === 'secret') return { ...base, configured: value !== undefined }
-  return {
-    ...base,
-    value,
-    options: definition.type === 'select' ? definition.options : undefined,
   }
 }

@@ -1,6 +1,8 @@
 import commerce, { type Order } from '@cms/plugin-commerce'
-import { definePlugin } from '@cms/sdk'
+import { definePlugin, type SettingsValues } from '@cms/sdk'
 import { createTestKernel, type TestKernel } from '@cms/testing'
+import type { ReactElement, ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import Stripe from 'stripe'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStripePlugin, type StripeClient } from '../src'
@@ -27,7 +29,9 @@ function fakeStripe(
   return { client, create }
 }
 
-async function bootStripe(client = fakeStripe().client) {
+const html = (node: ReactNode | Promise<ReactNode>) => renderToStaticMarkup(node as ReactElement)
+
+async function bootStripe(client = fakeStripe().client, settings: SettingsValues = {}) {
   const paid: Order[] = []
   const listener = definePlugin({
     id: 'paid-listener',
@@ -38,7 +42,7 @@ async function bootStripe(client = fakeStripe().client) {
   })
   harness = await createTestKernel({
     plugins: [commerce, createStripePlugin({ client }), listener],
-    settings: { 'commerce-stripe.webhookSecret': WEBHOOK_SECRET },
+    settings: { 'commerce-stripe.webhookSecret': WEBHOOK_SECRET, ...settings },
   })
   const service = harness.kernel.service('commerce')
   const mug = await service.createProduct({ slug: 'mug', title: 'Mug', price: 1800 })
@@ -206,3 +210,84 @@ describe('webhook', () => {
     expect((await deliver(sessionEvent(order, { type: 'customer.created' }))).status).toBe(200)
   })
 })
+
+describe('admin', () => {
+  it('adds its section to Commerce’s Payments page, keys read-only', async () => {
+    const { harness } = await bootStripe()
+    const { user } = await harness.signIn()
+    const page = harness.kernel.settingsPage('commerce.payments', user)
+    if (page.kind !== 'settings') throw new Error(page.kind)
+    expect(
+      page.view.sections.map((section) => [
+        section.title,
+        section.fields.map((field) => [field.key, field.locked]),
+      ]),
+    ).toEqual([
+      ['Pay later', [['commerce.manualGateway', false]]],
+      [
+        'Stripe',
+        [
+          ['commerce-stripe.enabled', false],
+          ['commerce-stripe.secretKey', true],
+          ['commerce-stripe.webhookSecret', true],
+        ],
+      ],
+    ])
+  })
+
+  it('stops offering cards when switched off, but completes payments already started', async () => {
+    const { harness, order } = await bootStripe()
+    const { cookie } = await harness.signIn('shop_manager')
+    // "Offer card payments" is unchecked, so it is absent from the form.
+    const saved = await harness.request('POST', '/api/p/core/actions/save-settings', {
+      cookie,
+      form: { page: 'commerce.payments', 'commerce.manualGateway': 'on' },
+    })
+    expect(saved.status).toBe(303)
+
+    const next = await harness.reboot()
+    expect(next.setting('commerce-stripe.enabled')).toBe(false)
+    expect(next.registry('commerce.gateways').has('stripe')).toBe(false)
+    expect((await deliver(sessionEvent(order))).status).toBe(200)
+    expect((await next.service('commerce').getOrder(order.id))!.status).toBe('paid')
+  })
+
+  it('tells the people who can fix it which keys are missing', async () => {
+    harness = await createTestKernel({
+      plugins: [commerce, createStripePlugin()],
+      settings: { 'commerce-stripe.webhookSecret': WEBHOOK_SECRET },
+    })
+    const [notice] = harness.kernel.slot('admin.notices')
+    const admin = await harness.signIn()
+    expect(html(notice!({ user: admin.user }))).toContain(
+      'card payments are off until <code>STRIPE_SECRET_KEY</code> is set on the server.',
+    )
+    const manager = await harness.signIn('shop_manager')
+    expect(notice!({ user: manager.user })).toBeNull()
+  })
+
+  it('shows the Checkout session on Stripe orders in the admin', async () => {
+    const { harness, order, service } = await bootStripe(fakeStripe().client, {
+      'commerce-stripe.secretKey': 'sk_test_123',
+    })
+    const { user } = await harness.signIn('shop_manager')
+    const [panel] = harness.kernel.slot('commerce.admin.order')
+
+    expect(html(panel!({ order, user }))).toContain('Waiting for Stripe to confirm the payment.')
+    await deliver(sessionEvent(order))
+    const paid = (await service.getOrder(order.id))!
+    const markup = html(panel!({ order: paid, user }))
+    expect(markup).toContain('Checkout session <code>cs_1</code>')
+    expect(markup).toContain('href="https://dashboard.stripe.com/test/search?query=cs_1"')
+
+    const { order: manual } = await service.checkout(
+      { email: 'bo@example.com', gateway: 'manual', lines: [order.lines[0]!].map(toLine) },
+      { baseUrl: 'https://shop.test' },
+    )
+    expect(html(panel!({ order: manual, user }))).toBe('')
+  })
+})
+
+function toLine(line: Order['lines'][number]) {
+  return { type: line.itemType, id: line.itemId, quantity: line.quantity }
+}

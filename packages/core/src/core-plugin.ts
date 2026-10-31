@@ -1,9 +1,10 @@
-import type { PluginDefinition, SettingDefinitions } from '@cms/sdk'
+import type { PluginDefinition, SettingDefinitions, User } from '@cms/sdk'
 import { ActionError } from '@cms/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
 import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, type CapabilityStore } from './capabilities'
 import { coreMigrations } from './core-migrations'
+import type { SettingsLayoutStore } from './settings-pages'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
 import { CORE_VERSION } from './version'
 
@@ -68,12 +69,28 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
 }
 
+/** WordPress's Settings › General, which other plugins add sections and fields to. */
+export function registerCoreSettings(layout: SettingsLayoutStore): void {
+  layout.page(
+    CORE,
+    { name: 'general', path: '/', title: 'General settings', menu: { label: 'General', order: 0 } },
+    `${ADMIN_PREFIX}/settings`,
+  )
+  layout.section(CORE, {
+    name: 'site',
+    page: 'core.general',
+    title: 'Site',
+    fields: ['site.title', 'site.url', 'site.locale'],
+  })
+}
+
 export interface CoreActionDependencies {
   auth: AuthService
   /** Each returns the notice to show. */
   activate(pluginId: string): Promise<string>
   deactivate(pluginId: string): Promise<string>
-  saveSettings(section: string, form: FormData): Promise<void>
+  /** Checks the page's own capability, which may be a plugin's rather than core's. */
+  saveSettings(page: string, user: User, form: FormData): Promise<void>
 }
 
 function field(form: FormData, name: string): string {
@@ -148,9 +165,9 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
     },
     {
       name: 'save-settings',
-      capability: 'core.manage_settings',
-      async handler({ form }) {
-        await deps.saveSettings(field(form, 'section'), form)
+      capability: 'core.access_admin',
+      async handler({ form, user }) {
+        await deps.saveSettings(field(form, 'page'), user!, form)
         return { notice: 'Settings saved.' }
       },
     },

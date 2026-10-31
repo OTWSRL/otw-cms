@@ -116,12 +116,14 @@ test('settings saved in the admin change the site', async ({ page }) => {
   await signIn(page, ADMIN)
   await page
     .getByRole('navigation', { name: 'Admin' })
-    .getByRole('link', { name: 'Settings' })
+    .getByRole('link', { name: 'General' })
     .click()
+  await expect(page).toHaveURL('/admin/settings')
+  await expect(page).toHaveTitle('General settings · Admin · Next CMS')
 
-  const general = page.getByRole('region', { name: 'General' })
-  await general.getByLabel('Site title').fill('Ada’s Shop')
-  await general.getByRole('button', { name: 'Save General settings' }).click()
+  const site = page.getByRole('region', { name: 'Site' })
+  await site.getByLabel('Site title').fill('Ada’s Shop')
+  await page.getByRole('button', { name: 'Save changes' }).click()
   await notice(page, 'Settings saved.')
 
   await page.goto('/shop')
@@ -130,10 +132,56 @@ test('settings saved in the admin change the site', async ({ page }) => {
 
   // Restore the default so the storefront specs see the usual title.
   await page.goto('/admin/settings')
-  await general.getByLabel('Site title').fill('')
-  await general.getByRole('button', { name: 'Save General settings' }).click()
+  await site.getByLabel('Site title').fill('')
+  await page.getByRole('button', { name: 'Save changes' }).click()
   await notice(page, 'Settings saved.')
-  await expect(general.getByLabel('Site title')).toHaveValue('Next CMS')
+  await expect(site.getByLabel('Site title')).toHaveValue('Next CMS')
+})
+
+test('plugins add pages under Settings and sections to each other’s pages', async ({ page }) => {
+  await signIn(page, ADMIN)
+  const settings = page.getByRole('navigation', { name: 'Admin' }).getByRole('region', {
+    name: 'Settings',
+  })
+  await expect(settings.getByRole('link')).toHaveText(['General', 'Shop', 'Payments'])
+  await settings.getByRole('link', { name: 'Payments' }).click()
+  await expect(page).toHaveURL('/admin/commerce/settings/payments')
+  await expect(page).toHaveTitle('Payment settings · Admin · Next CMS')
+  await expect(settings.getByRole('link', { name: 'Payments' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await expect(settings.getByRole('link', { name: 'Shop' })).not.toHaveAttribute('aria-current')
+
+  // Stripe's section sits on Commerce's page; its keys come from the server environment.
+  await expect(page.getByRole('region', { name: 'Stripe' }).getByText('Not set')).toHaveCount(2)
+
+  const payLater = page.getByRole('region', { name: 'Pay later' }).getByLabel('Offer "Pay later"')
+  await payLater.uncheck()
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await notice(page, 'Settings saved.')
+  await page.goto('/product/canvas-tote')
+  await expect(page.getByText('Checkout is not available right now.')).toBeVisible()
+
+  await page.goto('/admin/commerce/settings/payments')
+  await payLater.check()
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await notice(page, 'Settings saved.')
+  await page.goto('/product/canvas-tote')
+  await expect(page.getByLabel(/Pay later/)).toBeChecked()
+})
+
+test('the dashboard shows plugin widgets and notices', async ({ page }) => {
+  await signIn(page, ADMIN)
+  await expect(page.getByRole('region', { name: 'Orders' })).toContainText(/\d+ awaiting payment/)
+
+  // The e2e server has no Stripe keys, so Stripe says what to set.
+  const stripe = page.getByText('Stripe is active, but card payments are off')
+  await expect(stripe).toContainText(
+    'until STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are set on the server.',
+  )
+  await stripe.getByRole('link', { name: 'Payment settings' }).click()
+  await expect(page).toHaveURL('/admin/commerce/settings/payments')
 })
 
 test('a shop manager confirms a pay-later order but cannot manage plugins', async ({
@@ -148,6 +196,9 @@ test('a shop manager confirms a pay-later order but cannot manage plugins', asyn
   await addUser.getByLabel('Password').fill(MANAGER.password)
   await addUser.getByRole('button', { name: 'Add user' }).click()
   await notice(page, `Added ${MANAGER.email}.`)
+  await expect(
+    page.getByRole('region', { name: 'Roles' }).getByRole('row', { name: /Shop manager/ }),
+  ).toContainText('Change shop settings')
 
   // A shopper places an order in a separate browser session.
   const shopper = await browser.newPage()
@@ -161,6 +212,12 @@ test('a shop manager confirms a pay-later order but cannot manage plugins', asyn
   await signIn(manager, MANAGER)
   const nav = manager.getByRole('navigation', { name: 'Admin' })
   await expect(nav.getByRole('link', { name: 'Plugins' })).toHaveCount(0)
+  await expect(nav.getByRole('region', { name: 'Settings' }).getByRole('link')).toHaveText([
+    'Shop',
+    'Payments',
+  ])
+  // Only people who can change the server's environment are told about missing keys.
+  await expect(manager.getByText('Stripe is active')).toHaveCount(0)
   await nav.getByRole('link', { name: 'Orders' }).click()
   await manager.getByRole('link', { name: number, exact: true }).click()
   await expect(manager.getByTestId('admin-order-status')).toHaveText('Awaiting payment')
@@ -171,6 +228,7 @@ test('a shop manager confirms a pay-later order but cannot manage plugins', asyn
   await shopper.reload()
   await expect(shopper.getByTestId('order-status')).toHaveText('Paid')
 
+  expect((await manager.goto('/admin/settings'))?.status()).toBe(403)
   const forbidden = await manager.goto('/admin/plugins')
   expect(forbidden?.status()).toBe(403)
   await expect(

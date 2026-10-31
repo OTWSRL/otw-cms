@@ -6,6 +6,9 @@ import { createKernel, type KernelOptions } from '../src/kernel'
 import { createDb, memoryLogger, plugin } from './helpers'
 
 declare module '@cms/sdk' {
+  interface Slots {
+    'shop.receipt': { orderId: string }
+  }
   interface Registries {
     'test.gateways': { id: string }
   }
@@ -252,6 +255,25 @@ describe('pages and slots', () => {
     expect(await page!.metadata()).toEqual({ title: 'Mug' })
     expect(kernel.url('shop.product', { slug: 'mug' })).toBe('/product/mug')
     expect(kernel.slot('header.nav')).toHaveLength(1)
+  })
+
+  it('lets a plugin render fills other plugins put in its own slot, with props', async () => {
+    let receipt: (() => unknown) | undefined
+    const store = plugin('store', {
+      setup(cms) {
+        // Read at render time: the gateway below registers its fill after this setup runs.
+        receipt = () => cms.slots.get('shop.receipt').map((Fill) => Fill({ orderId: 'A-1' }))
+      },
+    })
+    const gateway = plugin('gateway', {
+      requires: { store: '^1.0.0' },
+      setup(cms) {
+        cms.slots.fill('shop.receipt', { component: ({ orderId }) => `Paid ${orderId}` })
+        cms.slots.fill('shop.receipt', { component: () => 'First', priority: 5 })
+      },
+    })
+    await boot({ plugins: [store, gateway] })
+    expect(receipt!()).toEqual(['First', 'Paid A-1'])
   })
 
   it('returns null when nothing matches or the loader finds nothing', async () => {

@@ -1,5 +1,5 @@
 import type { ApiHandler, HttpMethod, Logger } from '@cms/sdk'
-import { HttpError } from '@cms/sdk'
+import { ForbiddenError, HttpError } from '@cms/sdk'
 import type { Router } from './router'
 
 export const API_PREFIX = '/api/p'
@@ -57,6 +57,7 @@ export async function dispatchApi(
           : { error: error.message, details: error.details }
       return Response.json(body, { status: error.status })
     }
+    if (error instanceof ForbiddenError) return errorResponse(403, error.message)
     logger.error('API handler failed', { plugin: pluginId, route: match.route.key, error })
     return errorResponse(500, 'Internal server error')
   }

@@ -1,4 +1,4 @@
-import type { RegistryItem } from '@cms/sdk'
+import type { RegistryItem, User } from '@cms/sdk'
 
 /** Money is always an integer in the currency's minor unit (cents for USD). */
 export type Money = number
@@ -186,5 +186,18 @@ declare module '@cms/sdk' {
   interface Capabilities {
     'commerce.manage_products': true
     'commerce.manage_orders': true
+    'commerce.manage_settings': true
+  }
+  interface MetaCapabilities {
+    /**
+     * Confirm payment by hand. Commerce allows it for pending "Pay later" orders; a gateway
+     * plugin with offline payments (bank transfer, cheques) extends it for its own orders.
+     */
+    'commerce.mark_order_paid': [order: Order]
+    'commerce.cancel_order': [order: Order]
+  }
+  interface Slots {
+    /** Panels on the admin order screen, such as a gateway's payment details. */
+    'commerce.admin.order': { order: Order; user: User }
   }
 }

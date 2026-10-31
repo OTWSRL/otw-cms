@@ -1,5 +1,6 @@
 import type { PluginContext, SearchParams } from '@cms/sdk'
 import { ActionError } from '@cms/sdk'
+import type { ReactNode } from 'react'
 import { CommerceError } from './errors'
 import { currencyDigits, toMoneyInput } from './totals'
 import type { CommerceService, Money, Order, OrderStatus, OrderSummary, Product } from './types'
@@ -42,15 +43,16 @@ export function ordersQuery(searchParams: SearchParams) {
   }
 }
 
-export function registerAdmin(cms: PluginContext, commerce: CommerceService): void {
+export function registerAdmin(
+  cms: PluginContext,
+  commerce: CommerceService,
+  manualGatewayId: string,
+): void {
   const format = commerce.formatMoney
 
-  cms.auth.role('shop_manager', { label: 'Shop manager', capabilities: ['core.access_admin'] })
-  cms.auth.capability('commerce.manage_products', {
-    label: 'Manage products',
-    roles: ['shop_manager'],
-  })
-  cms.auth.capability('commerce.manage_orders', { label: 'Manage orders', roles: ['shop_manager'] })
+  registerCapabilities(cms, manualGatewayId)
+  registerSettings(cms)
+  registerDashboard(cms, commerce)
 
   cms.admin.page({
     name: 'products',
@@ -132,13 +134,24 @@ export function registerAdmin(cms: PluginContext, commerce: CommerceService): vo
     capability: 'commerce.manage_orders',
     load: ({ params }) => commerce.getOrder(params.id!),
     title: ({ data }) => `Order #${data.number}`,
-    component: ({ data }) => (
+    component: ({ data, user }) => (
       <OrderAdmin
         order={data}
         format={format}
         listUrl={cms.admin.url('commerce.orders')}
-        markPaidUrl={cms.admin.actionUrl('mark-order-paid')}
-        cancelUrl={cms.admin.actionUrl('cancel-order')}
+        markPaidUrl={
+          cms.auth.can(user, 'commerce.mark_order_paid', data)
+            ? cms.admin.actionUrl('mark-order-paid')
+            : undefined
+        }
+        cancelUrl={
+          cms.auth.can(user, 'commerce.cancel_order', data)
+            ? cms.admin.actionUrl('cancel-order')
+            : undefined
+        }
+        panels={cms.slots.get('commerce.admin.order').map((Panel, index) => (
+          <Panel key={index} order={data} user={user} />
+        ))}
       />
     ),
   })
@@ -176,12 +189,13 @@ export function registerAdmin(cms: PluginContext, commerce: CommerceService): vo
     async handler({ form, user }) {
       const order = await commerce.getOrder(field(form, 'order'))
       if (!order) throw new ActionError('That order no longer exists.')
-      if (order.gateway !== 'manual') {
+      // Paid and cancelled orders go on to the service, which answers "already paid" or refuses.
+      if (order.status === 'pending' && !cms.auth.can(user, 'commerce.mark_order_paid', order)) {
         throw new ActionError(`Payments through ${order.gateway} are confirmed by the provider.`)
       }
       const { changed } = await asActionError(() =>
         commerce.markPaid(order.id, {
-          gateway: 'manual',
+          gateway: order.gateway,
           // Who confirmed it, for the audit trail; card payments store the provider's id here.
           reference: `manual:${user.id}`,
           amount: order.total,
@@ -195,11 +209,88 @@ export function registerAdmin(cms: PluginContext, commerce: CommerceService): vo
   cms.admin.action({
     name: 'cancel-order',
     capability: 'commerce.manage_orders',
-    async handler({ form }) {
-      const { order, changed } = await asActionError(() =>
-        commerce.cancelOrder(field(form, 'order')),
-      )
+    async handler({ form, user }) {
+      const found = await commerce.getOrder(field(form, 'order'))
+      if (!found) throw new ActionError('That order no longer exists.')
+      if (found.status === 'pending' && !cms.auth.can(user, 'commerce.cancel_order', found)) {
+        throw new ActionError(`Order #${found.number} cannot be cancelled.`)
+      }
+      const { order, changed } = await asActionError(() => commerce.cancelOrder(found.id))
       return { notice: changed ? `Order #${order.number} cancelled.` : 'Already cancelled.' }
+    },
+  })
+}
+
+function registerCapabilities(cms: PluginContext, manualGatewayId: string): void {
+  cms.auth.role('shop_manager', { label: 'Shop manager', capabilities: ['core.access_admin'] })
+  cms.auth.capability('commerce.manage_products', {
+    label: 'Manage products',
+    roles: ['shop_manager'],
+  })
+  cms.auth.capability('commerce.manage_orders', { label: 'Manage orders', roles: ['shop_manager'] })
+  cms.auth.capability('commerce.manage_settings', {
+    label: 'Change shop settings',
+    roles: ['shop_manager'],
+  })
+  cms.auth.metaCapability('commerce.mark_order_paid', {
+    label: 'Mark an order as paid',
+    map: (_user, order) =>
+      order.status === 'pending' && order.gateway === manualGatewayId
+        ? ['commerce.manage_orders']
+        : false,
+  })
+  cms.auth.metaCapability('commerce.cancel_order', {
+    label: 'Cancel an order',
+    map: (_user, order) => (order.status === 'pending' ? ['commerce.manage_orders'] : false),
+  })
+}
+
+/** Settings › Shop and Settings › Payments, which gateway plugins add their sections to. */
+function registerSettings(cms: PluginContext): void {
+  cms.admin.settingsPage({
+    name: 'settings',
+    path: '/settings',
+    title: 'Shop settings',
+    capability: 'commerce.manage_settings',
+    menu: { label: 'Shop' },
+  })
+  cms.admin.settingsSection({
+    name: 'store',
+    page: 'commerce.settings',
+    title: 'Store',
+    fields: ['commerce.currency'],
+  })
+  cms.admin.settingsPage({
+    name: 'payments',
+    path: '/settings/payments',
+    title: 'Payment settings',
+    description: 'How customers can pay. Payment plugins add their own sections here.',
+    capability: 'commerce.manage_settings',
+    menu: { label: 'Payments' },
+  })
+  cms.admin.settingsSection({
+    name: 'pay-later',
+    page: 'commerce.payments',
+    title: 'Pay later',
+    fields: ['commerce.manualGateway'],
+  })
+}
+
+function registerDashboard(cms: PluginContext, commerce: CommerceService): void {
+  cms.slots.fill('admin.dashboard', {
+    async component({ user }) {
+      if (!cms.auth.can(user, 'commerce.manage_orders')) return null
+      const { total } = await commerce.listOrders({ status: 'pending', limit: 1 })
+      return (
+        <section className="cms-widget" aria-labelledby="widget-commerce-orders">
+          <h2 id="widget-commerce-orders">Orders</h2>
+          <p>
+            <a href={`${cms.admin.url('commerce.orders')}?status=pending`}>
+              {total} awaiting payment
+            </a>
+          </p>
+        </section>
+      )
     },
   })
 }
@@ -407,14 +498,16 @@ function OrderAdmin({
   listUrl,
   markPaidUrl,
   cancelUrl,
+  panels,
 }: {
   order: Order
   format: Format
   listUrl: string
-  markPaidUrl: string
-  cancelUrl: string
+  /** Only set when this user may take the action on this order. */
+  markPaidUrl?: string
+  cancelUrl?: string
+  panels: ReactNode[]
 }) {
-  const pending = order.status === 'pending'
   return (
     <>
       <dl className="cms-details">
@@ -457,8 +550,9 @@ function OrderAdmin({
           </tr>
         </tfoot>
       </table>
+      {panels}
       <div className="cms-form-actions">
-        {pending && order.gateway === 'manual' && (
+        {markPaidUrl && (
           <form method="post" action={markPaidUrl}>
             <input type="hidden" name="order" value={order.id} />
             <button type="submit" className="cms-button">
@@ -466,7 +560,7 @@ function OrderAdmin({
             </button>
           </form>
         )}
-        {pending && (
+        {cancelUrl && (
           <form method="post" action={cancelUrl}>
             <input type="hidden" name="order" value={order.id} />
             <button type="submit" className="cms-button cms-button-danger">

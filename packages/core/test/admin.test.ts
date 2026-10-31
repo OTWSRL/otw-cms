@@ -1,4 +1,4 @@
-import { ActionError, type PluginDefinition } from '@cms/sdk'
+import { ActionError, ForbiddenError, type PluginDefinition } from '@cms/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, formPost, ORIGIN, plugin, redirectOf, signIn } from './helpers'
 
@@ -38,7 +38,10 @@ function shopPlugin(log: string[] = []): PluginDefinition {
         name: 'order',
         path: '/orders/:id',
         capability: 'shop.manage',
-        load: ({ params }) => (params.id === 'missing' ? null : params.id!),
+        load: ({ params }) => {
+          if (params.id === 'locked') throw new ForbiddenError()
+          return params.id === 'missing' ? null : params.id!
+        },
         title: ({ data }) => `Order ${data}`,
         component: ({ data }) => data,
       })
@@ -55,6 +58,13 @@ function shopPlugin(log: string[] = []): PluginDefinition {
             notice: `Renamed to ${String(name)}.`,
             redirect: typeof redirect === 'string' ? redirect : undefined,
           }
+        },
+      })
+      cms.admin.action({
+        name: 'lock',
+        capability: 'shop.manage',
+        handler: () => {
+          throw new ForbiddenError('That order is locked')
         },
       })
       cms.admin.action({
@@ -90,6 +100,10 @@ describe('admin pages', () => {
     expect(await kernel.resolveAdminPage('/admin/shop/nothing', {}, user)).toEqual({
       kind: 'not-found',
     })
+    // A loader that checks the object itself, such as a meta capability.
+    expect(await kernel.resolveAdminPage('/admin/shop/orders/locked', {}, user)).toEqual({
+      kind: 'forbidden',
+    })
     expect(kernel.adminUrl('shop.order', { id: 'a b' })).toBe('/admin/shop/orders/a%20b')
   })
 
@@ -106,18 +120,83 @@ describe('admin pages', () => {
   it('builds the menu from pages the user may open, in order', async () => {
     const kernel = await bootKernel({ plugins: [shopPlugin()] })
     const admin = await signIn(kernel)
+    const dashboard = {
+      id: 'dashboard',
+      label: 'Dashboard',
+      items: [{ key: 'core.dashboard', label: 'Home', url: '/admin' }],
+    }
     expect(kernel.adminMenu(admin.user)).toEqual([
+      dashboard,
       {
-        pluginId: 'shop',
+        id: 'shop',
         label: 'Shop',
         items: [
           { key: 'shop.products', label: 'Products', url: '/admin/shop/products' },
           { key: 'shop.orders', label: 'Orders', url: '/admin/shop/orders' },
         ],
       },
+      {
+        id: 'plugins',
+        label: 'Plugins',
+        items: [{ key: 'core.plugins', label: 'Installed plugins', url: '/admin/plugins' }],
+      },
+      {
+        id: 'users',
+        label: 'Users',
+        items: [{ key: 'core.users', label: 'All users', url: '/admin/users' }],
+      },
+      {
+        id: 'settings',
+        label: 'Settings',
+        items: [{ key: 'core.general', label: 'General', url: '/admin/settings' }],
+      },
     ])
-    expect(kernel.adminMenu((await signIn(kernel, 'support')).user)).toEqual([])
+    expect(kernel.adminMenu((await signIn(kernel, 'support')).user)).toEqual([dashboard])
     expect(kernel.adminMenu((await signIn(kernel, 'customer')).user)).toEqual([])
+  })
+
+  it('puts pages under the parent they name, falling back to their own section', async () => {
+    const page = (name: string, parent: string, order?: number) => ({
+      name,
+      path: `/${name}`,
+      title: name,
+      capability: 'core.access_admin' as const,
+      menu: { label: name, parent, order },
+      component: () => null,
+    })
+    const reports = plugin('reports', {
+      name: 'Reports',
+      optional: { shop: '^1.0.0', forum: '^1.0.0' },
+      setup(cms) {
+        cms.admin.page(page('sales', 'shop', 15))
+        cms.admin.page(page('signups', 'users'))
+        // The forum is installed but inactive; "nowhere" is a typo.
+        cms.admin.page(page('threads', 'forum'))
+        cms.admin.page(page('lost', 'nowhere'))
+      },
+    })
+    const kernel = await bootKernel({
+      plugins: [shopPlugin(), reports, plugin('forum')],
+      active: ['shop', 'reports'],
+    })
+    const sections = kernel.adminMenu((await signIn(kernel)).user)
+    const items = (id: string) =>
+      sections.find((section) => section.id === id)?.items.map((item) => item.key)
+
+    expect(sections.map((section) => section.id)).toEqual([
+      'dashboard',
+      'shop',
+      'reports',
+      'plugins',
+      'users',
+      'settings',
+    ])
+    expect(items('shop')).toEqual(['shop.products', 'reports.sales', 'shop.orders'])
+    expect(items('users')).toEqual(['core.users', 'reports.signups'])
+    expect(items('reports')).toEqual(['reports.threads', 'reports.lost'])
+    expect(kernel.warnings).toEqual([
+      'Admin page "reports.lost" names unknown menu parent "nowhere"',
+    ])
   })
 
   it('rejects menu pages with parameters and warns about undeclared capabilities', async () => {
@@ -228,6 +307,14 @@ describe('admin actions', () => {
       status: 303,
       path: `/admin/login?next=${encodeURIComponent('/admin/shop/products?page=2')}`,
     })
+  })
+
+  it('answers 403 when the handler throws ForbiddenError', async () => {
+    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const { cookie } = await signIn(kernel, 'shop_manager')
+    const response = await kernel.handleApi(formPost('/api/p/shop/actions/lock', {}, { cookie }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'That order is locked' })
   })
 
   it('refuses users without the capability', async () => {

@@ -7,22 +7,26 @@ import type {
   Logger,
   User,
 } from '@cms/sdk'
-import { ActionError } from '@cms/sdk'
+import { ActionError, ForbiddenError } from '@cms/sdk'
 import { apiPath } from './api'
 import { withFlash, type Flash, type FlashCodec } from './flash'
 import { sessionTokenFromHeader } from './session-cookie'
+import type { SettingsPageView } from './settings-pages'
 
 export const ADMIN_PREFIX = '/admin'
 export const LOGIN_PATH = '/admin/login'
 
-export interface AdminPageEntry {
-  pluginId: string
-  page: AdminPage<unknown>
-}
+/** A plugin's own screen, or a settings page that core renders from its sections. */
+export type AdminPageEntry =
+  { pluginId: string; page: AdminPage<unknown> } | { pluginId: string; settingsPage: string }
 
-export type AdminResolution =
+export type SettingsResolution =
   | { kind: 'not-found' }
   | { kind: 'forbidden' }
+  | { kind: 'settings'; key: string; title: string; view: SettingsPageView }
+
+export type AdminResolution =
+  | SettingsResolution
   | {
       kind: 'page'
       key: string
@@ -31,18 +35,6 @@ export type AdminResolution =
       props: AdminPageProps<unknown>
       Component: AdminPage<unknown>['component']
     }
-
-export interface AdminMenuItem {
-  key: string
-  label: string
-  url: string
-}
-
-export interface AdminMenuGroup {
-  pluginId: string
-  label: string
-  items: AdminMenuItem[]
-}
 
 export interface ActionInput {
   /** `null` only for actions that work signed out. */
@@ -168,6 +160,9 @@ export function createActionHandler(action: InternalAction, deps: ActionDependen
     } catch (error) {
       if (error instanceof ActionError) {
         return redirect(flashTo(back, { kind: 'error', message: error.message }))
+      }
+      if (error instanceof ForbiddenError) {
+        return Response.json({ error: error.message }, { status: 403 })
       }
       deps.logger.error('Admin action failed', {
         plugin: deps.pluginId,

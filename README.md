@@ -86,6 +86,13 @@ export default definePlugin({
 
     cms.auth.role('teacher', { label: 'Teacher', capabilities: ['core.access_admin'] })
     cms.auth.capability('lms.manage_courses', { label: 'Manage courses', roles: ['teacher'] })
+    cms.auth.grant('shop_manager', ['lms.manage_courses']) // any plugin's role
+    // WordPress's map_meta_cap: the object decides which capabilities are needed.
+    cms.auth.metaCapability('lms.edit_course', {
+      label: 'Edit a course',
+      map: (user, course) =>
+        course.authorId === user.id ? ['lms.manage_courses'] : ['lms.manage_others_courses'],
+    })
 
     cms.admin.page({
       name: 'courses',
@@ -94,10 +101,26 @@ export default definePlugin({
       capability: 'lms.manage_courses',
       menu: { label: 'Courses' },
       load: () => listCourses(cms.db), // write load before title and component, for inference
-      component: ({ data }) => (
-        <CourseTable courses={data} action={cms.admin.actionUrl('publish')} />
+      component: ({ data, user }) => (
+        <CourseTable
+          courses={data.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
+          action={cms.admin.actionUrl('publish')}
+        />
       ),
     })
+    cms.admin.page({ ..., menu: { label: 'Course sales', parent: 'commerce' } }) // another menu
+
+    // Settings stay declared above; these say where they show.
+    cms.admin.settingsPage({ name: 'settings', path: '/settings', title: 'Course settings' })
+    cms.admin.settingsSection({
+      name: 'certificates',
+      page: 'lms.settings', // or another plugin's page, e.g. 'commerce.payments'
+      title: 'Certificates',
+      fields: ['lms.certificates'],
+    })
+
+    // Fill other plugins' slots; offer your own with declaration merging and cms.slots.get().
+    cms.slots.fill('admin.dashboard', { component: ({ user }) => <EnrollmentsWidget user={user} /> })
     cms.admin.action({
       name: 'publish',
       capability: 'lms.manage_courses',
@@ -129,8 +152,17 @@ Rules the kernel enforces or relies on:
     interface Actions {
       'lms.course.completed': { userId: string; courseId: string }
     }
+    interface MetaCapabilities {
+      'lms.edit_course': [course: Course]
+    }
+    interface Slots {
+      'lms.admin.course': { course: Course; user: User }
+    }
   }
   ```
+
+- **Throw `ForbiddenError`** from an admin loader, action or API route when a check needs the
+  loaded object (a meta capability). It answers 403.
 
 - **Test with `@cms/testing`:** `createTestKernel({ plugins: [...] })` gives you a kernel on a fresh
   migrated database, `request()` for API routes and admin actions, `signIn(role)` for a session
@@ -140,12 +172,27 @@ Rules the kernel enforces or relies on:
 
 - **Users and roles.** A user has one role and a role grants capabilities, as in WordPress.
   Administrators have every capability. Core defines `administrator` and `customer`; commerce
-  adds `shop_manager`. Plugins add roles, declare capabilities (`lms.manage_courses`) and grant
-  them to other plugins' roles. A grant to a role whose plugin is inactive is dropped.
-- **Screens.** Core provides Dashboard, Plugins, Settings and Users. Plugin pages mount at
-  `/admin/{pluginId}/...` and appear in the menu for users with the page's capability. Style them
-  with the `cms-*` classes in `apps/web/src/app/admin/admin.css` (`cms-table`, `cms-form`,
-  `cms-button`, `cms-form-actions`, `cms-details`).
+  adds `shop_manager`. Plugins add roles, declare capabilities (`lms.manage_courses`), and
+  `grant()` or `revoke()` them on any role. Nothing is stored: roles and grants are rebuilt on
+  every boot from the active plugins, so deactivating a plugin removes what it added. The Users
+  screen lists what each role can do.
+- **Meta capabilities** map an object to the capabilities it requires, like `map_meta_cap`:
+  `can(user, 'commerce.mark_order_paid', order)`. A map returns the required capabilities, or
+  `false` to deny everyone, administrators included. Other plugins adjust a mapping with
+  `extendCapability()`: a bank-transfer gateway lets shop managers confirm its orders by hand.
+  Checks receive the loaded object, so they are synchronous and list screens need no extra
+  queries.
+- **Menu.** Sections in order: Dashboard, one per plugin (load order), Plugins, Users, Settings.
+  A page joins another section with `menu.parent` (a core section or a plugin id); a parent whose
+  plugin is inactive falls back to the page's own section. A section with one item shows as a
+  single link.
+- **Screens.** Plugin pages mount at `/admin/{pluginId}/...` and appear for users with the page's
+  capability. Style them with the `cms-*` classes in `apps/web/src/app/admin/admin.css`
+  (`cms-table`, `cms-form`, `cms-button`, `cms-form-actions`, `cms-details`, `cms-panel`,
+  `cms-widget`).
+- **Slots.** `admin.notices` shows on every screen and `admin.dashboard` on the dashboard.
+  Commerce offers `commerce.admin.order`, which Stripe fills with the Checkout session. Fills
+  decide what to show from the `user` prop.
 - **Actions.** Admin forms post to `cms.admin.actionUrl(name)`. Before the handler runs, the kernel
   requires a same-site `Origin`, a session and the capability. It then answers with a 303 back to
   the form, or to `redirect`, carrying a one-time message. Throw `ActionError` for messages the
@@ -158,6 +205,14 @@ Rules the kernel enforces or relies on:
   environment variable (shown read-only), then database, then default. `secret` fields come from
   the environment only and the admin only says whether they are set. Invalid stored or env values
   are ignored with a warning instead of breaking boot.
+- **Settings pages** follow WordPress's Settings API. Core has Settings › General with a Site
+  section. Plugins add pages (`settingsPage`), sections on any page (`settingsSection`) and fields
+  in any section (`settingsFields`), but place only their own settings. Commerce has Shop and
+  Payments; Stripe adds its section to Payments. A section aimed at an inactive plugin's page
+  moves to its owner's page, and fields nobody placed get a section there, or a page of their
+  own. Each page has a capability (default `core.manage_settings`), so shop managers edit shop
+  settings but not the site's. Saving a page writes only the editable fields on it, after a trial
+  boot with the new values; if a plugin can't start with them, nothing is saved.
 
 ## Security model
 
@@ -181,8 +236,7 @@ methods. Payment webhooks verify their signatures and are idempotent.
 - **First-run setup** is open to whoever reaches a fresh install first, as in WordPress. Run setup
   before exposing a new site.
 
-## Not built yet
+## Roadmap
 
-Customer accounts on the storefront, password reset and email, editing roles in the admin,
-component overrides for themes, uninstall (down migrations), job queue, outbound event outbox, and
-the install flow (`pnpm add` + generate + blue/green rebuild).
+See [docs/roadmap.md](docs/roadmap.md): content types and taxonomies next, then accounts and
+email, then the LMS plugin.

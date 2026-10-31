@@ -106,7 +106,7 @@ export default definePlugin({
       component: () => <a href={cms.routes.url('commerce.shop')}>Shop</a>,
     })
 
-    registerAdmin(cms, commerce)
+    registerAdmin(cms, commerce, manualGateway.id)
   },
 })
 

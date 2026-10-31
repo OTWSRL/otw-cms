@@ -6,6 +6,7 @@
   --border: #e7e5e4;
   --accent: #1d4ed8;
   --danger: #b91c1c;
+  --warning: #b45309;
   color-scheme: light;
 }
 
@@ -18,6 +19,7 @@
     --border: #292524;
     --accent: #93c5fd;
     --danger: #fca5a5;
+    --warning: #fcd34d;
     color-scheme: dark;
   }
 }
