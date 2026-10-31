@@ -146,9 +146,10 @@ change itself, so the update path differs by hosting. Both are supported:
   styles (the theme, until themes exist), `.env`, and its own routes.
 - **Managed route files.** `cms generate`, which already runs before `dev` and `build`, writes
   the CMS's route files into the site: the admin root layout, one admin catch-all page with its
-  403 and 404 pages, the API route, the storefront catch-all, and `src/cms/site.generated.ts`
-  (the installed plugins). Each starts with a marker line; a file without it belongs to the site
-  and is never overwritten. The admin is one catch-all route, so a new core screen arrives with
+  403 and 404 pages, the API route, the storefront's home page and catch-all (separate, so a site
+  can write its own home page), and `src/cms/site.generated.ts` (the installed plugins). Each
+  starts with a marker line; a file without it belongs to the site and is never overwritten, and
+  one a newer version no longer writes is removed. The admin is one catch-all route, so a new core screen arrives with
   the package, and changed route files arrive with the next `cms generate`.
 - **`create-next-cms`** scaffolds a site from the template, and `apps/web` is exactly such a
   site, so the end-to-end suite tests the split.

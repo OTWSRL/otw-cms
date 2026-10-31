@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { PackageChange } from '@cms/core'
-import { MARKER } from '../generate.ts'
+import { MARKER, removeRoute } from '../generate.ts'
 import { CORE_PACKAGES, readSitePackages, writeChanges, type PackageManager } from '../update.ts'
 import type { BuiltRelease, Log } from './supervisor.ts'
 
@@ -154,8 +154,8 @@ async function managedFiles(root: string, dir = root): Promise<string[]> {
 
 /**
  * After a switch, the site's own copy should say what runs: the new versions in package.json,
- * the lockfile, and the route files the new CLI wrote. Files the site owns (no marker) stay.
- * Returns what it couldn't copy, to tell the administrator.
+ * the lockfile, and the route files the new CLI wrote, without the ones it retired. Files the
+ * site owns (no marker) stay. Returns what it couldn't copy, to tell the administrator.
  */
 export async function writeBack(
   { site, manager }: ReleaseBuilder,
@@ -176,12 +176,16 @@ export async function writeBack(
     }
     await copyFile(from, join(site, lockfile)).catch(() => {})
   }
-  for (const file of await managedFiles(release.dir)) {
+  const released = new Set(await managedFiles(release.dir))
+  for (const file of released) {
     const target = join(site, file)
     const current = await readFile(target, 'utf8').catch(() => null)
     if (current !== null && !current.startsWith(MARKER)) continue
     await mkdir(dirname(target), { recursive: true })
     await copyFile(join(release.dir, file), target)
+  }
+  for (const file of await managedFiles(site)) {
+    if (!released.has(file)) await removeRoute(join(site, file))
   }
   return skipped
 }

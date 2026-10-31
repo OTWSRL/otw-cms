@@ -147,7 +147,7 @@ function packageJson({ name, version, plugins, link, target }) {
       // For several instances or serverless: migrate before the new version takes traffic.
       'build:deploy': 'cms generate && cms migrate --no-backup && next build',
       start: 'next start',
-      typecheck: 'cms generate && tsc --noEmit',
+      typecheck: 'cms generate && next typegen && tsc --noEmit',
     },
     dependencies: sorted({
       ...Object.fromEntries([...CORE, ...plugins].map((pkg) => [pkg, spec(pkg)])),

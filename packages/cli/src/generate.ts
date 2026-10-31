@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, sep } from 'node:path'
 
 export interface CmsConfig {
@@ -33,6 +33,8 @@ export interface ManagedFile {
   /** Relative to the site's root, with forward slashes. */
   path: string
   content: string
+  /** The site may put its own file here, as with its other pages, so having one isn't a warning. */
+  replaceable?: true
 }
 
 /** `src/app` when the site uses a src directory, as Next.js allows either. */
@@ -47,8 +49,9 @@ export function siteModulePath({ srcDir }: SiteLayout): string {
   return srcDir ? `${srcDir}/${SITE_MODULE}` : SITE_MODULE
 }
 
-function file(path: string, lines: readonly string[]): ManagedFile {
-  return { path, content: [MARKER, ...lines, ''].join('\n') }
+function file(path: string, lines: readonly string[], replaceable = false): ManagedFile {
+  const content = [MARKER, ...lines, ''].join('\n')
+  return replaceable ? { path, content, replaceable } : { path, content }
 }
 
 /** The import specifier from one site file to another, as Next.js resolves it. */
@@ -65,9 +68,13 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
   const at = (path: string) => (srcDir ? `${srcDir}/${path}` : path)
   const site = siteModulePath({ srcDir })
   // Every route imports the site module, which registers the installed plugins for its bundle.
-  const route = (path: string, lines: readonly string[]) =>
-    file(at(path), [`import '${importPath(at(path), site)}'`, ...lines])
+  const route = (path: string, lines: readonly string[], replaceable = false) =>
+    file(at(path), [`import '${importPath(at(path), site)}'`, ...lines], replaceable)
   const dynamic = "export const dynamic = 'force-dynamic'"
+  const storefront = [
+    "export { SitePage as default, generateSiteMetadata as generateMetadata } from '@cms/next/site'",
+    dynamic,
+  ]
 
   return [
     file(site, [
@@ -97,14 +104,30 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
       "export { DELETE, GET, PATCH, POST, PUT } from '@cms/next/api'",
       dynamic,
     ]),
-    route('app/(site)/[[...slug]]/page.tsx', [
-      "export { SitePage as default, generateSiteMetadata as generateMetadata } from '@cms/next/site'",
-      dynamic,
-    ]),
+    // The home page has a file of its own so the site can write its own home page; an optional
+    // catch-all would claim / as well, and Next.js allows only one.
+    route('app/(site)/page.tsx', storefront, true),
+    route('app/(site)/[...slug]/page.tsx', storefront),
   ]
 }
 
-export type FileStatus = 'written' | 'unchanged' | 'kept'
+/**
+ * Files earlier versions managed, and the files that took their place. One still carrying the
+ * marker is removed. One the site made its own stays, and its replacements aren't written,
+ * since they would clash with it.
+ */
+export function retiredFiles({ srcDir }: SiteLayout): { path: string; replacedBy: string[] }[] {
+  const at = (path: string) => (srcDir ? `${srcDir}/${path}` : path)
+  return [
+    {
+      path: at('app/(site)/[[...slug]]/page.tsx'),
+      replacedBy: [at('app/(site)/page.tsx'), at('app/(site)/[...slug]/page.tsx')],
+    },
+  ]
+}
+
+/** `own` is the site's file where a replaceable one would go; `removed`, a retired file. */
+export type FileStatus = 'written' | 'unchanged' | 'kept' | 'own' | 'removed'
 
 export interface GenerateResult {
   files: { path: string; status: FileStatus }[]
@@ -138,11 +161,25 @@ export async function generate({
   const config = parseConfig(JSON.parse(await readFile(configPath, 'utf8')))
   const layout: SiteLayout = { srcDir: (await exists(join(root, 'src', 'app'))) ? 'src' : '' }
   const files: GenerateResult['files'] = []
+  const clashing = new Set<string>()
+  for (const retired of retiredFiles(layout)) {
+    const target = join(root, ...retired.path.split('/'))
+    const existing = await readIfExists(target)
+    if (existing === null) continue
+    if (existing.startsWith(MARKER)) {
+      await removeRoute(target)
+      files.push({ path: retired.path, status: 'removed' })
+    } else {
+      files.push({ path: retired.path, status: 'kept' })
+      for (const path of retired.replacedBy) clashing.add(path)
+    }
+  }
   for (const managed of managedFiles(config, layout)) {
+    if (clashing.has(managed.path)) continue
     const target = join(root, ...managed.path.split('/'))
     const existing = await readIfExists(target)
     if (existing !== null && !existing.startsWith(MARKER)) {
-      files.push({ path: managed.path, status: 'kept' })
+      files.push({ path: managed.path, status: managed.replaceable ? 'own' : 'kept' })
     } else if (existing === managed.content) {
       files.push({ path: managed.path, status: 'unchanged' })
     } else {
@@ -152,6 +189,14 @@ export async function generate({
     }
   }
   return { files }
+}
+
+/** Deletes a route file, and its folder unless the site put something else there. */
+export async function removeRoute(path: string): Promise<void> {
+  await unlink(path)
+  await rmdir(dirname(path)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST') throw error
+  })
 }
 
 /** For messages: a path relative to where the command ran. */

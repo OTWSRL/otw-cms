@@ -43,6 +43,8 @@ describe('scaffold', () => {
     expect(manifest.scripts['build:deploy']).toBe(
       'cms generate && cms migrate --no-backup && next build',
     )
+    // Route types come from Next.js, and go stale when `cms generate` moves a route.
+    expect(manifest.scripts.typecheck).toBe('cms generate && next typegen && tsc --noEmit')
     expect(JSON.parse(await read(target, 'cms.config.json'))).toEqual({
       plugins: ['@cms/plugin-commerce', '@acme/lms'],
     })
@@ -129,4 +131,22 @@ describe('the template', () => {
       )
     },
   )
+
+  it('has every compiler option Next.js adds on a first build, so building doesn’t rewrite it', async () => {
+    const { compilerOptions } = JSON.parse(await readFile(join(TEMPLATE, 'tsconfig.json'), 'utf8'))
+    // Next's suggested values (verify-typescript-setup); a missing one rewrites the whole file.
+    expect(compilerOptions).toMatchObject({
+      allowJs: true,
+      esModuleInterop: true,
+      incremental: true,
+      isolatedModules: true,
+      jsx: 'react-jsx',
+      module: 'esnext',
+      moduleResolution: 'bundler',
+      noEmit: true,
+      resolveJsonModule: true,
+      skipLibCheck: true,
+      strict: true,
+    })
+  })
 })

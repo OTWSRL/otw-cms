@@ -57,7 +57,8 @@ export const site = defineSite({
       'src/app/(cms)/admin/forbidden.tsx',
       'src/app/(cms)/admin/not-found.tsx',
       'src/app/(cms)/api/p/[...path]/route.ts',
-      'src/app/(site)/[[...slug]]/page.tsx',
+      'src/app/(site)/page.tsx',
+      'src/app/(site)/[...slug]/page.tsx',
     ])
     const admin = files.find((managed) => managed.path.endsWith('[[...segments]]/page.tsx'))!
     expect(admin.content).toBe(`${MARKER}
@@ -93,12 +94,12 @@ describe('generate', () => {
     Object.fromEntries((await generate({ root })).files.map((f) => [f.path, f.status]))
 
   it('writes every file, then leaves them alone until something changes', async () => {
-    expect(Object.values(await statuses())).toEqual(Array(7).fill('written'))
+    expect(Object.values(await statuses())).toEqual(Array(8).fill('written'))
     const site = join(root, 'src/cms/site.generated.ts')
     expect(await readFile(site, 'utf8')).toContain('import plugin0 from "@acme/lms"')
     const written = (await stat(site)).mtimeMs
 
-    expect(Object.values(await statuses())).toEqual(Array(7).fill('unchanged'))
+    expect(Object.values(await statuses())).toEqual(Array(8).fill('unchanged'))
     expect((await stat(site)).mtimeMs).toBe(written)
 
     await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: [] }))
@@ -108,15 +109,52 @@ describe('generate', () => {
   it('overwrites edits to a managed file, but keeps a file without the marker', async () => {
     await generate({ root })
     const layout = join(root, 'src/app/(cms)/layout.tsx')
-    const page = join(root, 'src/app/(site)/[[...slug]]/page.tsx')
+    const page = join(root, 'src/app/(site)/[...slug]/page.tsx')
     await writeFile(layout, `${MARKER}\nexport default function Broken() {}\n`)
     await writeFile(page, 'export default function Home() { return "mine" }\n')
 
     const result = await statuses()
     expect(result['src/app/(cms)/layout.tsx']).toBe('written')
     expect(await readFile(layout, 'utf8')).toContain('AdminRootLayout as default')
-    expect(result['src/app/(site)/[[...slug]]/page.tsx']).toBe('kept')
+    expect(result['src/app/(site)/[...slug]/page.tsx']).toBe('kept')
     expect(await readFile(page, 'utf8')).toContain('"mine"')
+  })
+
+  it('lets the site have its own home page, as it has its other pages', async () => {
+    const home = join(root, 'src/app/(site)/page.tsx')
+    await mkdir(join(root, 'src/app/(site)'), { recursive: true })
+    await writeFile(home, 'export default function Home() { return "hello" }\n')
+
+    const result = await statuses()
+    // Not 'kept': that warns the site to compare its copy after updates.
+    expect(result['src/app/(site)/page.tsx']).toBe('own')
+    expect(result['src/app/(site)/[...slug]/page.tsx']).toBe('written')
+    expect(await readFile(home, 'utf8')).toContain('"hello"')
+  })
+
+  it('removes the optional catch-all earlier versions wrote, which claimed the home page too', async () => {
+    const old = join(root, 'src/app/(site)/[[...slug]]/page.tsx')
+    await mkdir(join(old, '..'), { recursive: true })
+    await writeFile(old, `${MARKER}\nexport { SitePage as default } from '@cms/next/site'\n`)
+
+    const result = await statuses()
+    expect(result['src/app/(site)/[[...slug]]/page.tsx']).toBe('removed')
+    await expect(stat(join(old, '..'))).rejects.toThrow('ENOENT')
+    expect(result['src/app/(site)/page.tsx']).toBe('written')
+    expect(result['src/app/(site)/[...slug]/page.tsx']).toBe('written')
+  })
+
+  it('keeps an old catch-all the site made its own, and doesn’t write routes that clash with it', async () => {
+    const old = join(root, 'src/app/(site)/[[...slug]]/page.tsx')
+    await mkdir(join(old, '..'), { recursive: true })
+    await writeFile(old, 'export default function Mine() { return "mine" }\n')
+
+    const result = await statuses()
+    expect(result['src/app/(site)/[[...slug]]/page.tsx']).toBe('kept')
+    expect(result).not.toHaveProperty(['src/app/(site)/page.tsx'])
+    await expect(stat(join(root, 'src/app/(site)/page.tsx'))).rejects.toThrow('ENOENT')
+    await expect(stat(join(root, 'src/app/(site)/[...slug]'))).rejects.toThrow('ENOENT')
+    expect(await readFile(old, 'utf8')).toContain('"mine"')
   })
 
   it('fails on invalid JSON without writing anything', async () => {

@@ -62,13 +62,16 @@ async function runGenerate(root: string): Promise<void> {
   const { files } = await generate({ root })
   for (const { path, status } of files) {
     if (status === 'written') console.log(`cms: wrote ${displayPath(root, path)}`)
+    if (status === 'removed') console.log(`cms: removed ${displayPath(root, path)}`)
     if (status === 'kept') {
       console.warn(
         `cms: kept ${displayPath(root, path)}: it has no "@generated" line, so it is yours. Compare it with a new site from create-next-cms after updating.`,
       )
     }
   }
-  if (files.every(({ status }) => status === 'unchanged')) console.log('cms: up to date')
+  if (files.every(({ status }) => status === 'unchanged' || status === 'own')) {
+    console.log('cms: up to date')
+  }
 }
 
 async function runMigrate(root: string): Promise<void> {

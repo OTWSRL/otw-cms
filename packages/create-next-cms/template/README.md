@@ -12,7 +12,8 @@ uses an embedded database in `.data/`; see `.env.example` for the other settings
 ## What's yours and what's the CMS's
 
 - **Yours:** `cms.config.json` (installed plugins), `next.config.ts`, `src/app/(site)/layout.tsx`
-  and `src/app/globals.css` (the storefront's look), `.env`, and any routes you add.
+  and `src/app/globals.css` (the storefront's look), `.env`, and any routes you add. For your
+  own home page, write `src/app/(site)/page.tsx` without the `@generated` line.
 - **The CMS's:** the files whose first line says `@generated`. `cms generate` writes them
   before every `dev` and `build`, so updates can change them. Delete that line to keep a file
   as your own; it is never overwritten again.

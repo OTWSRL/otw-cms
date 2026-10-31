@@ -126,6 +126,23 @@ describe('writeBack', () => {
     expect(await exists(join(dir, 'node_modules'))).toBe(false)
   })
 
+  it('removes route files the new release no longer has, unless the site owns them', async () => {
+    const dir = join(root, 'site')
+    const release = { id: 'r2', dir: join(root, 'release'), createdAt: '', versions: {} }
+    const retired = join(dir, 'src', 'app', '(site)', '[[...slug]]', 'page.tsx')
+    const own = join(dir, 'src', 'app', '(site)', 'about', 'page.tsx')
+    await write(join(dir, 'package.json'), json({ dependencies: {} }))
+    await write(retired, `${MARKER}\nold catch-all\n`)
+    await write(own, 'mine\n')
+    await write(join(release.dir, 'package.json'), json({ dependencies: {} }))
+    await write(join(release.dir, 'src', 'app', '(site)', 'page.tsx'), `${MARKER}\nhome\n`)
+
+    await writeBack({ site: dir, manager: 'npm', releasesDir: '' }, release, [])
+    expect(await exists(join(retired, '..'))).toBe(false)
+    expect(await readFile(own, 'utf8')).toBe('mine\n')
+    expect(await exists(join(dir, 'src', 'app', '(site)', 'page.tsx'))).toBe(true)
+  })
+
   it('keeps the site’s lockfile when the release anchored local packages', async () => {
     const dir = join(root, 'site')
     const release = { id: 'r2', dir: join(root, 'release'), createdAt: '', versions: {} }

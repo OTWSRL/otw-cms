@@ -9,7 +9,7 @@
     "build": "cms generate && next build",
     "start": "next start",
     "seed": "cms generate && tsx scripts/seed.ts",
-    "typecheck": "cms generate && tsc --noEmit -p .",
+    "typecheck": "cms generate && next typegen && tsc --noEmit -p .",
     "test:e2e": "playwright test"
   },
   "dependencies": {

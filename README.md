@@ -47,9 +47,11 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   layout and styles (`src/app/(site)/layout.tsx`, `globals.css`), `.env` and its own routes.
 - **The CMS owns** the files `cms generate` writes before every `dev` and `build`: the site
   module (`src/cms/site.generated.ts`, the installed plugins), the admin's root layout and its one
-  catch-all page with 403 and 404 pages, the API route and the storefront catch-all. Each starts
-  with an `@generated` line; delete it and the file is the site's, never overwritten. The admin
-  is one route, so new core screens arrive with the package.
+  catch-all page with 403 and 404 pages, the API route, and the storefront's home page and
+  catch-all. Each starts with an `@generated` line; delete it and the file is the site's, never
+  overwritten. The admin is one route, so new core screens arrive with the package. For its own
+  home page a site writes `src/app/(site)/page.tsx`; otherwise plugins can claim `/`. Files a
+  version stops managing are removed while they still carry the line.
 - **Database changes.** `CMS_MIGRATIONS=startup` (default) migrates when the site starts, for one
   server. `CMS_MIGRATIONS=deploy` never migrates at runtime: run `cms migrate` in the deploy
   step (`build:deploy` in a new site), for several instances or serverless. Until then plugins
