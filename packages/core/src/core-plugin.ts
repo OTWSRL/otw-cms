@@ -5,6 +5,7 @@ import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, type CapabilityStore } from './capabilities'
 import { coreMigrations } from './core-migrations'
 import type { SettingsLayoutStore } from './settings-pages'
+import type { AutoUpdateMode, UpdateService } from './updates'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
 import { CORE_VERSION } from './version'
 
@@ -67,6 +68,8 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.capability(CORE, 'core.manage_plugins', { label: 'Activate and deactivate plugins' })
   capabilities.capability(CORE, 'core.manage_settings', { label: 'Change settings' })
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
+  // No role gets it: updating rebuilds the site, so it stays with administrators unless granted.
+  capabilities.capability(CORE, 'core.manage_updates', { label: 'Update the CMS and plugins' })
 }
 
 /** WordPress's Settings › General, which other plugins add sections and fields to. */
@@ -91,6 +94,8 @@ export interface CoreActionDependencies {
   deactivate(pluginId: string): Promise<string>
   /** Runs pending migrations for core and the active plugins. */
   updateDatabase(): Promise<string>
+  /** The site's way of applying updates, when it has one. */
+  updates: UpdateService | null
   /** Checks the page's own capability, which may be a plugin's rather than core's. */
   saveSettings(page: string, user: User, form: FormData): Promise<void>
 }
@@ -165,6 +170,7 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
       capability: 'core.manage_plugins',
       handler: async ({ form }) => ({ notice: await deps.deactivate(field(form, 'plugin')) }),
     },
+    ...updateActions(deps.updates),
     {
       // WooCommerce's "Update database" button, for sites that migrate at deploy.
       name: 'update-database',
@@ -208,6 +214,54 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
               ? `Updated ${updated[0]!.email}.`
               : `Changed the role of ${updated.length} users.`,
         }
+      },
+    },
+  ]
+}
+
+const NO_UPDATES =
+  'Updates from the admin need the site to run under `cms serve`, or a GitHub repository. Run `cms update` on the server instead.'
+
+/** Dashboard › Updates: each hands the request to the site's update service. */
+function updateActions(updates: UpdateService | null): InternalAction[] {
+  const service = (): UpdateService => {
+    if (!updates) throw new ActionError(NO_UPDATES)
+    return updates
+  }
+  return [
+    {
+      name: 'check-updates',
+      capability: 'core.manage_updates',
+      handler: async () => ({ notice: await service().check() }),
+    },
+    {
+      name: 'update',
+      capability: 'core.manage_updates',
+      async handler({ form }) {
+        const packages = form.getAll('packages').filter((value) => typeof value === 'string')
+        const request =
+          packages.length > 0
+            ? { packages }
+            : field(form, 'scope') === 'plugins'
+              ? { pluginsOnly: true }
+              : {}
+        return { notice: await service().update(request) }
+      },
+    },
+    {
+      name: 'rollback-release',
+      capability: 'core.manage_updates',
+      handler: async ({ form }) => ({ notice: await service().rollback(field(form, 'release')) }),
+    },
+    {
+      name: 'auto-updates',
+      capability: 'core.manage_updates',
+      async handler({ form }) {
+        const mode = field(form, 'mode')
+        if (mode !== 'off' && mode !== 'patch') {
+          throw new ActionError('Choose off or patch releases.')
+        }
+        return { notice: await service().setAutoUpdate(mode satisfies AutoUpdateMode) }
       },
     },
   ]

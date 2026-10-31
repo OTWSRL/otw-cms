@@ -128,6 +128,8 @@ export interface UpdateScope {
   only?: readonly string[]
   /** Leave core where it is. */
   pluginsOnly?: boolean
+  /** Patch releases only (`~` of what's installed), for automatic updates. */
+  patchOnly?: boolean
 }
 
 const INCLUDE_PRERELEASE = { includePrerelease: true }
@@ -180,14 +182,15 @@ export function resolveTargets(site: SitePackages, names: readonly string[]): st
 function planCore(
   site: SitePackages,
   packuments: Readonly<Record<string, Packument | Unreachable>>,
-  { major = false }: UpdateScope,
+  { major = false, patchOnly = false }: UpdateScope,
 ): { core: UpdatePlan['core']; changes: UpdatePlan['changes']; blockers: string[] } {
   const from = site.installed[CORE_VERSION_FROM]!
   const doc = packuments[CORE_VERSION_FROM]
   if (!doc || 'error' in doc) {
     throw new Error(`Can't look up ${CORE_VERSION_FROM}: ${doc?.error ?? 'not fetched'}`)
   }
-  const target = semver.maxSatisfying(candidates(doc, from), major ? '*' : `^${from}`)
+  const range = patchOnly ? `~${from}` : major ? '*' : `^${from}`
+  const target = semver.maxSatisfying(candidates(doc, from), range)
   if (!target || !semver.gt(target, from)) return { core: null, changes: [], blockers: [] }
   const changes: UpdatePlan['changes'] = []
   const blockers: string[] = []
@@ -257,7 +260,10 @@ export function planUpdate(
       continue
     }
     const newer = candidates(doc, from)
-      .filter((version) => semver.gt(version, from))
+      .filter(
+        (version) =>
+          semver.gt(version, from) && (!scope.patchOnly || semver.satisfies(version, `~${from}`)),
+      )
       .sort(semver.rcompare)
     latest.set(name, newer[0] ?? null)
     const usable = newer.filter((version) => {
@@ -373,6 +379,40 @@ export async function readSitePackages(root: string): Promise<SitePackages> {
   return { specs, installed, peers, plugins }
 }
 
+/**
+ * Plans an update for the site at `root`: reads what is installed, looks up what is published
+ * (through npm, so `.npmrc` applies), and plans. `packages` are names as typed, resolved with
+ * `resolveTargets`. What `cms update` and `cms serve` both run.
+ */
+export async function planSite(
+  root: string,
+  { packages = [], ...scope }: Omit<UpdateScope, 'only'> & { packages?: readonly string[] } = {},
+  fetchVersions: FetchVersions = npmView(root),
+): Promise<UpdatePlan> {
+  const site = await readSitePackages(root)
+  const only = packages.length > 0 ? resolveTargets(site, packages) : undefined
+  const coreInScope = only ? only.some(isCore) : !scope.pluginsOnly
+  const lookups = [
+    ...(coreInScope ? CORE_PACKAGES.filter((name) => name in site.specs) : []),
+    ...site.plugins.filter((name) => !only || only.includes(name)),
+  ].filter((name) => site.specs[name] && !isLinked(site.specs[name]))
+  // One plugin npm can't reach (a private registry without a token, say) doesn't stop the rest.
+  const packuments: Record<string, Packument | Unreachable> = Object.fromEntries(
+    await Promise.all(
+      lookups.map(async (name) => {
+        const found = await fetchVersions(name, site.installed[name] ?? '0.0.0').catch(
+          (error: unknown): Unreachable => ({
+            name,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        )
+        return [name, found] as const
+      }),
+    ),
+  )
+  return planUpdate(site, packuments, { ...scope, only })
+}
+
 /** Keeps the spec's style: `^1.2.0` stays a caret range, `1.2.0` stays exact. */
 export function nextSpec(current: string, version: string): string {
   const prefix = /^[\^~]/.exec(current)?.[0] ?? ''
@@ -380,7 +420,10 @@ export function nextSpec(current: string, version: string): string {
 }
 
 /** Rewrites package.json in place, leaving everything else in it as it was. */
-export async function writeChanges(root: string, changes: UpdatePlan['changes']): Promise<void> {
+export async function writeChanges(
+  root: string,
+  changes: readonly UpdatePlan['changes'][number][],
+): Promise<void> {
   const file = join(root, 'package.json')
   const raw = await readFile(file, 'utf8')
   const manifest = JSON.parse(raw) as PackageJson

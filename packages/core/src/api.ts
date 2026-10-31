@@ -1,3 +1,4 @@
+import { isSiteOrigin, type OriginPolicy } from './origins'
 import type { ApiHandler, HttpMethod, Logger } from '@cms/sdk'
 import { ForbiddenError, HttpError } from '@cms/sdk'
 import type { Router } from './router'
@@ -22,7 +23,7 @@ export async function dispatchApi(
   router: Router<ApiEntry>,
   request: Request,
   logger: Logger,
-  allowedOrigins: readonly string[],
+  origins: OriginPolicy,
 ): Promise<Response> {
   const url = new URL(request.url)
   const method = request.method.toUpperCase()
@@ -39,7 +40,7 @@ export async function dispatchApi(
   // (payment webhooks) send none.
   if (!SAFE_METHODS.has(method)) {
     const origin = request.headers.get('origin')
-    if (origin && origin !== url.origin && !allowedOrigins.includes(origin)) {
+    if (origin && !isSiteOrigin(origin, request, origins)) {
       return errorResponse(403, 'Cross-origin request blocked')
     }
   }

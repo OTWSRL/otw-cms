@@ -15,6 +15,9 @@ extensibility and drop the flaw.
 3. **Admin extensibility.** Below, kept as the spec it was built to.
 4. **WordPress admin UI.** Below.
 5. **Packaging and updates.** Below.
+6. **Updates from the admin.** Below.
+
+Next: 7, Content.
 
 ## 3. Admin extensibility (done)
 
@@ -214,12 +217,69 @@ core packages together and publishes them with provenance. A `deprecated()` help
 policy above. `--link` sites see two copies of shared dependencies such as `drizzle-orm`, which
 only matters to the type checker.
 
-## 6. Updates from the admin
+## 6. Updates from the admin (done)
 
-Dashboard › Updates (available versions, compatibility, security releases), one-click updates on
-your own server (build beside the running release, migrate, health-check, switch, keep the old
-one for rollback), a pull request or deploy hook on git-based hosts, and automatic patch
-releases, opt-in.
+WordPress's Dashboard › Updates and "update now", for a site that has to be rebuilt to change.
+How an update is applied depends on the hosting, so the admin talks to an update channel:
+
+| Channel     | When                                                              | Update now                                  | Checks                      |
+| ----------- | ----------------------------------------------------------------- | ------------------------------------------- | --------------------------- |
+| `cms serve` | Your own server, started with `cms serve`                         | Builds a release and switches to it         | Twice a day, and on request |
+| GitHub      | `CMS_GITHUB_REPO` and `CMS_GITHUB_TOKEN` set (Vercel and similar) | Starts a workflow that opens a pull request | In the workflow             |
+| None        | Anything else (Docker images, `next start`)                       | The command to run                          | None                        |
+
+### `cms serve`
+
+- Runs the site from built releases in `.cms/releases`, behind a small proxy on the public port,
+  instead of `next start`. A site is built once into a release before it first serves.
+- **Update now** builds a new release beside the live one: copy the site, apply the plan (the
+  same planner as `cms update`), install, build. Then back up and migrate, start the new
+  release, check it answers, switch the proxy to it, and stop the old one. With Postgres both
+  run during the switch, so there is no downtime; the embedded database belongs to one process,
+  so the proxy answers "being updated" (503, Retry-After) for the seconds between. If anything
+  fails, the old release keeps or resumes serving, and the embedded database's backup is put
+  back.
+- **Roll back** switches to the previous release. Migrations only add within a major version,
+  so the older code runs on the newer schema.
+- After a successful update, `package.json`, the lockfile and the managed route files are copied
+  back to the site, so the repository matches what runs.
+- Checks for updates twice a day, as WordPress does; automatic updates (off by default) apply
+  patch releases of core and plugins the same way.
+- The admin reaches it on a loopback port with a random token it passes to the release it
+  starts. Jobs run one at a time; the admin shows their steps as they run.
+
+### GitHub
+
+- A new site includes `.github/workflows/cms-update.yml`: run by hand, from the admin, or weekly,
+  it runs `cms update --commit` (with the plugins asked for) and opens a pull request. Merging
+  deploys it, and `build:deploy` migrates.
+- The admin starts it through the GitHub API with a token allowed to run workflows, and links to
+  the runs.
+
+### The admin
+
+- Dashboard › Updates: when it last checked and Check again; core; plugins with checkboxes, the
+  version each goes to, compatibility with the core it will run on, and why one is held back;
+  automatic updates; releases with Roll back; and the current job's progress.
+- The update count on Dashboard and Plugins in the menu, and "There is a new version of … update
+  now" under the plugin on the Plugins screen.
+- `core.manage_updates`, administrators only unless granted.
+
+### Behind proxies
+
+Next.js reports every request at its own address, so behind `cms serve`'s proxy (or nginx) the
+admin's same-site check refused every form. The site's origin is now the request's, `site.url`,
+or, with `CMS_TRUST_PROXY=1`, the forwarded host and protocol. `cms serve` passes those headers
+on, keeping an outer proxy's, and sets `CMS_TRUST_PROXY` for its releases.
+
+### Not in this milestone
+
+Tried for real: `cms serve` on the embedded database, building, updating a plugin from a local
+registry with a migration, and rolling back, all from the admin. Covered only with fakes: the
+Postgres path (both releases running through the switch, `pg_dump` backups) and the GitHub
+workflow, which hasn't run on GitHub yet. `cms serve` is one server; several instances update
+through git. Docker images update by rebuilding. Installing new plugins from the admin, as
+WordPress's Add New does, needs a plugin directory first.
 
 ## 7. Content
 

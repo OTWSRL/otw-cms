@@ -136,7 +136,30 @@ function opensOnTap(event: MouseEvent): boolean {
 }
 
 /** The admin menu (`#adminmenu`): sections with icons, submenus inline or flying out. */
-export function AdminMenu({ sections }: { sections: readonly AdminMenuSection[] }) {
+/** WordPress's count bubble: updates waiting, by section id or item key. */
+function Badge({ count }: { count: number | undefined }) {
+  if (!count) return null
+  return (
+    <>
+      {' '}
+      <span className="update-plugins" aria-hidden="true">
+        {count}
+      </span>
+      <span className="screen-reader-text">
+        {' '}
+        ({count} {count === 1 ? 'update' : 'updates'})
+      </span>
+    </>
+  )
+}
+
+export function AdminMenu({
+  sections,
+  badges = {},
+}: {
+  sections: readonly AdminMenuSection[]
+  badges?: Readonly<Record<string, number>>
+}) {
   const { setMenuOpen, toggleFolded } = useFrame()
   const current = currentUrl(sections, usePathname())
   const [opened, setOpened] = useState<string | null>(null)
@@ -194,7 +217,10 @@ export function AdminMenu({ sections }: { sections: readonly AdminMenuSection[] 
                     <span className="wp-menu-image">
                       <AdminIcon icon={section.icon} />
                     </span>
-                    <span className="wp-menu-name">{section.label}</span>
+                    <span className="wp-menu-name">
+                      {section.label}
+                      <Badge count={badges[section.id]} />
+                    </span>
                   </Link>
                   <ul className="wp-submenu" aria-label={section.label}>
                     <li className="wp-submenu-head" aria-hidden="true">
@@ -209,6 +235,7 @@ export function AdminMenu({ sections }: { sections: readonly AdminMenuSection[] 
                             onClick={navigate}
                           >
                             {item.label}
+                            <Badge count={badges[item.key]} />
                           </Link>
                         </li>
                       ))}

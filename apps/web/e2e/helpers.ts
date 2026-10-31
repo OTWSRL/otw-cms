@@ -5,6 +5,9 @@ export const ADMIN = {
   email: 'ada@example.com',
   password: 'a strong e2e password',
 }
+/** The stand-in for `cms serve` the e2e site reports updates through (e2e/fake-supervisor.mjs). */
+export const SUPERVISOR = { port: 3199, token: 'e2e-supervisor-token' }
+
 export const MANAGER = { email: 'max@example.com', password: 'another e2e password' }
 
 export async function signIn(
@@ -28,9 +31,14 @@ export function mainMenu(page: Page) {
   return page.getByRole('navigation', { name: 'Main menu' })
 }
 
-/** A top-level menu entry, which opens its section's first page, as in WordPress. */
+/**
+ * A top-level menu entry, which opens its section's first page, as in WordPress. Its name may
+ * end in WordPress's update count, as in "Plugins (1 update)".
+ */
 export function openSection(page: Page, label: string) {
-  return mainMenu(page).getByRole('link', { name: label, exact: true }).click()
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const name = new RegExp(`^${escaped}( \\(\\d+ updates?\\))?$`)
+  return mainMenu(page).getByRole('link', { name }).click()
 }
 
 /** The submenu of the current section. Other sections' submenus only fly out on hover. */

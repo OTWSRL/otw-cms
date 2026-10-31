@@ -38,3 +38,16 @@ export {
   type MigrateSiteOptions,
   type MigrateSiteResult,
 } from './site-migrations'
+export {
+  availableUpdates,
+  type AutoUpdateMode,
+  type PackageChange,
+  type PluginUpdate,
+  type ReleaseRecord,
+  type UpdateCheck,
+  type UpdateJob,
+  type UpdateJobStep,
+  type UpdateOverview,
+  type UpdateRequest,
+  type UpdateService,
+} from './updates'

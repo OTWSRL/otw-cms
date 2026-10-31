@@ -2,6 +2,7 @@ import { createKernel, type Env, type Kernel } from '@cms/core'
 import type { Database } from '@cms/sdk'
 import type { Site } from '../site-registry'
 import { activePluginsFromEnv, migrationModeFromEnv } from './settings'
+import { updateServiceFromEnv } from './updates'
 
 export interface BootOptions {
   env?: Env
@@ -21,6 +22,8 @@ export function bootSite(
     db,
     env,
     secret: env.CMS_SECRET || undefined,
+    trustProxy: ['1', 'true'].includes(env.CMS_TRUST_PROXY ?? ''),
+    updates: updateServiceFromEnv(env),
     onChange,
   })
 }

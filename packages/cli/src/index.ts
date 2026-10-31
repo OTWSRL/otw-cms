@@ -7,6 +7,7 @@ export {
   CORE_PACKAGES,
   detectPackageManager,
   nextSpec,
+  planSite,
   planUpdate,
   readSitePackages,
   npmView,

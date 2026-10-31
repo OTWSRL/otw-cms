@@ -147,6 +147,37 @@ describe('planUpdate', () => {
     ])
   })
 
+  it('stays within patch releases for automatic updates', () => {
+    const installed = site({
+      installed: {
+        '@cms/next': '1.2.0',
+        '@cms/cli': '1.2.0',
+        [COMMERCE]: '1.0.0',
+        [STRIPE]: '1.0.0',
+      },
+      peers: { [COMMERCE]: { '@cms/sdk': '^1.0.0' }, [STRIPE]: { '@cms/sdk': '^1.0.0' } },
+    })
+    const packuments = {
+      ...core('1.2.0', '1.2.3', '1.3.0'),
+      [COMMERCE]: packument(COMMERCE, { '1.0.0': '^1.0.0', '1.0.1': '^1.0.0', '1.1.0': '^1.0.0' }),
+      [STRIPE]: stripe({ '1.0.0': { '@cms/sdk': '^1.0.0' }, '1.0.4': { '@cms/sdk': '^1.0.0' } }),
+    }
+    const changes = (plan: ReturnType<typeof planUpdate>) =>
+      plan.changes.map(({ name, to }) => `${name}@${to}`)
+    expect(changes(planUpdate(installed, packuments))).toEqual([
+      '@cms/next@1.3.0',
+      '@cms/cli@1.3.0',
+      `${COMMERCE}@1.1.0`,
+      `${STRIPE}@1.0.4`,
+    ])
+    expect(changes(planUpdate(installed, packuments, { patchOnly: true }))).toEqual([
+      '@cms/next@1.2.3',
+      '@cms/cli@1.2.3',
+      `${COMMERCE}@1.0.1`,
+      `${STRIPE}@1.0.4`,
+    ])
+  })
+
   it('leaves core alone with --plugins-only', () => {
     const plan = planUpdate(
       site(),

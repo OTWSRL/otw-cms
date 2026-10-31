@@ -4,6 +4,8 @@ import type { PluginDefinition } from '@cms/sdk'
 export interface Site {
   /** The installed plugins, in `cms.config.json` order. */
   plugins: readonly PluginDefinition[]
+  /** Each plugin's npm package, in the same order, for matching update checks to plugins. */
+  packages?: readonly string[]
 }
 
 // Module-scoped, not global: Next compiles server components and route handlers separately, and

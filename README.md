@@ -17,7 +17,7 @@ packages/sdk           @cms/sdk: the only package plugin authors depend on (type
 packages/admin-ui      @cms/admin-ui: WordPress-style admin components (list and form tables, boxes)
 packages/core          @cms/core: the kernel (resolver, hooks, registries, services, router, migrations)
 packages/testing       @cms/testing: boots the kernel on in-memory Postgres for plugin tests
-packages/cli           @cms/cli: `cms generate`, `cms migrate`, `cms update`
+packages/cli           @cms/cli: `cms generate`, `cms migrate`, `cms update`, `cms serve`
 packages/create-next-cms  scaffolds a new site (`pnpm create next-cms my-site`)
 plugins/commerce       products, orders, checkout; defines the extension points other plugins use
 plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
@@ -68,6 +68,21 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   `--plugins-only` leaves core alone. Versions come from `npm view` in the site's directory, so
   `.npmrc` registries and tokens for private and paid plugins apply; one npm can't reach is
   reported and left as it is. `--commit` puts it on a git branch for hosts that build from git.
+- **Updates from the admin.** Dashboard › Updates and the Plugins screen's "update now", as in
+  WordPress, through whichever channel the hosting allows. `cms serve` (your own server) runs
+  the site from built releases in `.cms/releases` behind a small proxy: an update builds a new
+  release beside the live one with the same planner, backs up and migrates, starts it, checks
+  it answers and switches. With Postgres there's no downtime; with the embedded database
+  visitors get a few seconds of 503 "being updated". A failure leaves the old release serving
+  and restores the backup; earlier releases can be rolled back to; `package.json`, the lockfile
+  and managed route files are written back to the site. It checks twice a day and can install
+  patch releases on its own. With `CMS_GITHUB_REPO` and `CMS_GITHUB_TOKEN` (Vercel and other
+  git-built hosts) the admin starts the site's `cms-update.yml` workflow, which opens a pull
+  request. Otherwise the screen gives the commands. Needs `core.manage_updates`.
+- **Behind a reverse proxy** (nginx, Caddy), Next.js sees its own address, not the visitor's.
+  Set `CMS_TRUST_PROXY=1` so the admin trusts `X-Forwarded-Host` and `X-Forwarded-Proto`, or set
+  `SITE_URL` (the site address on Settings › General); until one is set, admin forms answer 403.
+  `cms serve` sets `CMS_TRUST_PROXY` for its releases.
 - **A new site:** `pnpm create next-cms my-site --plugins commerce,commerce-stripe`, or
   `--link <checkout>` to try unreleased changes. It includes a Dockerfile for your own server.
 
@@ -293,7 +308,12 @@ methods. Payment webhooks verify their signatures and are idempotent.
   hash as wrong passwords, so timing doesn't reveal accounts. Throttling per IP belongs at the
   edge (WAF or proxy), where the client address is trustworthy.
 - **Admin actions** require an `Origin` header matching the site (stricter than public routes),
-  on top of `SameSite=Lax`. Redirects only go to same-site paths.
+  on top of `SameSite=Lax`. The site is the request's own origin, the site address setting, or,
+  with `CMS_TRUST_PROXY`, the forwarded host and protocol; forwarded headers are ignored
+  otherwise, since anyone can send them. Redirects only go to same-site paths.
+- **`cms serve`'s control port**, which the admin uses to start updates, listens on loopback
+  only and requires a random bearer token (compared in constant time) that it hands to the
+  releases it starts. Starting an update needs `core.manage_updates`.
 - **Flash messages** travel in the redirect URL signed with HMAC and expire after 10 minutes, so
   a crafted link can't make the admin display attacker-written text.
 - **First-run setup** is open to whoever reaches a fresh install first, as in WordPress. Run setup

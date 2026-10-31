@@ -74,7 +74,10 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
       "import { defineSite } from '@cms/next'",
       ...config.plugins.map((name, i) => `import plugin${i} from ${JSON.stringify(name)}`),
       '',
-      `export const site = defineSite({ plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}] })`,
+      'export const site = defineSite({',
+      `  plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}],`,
+      `  packages: [${config.plugins.map((name) => JSON.stringify(name)).join(', ')}],`,
+      '})',
     ]),
     route('app/(cms)/layout.tsx', [
       "export { AdminRootLayout as default } from '@cms/next/admin'",

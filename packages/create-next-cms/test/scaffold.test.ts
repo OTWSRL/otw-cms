@@ -59,6 +59,13 @@ describe('scaffold', () => {
     expect(readme).toMatch(/^# my-shop$/m)
     expect(readme).toContain('pnpm cms update --check')
     expect(readme).not.toContain('{{')
+
+    // The update workflow for git-based hosts, with this package manager's commands.
+    const workflow = await read(target, '.github/workflows/cms-update.yml')
+    expect(workflow).toContain("run: 'corepack enable && pnpm install --frozen-lockfile'")
+    expect(workflow).toContain('pnpm cms update $PACKAGES $PLUGINS_ONLY --commit')
+    expect(workflow.replace(/\$\{\{[^}]*\}\}/g, '')).not.toContain('{{')
+    expect(await read(target, '.gitignore')).toContain('.cms/')
   })
 
   it('writes npm commands for npm', async () => {
@@ -67,6 +74,9 @@ describe('scaffold', () => {
     const readme = await read(target, 'README.md')
     expect(readme).toContain('npx cms update --check')
     expect(readme).toContain('npm run build')
+    const workflow = await read(target, '.github/workflows/cms-update.yml')
+    expect(workflow).toContain("run: 'npm ci'")
+    expect(workflow).toContain('npx cms update $PACKAGES $PLUGINS_ONLY --commit')
   })
 
   it('links a checkout of the CMS instead of the registry', async () => {

@@ -63,6 +63,15 @@ export const CORE_MENU: readonly MenuEntry[] = [
     parent: 'dashboard',
   },
   {
+    key: 'core.updates',
+    pluginId: 'core',
+    label: 'Updates',
+    url: '/admin/updates',
+    order: 1,
+    capability: 'core.manage_updates',
+    parent: 'dashboard',
+  },
+  {
     key: 'core.plugins',
     pluginId: 'core',
     label: 'Installed Plugins',

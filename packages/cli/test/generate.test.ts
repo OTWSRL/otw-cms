@@ -37,11 +37,14 @@ import { defineSite } from '@cms/next'
 import plugin0 from "@cms/plugin-commerce"
 import plugin1 from "@cms/plugin-commerce-stripe"
 
-export const site = defineSite({ plugins: [plugin0, plugin1] })
+export const site = defineSite({
+  plugins: [plugin0, plugin1],
+  packages: ["@cms/plugin-commerce", "@cms/plugin-commerce-stripe"],
+})
 `,
     })
     expect(managedFiles({ plugins: [] }, { srcDir: 'src' })[0]!.content).toContain(
-      'defineSite({ plugins: [] })',
+      '  plugins: [],\n  packages: [],',
     )
   })
 

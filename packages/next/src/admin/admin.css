@@ -635,6 +635,29 @@ body:has(> .cms-login) {
   }
 }
 
+/* WordPress's count bubble on Dashboard › Updates and Plugins. */
+.cms-admin #adminmenu .update-plugins {
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  margin: 1px 0 -1px 2px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--wp-highlight);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: center;
+  vertical-align: top;
+}
+
+.cms-admin #adminmenu li.wp-has-current-submenu > a .update-plugins,
+.cms-admin #adminmenu li.menu-top:hover > a .update-plugins {
+  background: var(--wp-submenu-bg);
+}
+
 /* ── Content and footer ────────────────────────────────────────────────────── */
 
 .cms-admin #wpcontent,
@@ -1506,6 +1529,62 @@ body:has(> .cms-login) {
 .cms-admin .order-status.status-paid {
   background: #c6e1c6;
   color: #2c4700;
+}
+
+/* ── Updates ───────────────────────────────────────────────────────────────── */
+
+.cms-admin .update-last-checked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cms-admin .update-steps {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.cms-admin .update-steps li[data-status='running'] {
+  font-weight: 600;
+}
+
+.cms-admin .update-steps li[data-status='skipped'] {
+  color: var(--wp-muted);
+}
+
+.cms-admin .code-block {
+  max-height: 20em;
+  margin: 0.5em 0;
+  padding: 8px 12px;
+  overflow: auto;
+  background: #f6f7f7;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin .auto-updates {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cms-admin .auto-updates input[type='radio'] {
+  margin: -0.25rem 0.25rem 0 0;
+  accent-color: var(--wp-highlight);
+}
+
+.cms-admin .update-waiting {
+  padding-left: 1.5em;
+}
+
+.cms-admin .widefat td .update-message {
+  margin: 8px 0 0;
 }
 
 /* ── Sign-in and setup (wp-login.php) ──────────────────────────────────────── */

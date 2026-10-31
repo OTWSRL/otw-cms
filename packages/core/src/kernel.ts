@@ -57,7 +57,9 @@ import { createFlashCodec, type Flash, type FlashCodec } from './flash'
 import { HookBus } from './hooks'
 import { consoleLogger, withContext } from './logger'
 import { pendingMigrations, runMigrations } from './migrations'
+import type { OriginPolicy } from './origins'
 import { DatabaseUpdateRequiredError, migrateSite } from './site-migrations'
+import type { UpdateService } from './updates'
 import { bumpGeneration, ensureSecret, readGeneration } from './options'
 import type { HashCost } from './passwords'
 import {
@@ -107,6 +109,11 @@ export interface KernelOptions {
   routes?: Readonly<Record<string, string>>
   /** Extra origins allowed to send unsafe API requests. */
   allowedOrigins?: readonly string[]
+  /**
+   * A reverse proxy the site trusts sits in front (cms serve sets this): take the visitor's
+   * origin from X-Forwarded-Host and X-Forwarded-Proto.
+   */
+  trustProxy?: boolean
   logger?: Logger
   /** Throw when a plugin fails to boot instead of booting without it. Use in tests and CI. */
   strict?: boolean
@@ -123,6 +130,8 @@ export interface KernelOptions {
    * core migrations stop the boot with `DatabaseUpdateRequiredError`.
    */
   migrations?: 'startup' | 'deploy'
+  /** How this site applies updates from the admin (Dashboard › Updates), if it can. */
+  updates?: UpdateService
 }
 
 export interface ResolvedPage {
@@ -153,6 +162,8 @@ export interface Kernel {
   readonly skipped: readonly SkippedPlugin[]
   /** Plugins kept off because their migrations haven't run (`migrations: 'deploy'`). */
   readonly databaseUpdates: readonly string[]
+  /** The site's update service, for Dashboard › Updates; `null` when it has none. */
+  readonly updates: UpdateService | null
   readonly warnings: readonly string[]
   readonly db: Database
   /** Changes when the admin changes activation or settings. */
@@ -317,6 +328,11 @@ async function boot(
   })
   for (const warning of settings.warnings) logger.warn(warning)
   const values = settings.values as SettingsValues
+  const origins: OriginPolicy = {
+    trustProxy: options.trustProxy ?? false,
+    siteUrl: () => values['site.url'],
+    allowedOrigins: options.allowedOrigins ?? [],
+  }
   const settingsByKey = new Map(settings.settings.map((setting) => [setting.key, setting]))
 
   let sealed = false
@@ -443,8 +459,7 @@ async function boot(
           can: (user, capability) => stores.capabilities.can(user, capability),
           flash: prepared.flash,
           logger: withContext(logger, { plugin: pluginId }),
-          allowedOrigins: options.allowedOrigins ?? [],
-          siteUrl: () => values['site.url'],
+          origins,
         }),
       },
       'POST',
@@ -506,6 +521,7 @@ async function boot(
       await changed()
       return `${name} deactivated.`
     },
+    updates: options.updates ?? null,
     async updateDatabase() {
       const result = await migrateSite({
         db: db.root,
@@ -736,6 +752,7 @@ async function boot(
 
   return buildKernel({
     coreVersion,
+    origins,
     prepared,
     resolution,
     skipped,
@@ -780,8 +797,9 @@ function buildKernel(input: {
   settingsPages: ReadonlyMap<string, ResolvedSettingsPage>
   installed: ReadonlyMap<string, PluginDefinition>
   auth: AuthService
+  origins: OriginPolicy
 }): Kernel {
-  const { prepared, stores, values, installed } = input
+  const { prepared, stores, values, installed, origins } = input
   const { options, logger, db } = prepared
   const active = input.resolution.order.map((plugin) => plugin.id)
   const activeSet = new Set(active)
@@ -802,6 +820,7 @@ function buildKernel(input: {
     active,
     skipped: input.skipped,
     databaseUpdates: prepared.databaseUpdates,
+    updates: options.updates ?? null,
     warnings: input.warnings,
     generation: prepared.generation,
     activation: options.active ? 'pinned' : 'database',
@@ -834,7 +853,7 @@ function buildKernel(input: {
       }
     },
     slot: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
-    handleApi: (request) => dispatchApi(stores.apis, request, logger, options.allowedOrigins ?? []),
+    handleApi: (request) => dispatchApi(stores.apis, request, logger, origins),
 
     auth: input.auth,
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),

@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import { SUPERVISOR } from './e2e/helpers'
 
 const PORT = 3100
+const { port: SUPERVISOR_PORT, token: SUPERVISOR_TOKEN } = SUPERVISOR
 
 export default defineConfig({
   testDir: './e2e',
@@ -30,16 +32,30 @@ export default defineConfig({
       dependencies: ['chromium'],
     })),
   ],
-  webServer: {
-    command: `pnpm build && pnpm seed --reset && pnpm start --port ${PORT}`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 300_000,
-    env: {
-      CMS_DATA_DIR: '.data/e2e',
-      DATABASE_URL: '',
-      STRIPE_SECRET_KEY: '',
-      STRIPE_WEBHOOK_SECRET: '',
+  webServer: [
+    // Stands in for `cms serve`, which the site reports updates through.
+    {
+      command: 'node e2e/fake-supervisor.mjs',
+      url: `http://127.0.0.1:${SUPERVISOR_PORT}/health`,
+      reuseExistingServer: false,
+      env: {
+        FAKE_SUPERVISOR_PORT: String(SUPERVISOR_PORT),
+        CMS_SUPERVISOR_TOKEN: SUPERVISOR_TOKEN,
+      },
     },
-  },
+    {
+      command: `pnpm build && pnpm seed --reset && pnpm start --port ${PORT}`,
+      url: `http://localhost:${PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 300_000,
+      env: {
+        CMS_DATA_DIR: '.data/e2e',
+        DATABASE_URL: '',
+        STRIPE_SECRET_KEY: '',
+        STRIPE_WEBHOOK_SECRET: '',
+        CMS_SUPERVISOR_URL: `http://127.0.0.1:${SUPERVISOR_PORT}`,
+        CMS_SUPERVISOR_TOKEN: SUPERVISOR_TOKEN,
+      },
+    },
+  ],
 })

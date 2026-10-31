@@ -1,10 +1,11 @@
-import { CORE_VERSION, type Kernel } from '@cms/core'
+import { availableUpdates, CORE_VERSION, type Kernel } from '@cms/core'
 import type { User } from '@cms/sdk'
 import { cookies } from 'next/headers'
 import type { ReactNode } from 'react'
 import { AdminBar } from './admin-bar'
 import { AdminFrame, AdminMenu } from './admin-frame'
 import { MENU_COOKIE, menuPreference } from './admin-menu-preference'
+import { updateOverview } from './update-overview'
 
 /** WordPress's admin frame: bar on top, menu on the left, the screen, and the footer. */
 export async function AdminShell({
@@ -16,7 +17,13 @@ export async function AdminShell({
   user: User
   children: ReactNode
 }) {
-  const jar = await cookies()
+  const [jar, overview] = await Promise.all([cookies(), updateOverview(kernel, user)])
+  const total = overview ? availableUpdates(overview) : 0
+  const plugins =
+    overview?.channel === 'serve'
+      ? (overview.lastCheck?.plugins.filter((plugin) => plugin.to).length ?? 0)
+      : 0
+  const badges = { dashboard: total, 'core.updates': total, plugins, 'core.plugins': plugins }
   return (
     <AdminFrame preference={menuPreference(jar.get(MENU_COOKIE)?.value)}>
       <a className="screen-reader-shortcut" href="#wpbody-content">
@@ -27,7 +34,7 @@ export async function AdminShell({
         user={user}
         logoutUrl={kernel.actionUrl('core', 'logout')}
       />
-      <AdminMenu sections={kernel.adminMenu(user)} />
+      <AdminMenu sections={kernel.adminMenu(user)} badges={badges} />
       <div id="wpcontent">
         <main id="wpbody-content" tabIndex={-1}>
           {children}

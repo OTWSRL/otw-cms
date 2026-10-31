@@ -127,7 +127,14 @@ describe('admin pages', () => {
       items: [{ key: 'core.dashboard', label: 'Home', url: '/admin' }],
     }
     expect(kernel.adminMenu(admin.user)).toEqual([
-      dashboard,
+      // Updates is for administrators unless a plugin grants core.manage_updates.
+      {
+        ...dashboard,
+        items: [
+          ...dashboard.items,
+          { key: 'core.updates', label: 'Updates', url: '/admin/updates' },
+        ],
+      },
       {
         id: 'shop',
         label: 'Shop',

@@ -18,6 +18,7 @@ import { LoginScreen } from './screens/login'
 import { PluginsScreen } from './screens/plugins'
 import { RolesScreen } from './screens/roles'
 import { SetupScreen } from './screens/setup'
+import { UpdatesScreen } from './screens/updates'
 import { NewUserScreen } from './screens/user-new'
 import { UsersScreen } from './screens/users'
 import { SettingsForm } from './settings-form'
@@ -50,6 +51,7 @@ const SCREENS: Readonly<Record<string, CoreScreen>> = {
     Screen: NewUserScreen,
   },
   '/admin/users/roles': { title: 'Roles', capability: 'core.manage_users', Screen: RolesScreen },
+  '/admin/updates': { title: 'Updates', capability: 'core.manage_updates', Screen: UpdatesScreen },
 }
 
 /** Signed-out screens, in wp-login.php's frame rather than the admin's. */

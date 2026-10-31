@@ -57,11 +57,22 @@ export function detectPackageManager(userAgent = process.env.npm_config_user_age
 }
 
 const COMMANDS = {
-  pnpm: { run: 'pnpm', exec: 'pnpm' },
-  npm: { run: 'npm run', exec: 'npx' },
-  yarn: { run: 'yarn', exec: 'yarn' },
-  bun: { run: 'bun run', exec: 'bunx' },
+  pnpm: {
+    run: 'pnpm',
+    exec: 'pnpm',
+    ciInstall: 'corepack enable && pnpm install --frozen-lockfile',
+  },
+  npm: { run: 'npm run', exec: 'npx', ciInstall: 'npm ci' },
+  yarn: { run: 'yarn', exec: 'yarn', ciInstall: 'corepack enable && yarn install --immutable' },
+  bun: {
+    run: 'bun run',
+    exec: 'bunx',
+    ciInstall: 'npm install --global bun && bun install --frozen-lockfile',
+  },
 }
+
+/** `{{run}}`-style placeholders in the template's text files. */
+const PLACEHOLDER_FILES = ['README.md', '.github/workflows/cms-update.yml']
 
 /**
  * Where each CMS package lives in a checkout of the CMS, for `--link`: the site uses the
@@ -174,14 +185,17 @@ export async function scaffold({ target, version, plugins = [], packageManager =
   await rename(join(target, 'gitignore'), join(target, '.gitignore'))
 
   const commands = COMMANDS[packageManager]
-  const readme = join(target, 'README.md')
-  await writeFile(
-    readme,
-    (await readFile(readme, 'utf8'))
-      .replaceAll('{{name}}', name)
-      .replaceAll('{{run}}', commands.run)
-      .replaceAll('{{exec}}', commands.exec),
-  )
+  for (const file of PLACEHOLDER_FILES) {
+    const path = join(target, file)
+    await writeFile(
+      path,
+      (await readFile(path, 'utf8'))
+        .replaceAll('{{name}}', name)
+        .replaceAll('{{run}}', commands.run)
+        .replaceAll('{{exec}}', commands.exec)
+        .replaceAll('{{ci_install}}', commands.ciInstall),
+    )
+  }
   const linked = link ? await workspacePackages(resolve(link)) : undefined
   if (link) await linkTurbopackRoot(resolve(target), resolve(link))
   const manifest = packageJson({

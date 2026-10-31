@@ -1,6 +1,8 @@
 import { FormButton, ListTable, Notice, TableNav, Views } from '@cms/admin-ui'
-import type { PluginStatus } from '@cms/core'
+import type { PluginStatus, PluginUpdate } from '@cms/core'
+import { currentSite } from '../../site-registry'
 import { AdminScreen } from '../screen'
+import { updateOverview } from '../update-overview'
 import type { ScreenContext } from './context'
 import { firstParam } from '../../runtime/search-params'
 
@@ -18,7 +20,7 @@ function filterFrom(value: string | undefined): Filter | undefined {
 }
 
 /** plugins.php: every installed plugin, active ones highlighted, actions under the name. */
-export async function PluginsScreen({ kernel, searchParams: params }: ScreenContext) {
+export async function PluginsScreen({ kernel, user, searchParams: params }: ScreenContext) {
   const pinned = kernel.activation === 'pinned'
   const filter = filterFrom(firstParam(params.plugin_status))
   const plugins = kernel.plugins()
@@ -26,6 +28,18 @@ export async function PluginsScreen({ kernel, searchParams: params }: ScreenCont
   const count = (status: Filter) => plugins.filter((plugin) => plugin.status === status).length
   const href = (status?: Filter) =>
     status ? `/admin/plugins?plugin_status=${status}` : '/admin/plugins'
+
+  // Update checks speak in package names; the site module says which package is which plugin.
+  const overview = await updateOverview(kernel, user)
+  const site = currentSite()
+  const updates = new Map(
+    overview?.channel === 'serve'
+      ? (overview.lastCheck?.plugins ?? []).flatMap((update) => {
+          const plugin = site.plugins.find((_, i) => site.packages?.[i] === update.name)
+          return plugin && update.to ? [[plugin.id, update] as const] : []
+        })
+      : [],
+  )
 
   const action = (plugin: PluginStatus) => {
     const on = plugin.status !== 'inactive'
@@ -89,6 +103,11 @@ export async function PluginsScreen({ kernel, searchParams: params }: ScreenCont
             render: (plugin) => (
               <>
                 {plugin.description && <p>{plugin.description}</p>}
+                <UpdateMessage
+                  update={updates.get(plugin.id)}
+                  name={plugin.name}
+                  action={kernel.actionUrl('core', 'update')}
+                />
                 {plugin.reason && <p className="plugin-error">{plugin.reason}</p>}
                 {plugin.blockers.length > 0 && (
                   <p className="description" id={`blockers-${plugin.id}`}>
@@ -105,5 +124,28 @@ export async function PluginsScreen({ kernel, searchParams: params }: ScreenCont
         ]}
       />
     </AdminScreen>
+  )
+}
+
+/** "There is a new version of Forum available. Update now", as on WordPress's plugins screen. */
+function UpdateMessage({
+  update,
+  name,
+  action,
+}: {
+  update: PluginUpdate | undefined
+  name: string
+  action: string
+}) {
+  if (!update?.to) return null
+  return (
+    <div className="notice inline notice-warning update-message">
+      <p>
+        There is a new version of {name} available: {update.to}.{' '}
+        <FormButton action={action} fields={{ packages: update.name }} variant="link">
+          Update now<span className="screen-reader-text"> {name}</span>
+        </FormButton>
+      </p>
+    </div>
   )
 }

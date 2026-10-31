@@ -5,21 +5,14 @@ import { consoleLogger } from '@cms/core'
 import { migrationModeFromEnv } from '@cms/next/server'
 import { displayPath, generate } from './generate.ts'
 import { migrate } from './migrate.ts'
+import { serve } from './serve/index.ts'
 import { loadEnv, loadSite } from './site.ts'
 import {
-  CORE_PACKAGES,
   commitUpdate,
   detectPackageManager,
   install,
-  isCore,
-  isLinked,
-  npmView,
-  planUpdate,
-  readSitePackages,
-  resolveTargets,
+  planSite,
   writeChanges,
-  type Packument,
-  type Unreachable,
   type UpdatePlan,
 } from './update.ts'
 
@@ -30,6 +23,10 @@ Commands:
   migrate    Back up the database, then run pending migrations
                --dry-run     list them and change nothing
                --no-backup   when your host takes backups (most managed Postgres does)
+  serve      Run the site from built releases, with updates from the admin (instead of next start)
+               --port <n>       public port (default: PORT, or 3000)
+               --hostname <h>   address to listen on (default: 0.0.0.0)
+               --no-backup      with Postgres, when your host takes backups
   update [packages...]
              Update core and plugins to the newest compatible versions; name plugins (or
              "core") to update only those
@@ -54,6 +51,8 @@ const { positionals, values } = parseArgs({
     'plugins-only': { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
     commit: { type: 'boolean', default: false },
+    port: { type: 'string' },
+    hostname: { type: 'string', default: '0.0.0.0' },
   },
 })
 
@@ -136,30 +135,11 @@ async function runInstalledCli(root: string, args: string[]): Promise<void> {
 }
 
 async function runUpdate(root: string, names: readonly string[]): Promise<void> {
-  const site = await readSitePackages(root)
-  const only = names.length > 0 ? resolveTargets(site, names) : undefined
-  const scope = { major: values.major, only, pluginsOnly: values['plugins-only'] }
-  const coreInScope = only ? only.some(isCore) : !scope.pluginsOnly
-  const lookups = [
-    ...(coreInScope ? CORE_PACKAGES.filter((name) => name in site.specs) : []),
-    ...site.plugins.filter((name) => !only || only.includes(name)),
-  ].filter((name) => site.specs[name] && !isLinked(site.specs[name]))
-  const fetchVersions = npmView(root)
-  // One plugin npm can't reach (a private registry without a token, say) doesn't stop the rest.
-  const packuments: Record<string, Packument | Unreachable> = Object.fromEntries(
-    await Promise.all(
-      lookups.map(async (name) => {
-        const found = await fetchVersions(name, site.installed[name] ?? '0.0.0').catch(
-          (error: unknown): Unreachable => ({
-            name,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        )
-        return [name, found] as const
-      }),
-    ),
-  )
-  const plan = planUpdate(site, packuments, scope)
+  const plan = await planSite(root, {
+    major: values.major,
+    pluginsOnly: values['plugins-only'],
+    packages: names,
+  })
   report(plan)
   if (values.check) return
   if (plan.changes.length === 0) {
@@ -211,6 +191,19 @@ async function main(): Promise<void> {
   if (command === 'generate') return runGenerate(root)
   if (command === 'migrate') return runMigrate(root)
   if (command === 'update') return runUpdate(root, positionals.slice(1))
+  if (command === 'serve') {
+    const port = Number(values.port ?? process.env.PORT ?? 3000)
+    if (!Number.isInteger(port) || port < 0 || port > 65535)
+      throw new Error('--port must be a port number')
+    return serve({
+      root,
+      port,
+      hostname: values.hostname,
+      backup: !values['no-backup'],
+      // For tests; twelve hours otherwise, as WordPress checks twice a day.
+      checkEveryMs: Number(process.env.CMS_UPDATE_CHECK_EVERY_MS) || undefined,
+    })
+  }
   throw new Error(`Unknown command "${command}"\n\n${USAGE}`)
 }
 

@@ -10,6 +10,7 @@ import type {
 } from '@cms/sdk'
 import { ActionError, ForbiddenError } from '@cms/sdk'
 import { apiPath } from './api'
+import { isSiteOrigin, publicOrigin, type OriginPolicy } from './origins'
 import { withFlash, type Flash, type FlashCodec } from './flash'
 import { sessionTokenFromHeader } from './session-cookie'
 import type { SettingsPageView } from './settings-pages'
@@ -64,8 +65,7 @@ export interface ActionDependencies {
   can(user: User, capability: CapabilityName): boolean
   flash: FlashCodec
   logger: Logger
-  allowedOrigins: readonly string[]
-  siteUrl(): string | undefined
+  origins: OriginPolicy
 }
 
 export function adminPath(pluginId: string, path: string): string {
@@ -92,12 +92,12 @@ export function safeRedirectPath(value: unknown): string | null {
   }
 }
 
-function refererPath(request: Request, origin: string): string | null {
+function refererPath(request: Request, origins: OriginPolicy): string | null {
   const referer = request.headers.get('referer')
   if (!referer) return null
   try {
     const url = new URL(referer)
-    return url.origin === origin ? url.pathname + url.search : null
+    return isSiteOrigin(url.origin, request, origins) ? url.pathname + url.search : null
   } catch {
     return null
   }
@@ -124,16 +124,15 @@ function redirect(location: string, cookies: readonly string[] = []): Response {
  */
 export function createActionHandler(action: InternalAction, deps: ActionDependencies): ApiHandler {
   return async (request) => {
-    const url = new URL(request.url)
     const origin = request.headers.get('origin')
-    if (origin !== url.origin && !(origin && deps.allowedOrigins.includes(origin))) {
+    if (!origin || !isSiteOrigin(origin, request, deps.origins)) {
       return Response.json({ error: 'Cross-origin request blocked' }, { status: 403 })
     }
     if (!isForm(request)) {
       return Response.json({ error: 'Expected a form submission' }, { status: 415 })
     }
 
-    const back = refererPath(request, url.origin) ?? ADMIN_PREFIX
+    const back = refererPath(request, deps.origins) ?? ADMIN_PREFIX
     const sessionToken = sessionTokenFromHeader(request.headers.get('cookie'))
     const user = await deps.userForSession(sessionToken)
     if (action.capability !== null) {
@@ -154,7 +153,8 @@ export function createActionHandler(action: InternalAction, deps: ActionDependen
     }
 
     try {
-      const secure = new URL(deps.siteUrl() ?? url.origin).protocol === 'https:'
+      const site = deps.origins.siteUrl() ?? publicOrigin(request, deps.origins.trustProxy)
+      const secure = new URL(site).protocol === 'https:'
       const result = (await action.handler({ user, sessionToken, form, secure })) ?? {}
       const target = safeRedirectPath(result.redirect) ?? back
       const notice: Flash | null = result.notice ? { kind: 'notice', message: result.notice } : null

@@ -1,0 +1,63 @@
+# Updates Next CMS and its plugins in a pull request. Run it from the admin (Dashboard › Updates,
+# with CMS_GITHUB_REPO and CMS_GITHUB_TOKEN set on the site), from the Actions tab, or on the
+# schedule below. Merging the pull request deploys the update; build:deploy migrates.
+name: Update Next CMS
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Plugins to update, or "core"; empty for everything
+        required: false
+        default: ''
+      plugins_only:
+        description: Leave Next CMS itself where it is
+        type: boolean
+        default: false
+  schedule:
+    # Weekly. Remove to propose updates only when asked.
+    - cron: '23 5 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: cms-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      # For plugins from a private registry, read as ${NPM_TOKEN} in .npmrc.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install
+        run: '{{ci_install}}'
+      - name: Update
+        env:
+          # Through the environment, not pasted into the script.
+          PACKAGES: ${{ inputs.packages }}
+          PLUGINS_ONLY: ${{ inputs.plugins_only && '--plugins-only' || '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Word splitting on purpose: PACKAGES is a space-separated list.
+          {{exec}} cms update $PACKAGES $PLUGINS_ONLY --commit
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="$(git branch --show-current)"
+          if [ "$branch" = "$GITHUB_REF_NAME" ]; then
+            echo "Nothing to update."
+            exit 0
+          fi
+          git push origin "$branch"
+          gh pr create --head "$branch" --title "$(git log -1 --format=%s)" \
+            --body "Opened by the Update Next CMS workflow. Merging deploys it; database changes run in the deploy step (build:deploy)."

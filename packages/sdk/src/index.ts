@@ -54,6 +54,7 @@ export interface Capabilities {
   'core.manage_plugins': true
   'core.manage_settings': true
   'core.manage_users': true
+  'core.manage_updates': true
 }
 
 /**
