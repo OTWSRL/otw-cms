@@ -32,3 +32,9 @@ export { SESSION_COOKIE, SESSION_COOKIE_NAMES, SECURE_SESSION_COOKIE } from './s
 export type { Env, SettingSource, SettingValue } from './settings'
 export type { SettingField, SettingsPageView, SettingsSectionView } from './settings-pages'
 export { CORE_VERSION } from './version'
+export {
+  DatabaseUpdateRequiredError,
+  migrateSite,
+  type MigrateSiteOptions,
+  type MigrateSiteResult,
+} from './site-migrations'

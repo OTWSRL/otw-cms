@@ -3,19 +3,22 @@
 A WordPress-style CMS on Next.js where third parties build large plugins (commerce, community,
 LMS) that extend each other.
 
-Plugins are npm packages compiled into the app. **Installing** a plugin adds it to
-`apps/web/cms.config.json` and rebuilds. **Activating** one is a switch on the admin's Plugins
-screen, with no rebuild.
+A site is a small Next.js app that depends on the CMS's packages, so updating the CMS or a
+plugin is a version bump (`cms update`). Plugins are npm packages compiled into the site.
+**Installing** a plugin adds it to the site's `cms.config.json` and rebuilds. **Activating** one
+is a switch on the admin's Plugins screen, with no rebuild.
 
 ## Layout
 
 ```
-apps/web               Next.js app: catch-all route, plugin API route, layout slots
+apps/web               the CMS's own site, exactly what create-next-cms makes, plus e2e tests
+packages/next          @cms/next: the admin, the storefront route, the API route and the runtime
 packages/sdk           @cms/sdk: the only package plugin authors depend on (types + definePlugin)
 packages/admin-ui      @cms/admin-ui: WordPress-style admin components (list and form tables, boxes)
 packages/core          @cms/core: the kernel (resolver, hooks, registries, services, router, migrations)
 packages/testing       @cms/testing: boots the kernel on in-memory Postgres for plugin tests
-packages/cli           @cms/cli: `cms generate` writes the static plugin import map
+packages/cli           @cms/cli: `cms generate`, `cms migrate`, `cms update`
+packages/create-next-cms  scaffolds a new site (`pnpm create next-cms my-site`)
 plugins/commerce       products, orders, checkout; defines the extension points other plugins use
 plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
 ```
@@ -38,16 +41,49 @@ There's no database to set up: without `DATABASE_URL` the app uses embedded PGli
 
 The first visit to `/admin` creates the administrator account, as WordPress's installer does.
 
+## Sites, hosting and updates
+
+- **A site owns** `cms.config.json`, `next.config.ts` (wrapped in `withCms()`), its storefront
+  layout and styles (`src/app/(site)/layout.tsx`, `globals.css`), `.env` and its own routes.
+- **The CMS owns** the files `cms generate` writes before every `dev` and `build`: the site
+  module (`src/cms/site.generated.ts`, the installed plugins), the admin's root layout and its one
+  catch-all page with 403 and 404 pages, the API route and the storefront catch-all. Each starts
+  with an `@generated` line; delete it and the file is the site's, never overwritten. The admin
+  is one route, so new core screens arrive with the package.
+- **Database changes.** `CMS_MIGRATIONS=startup` (default) migrates when the site starts, for one
+  server. `CMS_MIGRATIONS=deploy` never migrates at runtime: run `cms migrate` in the deploy
+  step (`build:deploy` in a new site), for several instances or serverless. Until then plugins
+  with pending migrations wait, and administrators get WooCommerce's "Database update required"
+  notice with an Update database button; pending core migrations stop the site with the command
+  to run in the log. `cms migrate` backs up first (a copy of the embedded database, or
+  `pg_dump`), and `--dry-run` lists what would run. The embedded database belongs to one
+  process: a lock file stops a second server, or `cms migrate` beside a running site.
+- **Updating.** `cms update --check` lists newer core and plugin versions and which plugins
+  support the new core. Plugins declare it as a peer dependency on `@cms/sdk`, and what they
+  need from each other as peer dependencies on those plugins, so this is known before anything
+  changes: a plugin another one still needs in an older version is held back, and says why.
+  `cms update` bumps `package.json` within core's compatible range (`--major` to cross it),
+  installs, and regenerates the route files with the new version; then migrate, build and
+  restart. `cms update commerce` (or `@acme/forum`, or `core`) updates only those, and
+  `--plugins-only` leaves core alone. Versions come from `npm view` in the site's directory, so
+  `.npmrc` registries and tokens for private and paid plugins apply; one npm can't reach is
+  reported and left as it is. `--commit` puts it on a git branch for hosts that build from git.
+- **A new site:** `pnpm create next-cms my-site --plugins commerce,commerce-stripe`, or
+  `--link <checkout>` to try unreleased changes. It includes a Dockerfile for your own server.
+
 ## How the kernel boots
 
-0. **Load site state.** Core's own migrations run, then the kernel reads which plugins are active
+0. **Load site state.** Core's own migrations run (or, with `CMS_MIGRATIONS=deploy`, are checked:
+   pending ones stop the boot), then the kernel reads which plugins are active
    and the stored settings. On first boot every installed plugin is active; plugins installed
    later start inactive.
 1. **Resolve.** Check the semver ranges for core and dependencies, then sort plugins so
    dependencies load first. Plugins with unmet requirements or hard cycles are skipped with a
    reason. A cycle that runs through an optional dependency drops only that integration.
 2. **Migrate.** Each plugin's migrations run in a transaction under an advisory lock and are
-   tracked per plugin in `cms_migrations`.
+   tracked per plugin in `cms_migrations`. With `CMS_MIGRATIONS=deploy` nothing runs here;
+   plugins with pending migrations are left out, with the reason, until `cms migrate` or an
+   administrator runs them.
 3. **Set up.** Each plugin registers its hooks, registries, services, routes and slots. After boot
    the registry is sealed, so a late registration fails loudly instead of leaking.
 4. **Recovery mode.** If a plugin throws during migrate or setup, the kernel boots again without it

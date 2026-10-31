@@ -14,6 +14,7 @@ extensibility and drop the flaw.
    database; plugin admin pages and form actions; first-run setup.
 3. **Admin extensibility.** Below, kept as the spec it was built to.
 4. **WordPress admin UI.** Below.
+5. **Packaging and updates.** Below.
 
 ## 3. Admin extensibility (done)
 
@@ -120,7 +121,107 @@ Admin colour schemes (the CSS uses variables so they can come), screen options a
 drag-and-drop dashboard widgets, a user edit and profile screen, bulk plugin actions, the
 front-end admin bar, right-to-left layout.
 
-## 5. Content
+## 5. Packaging and updates (done)
+
+A site is a small Next.js app that depends on versioned `@cms/*` packages, so updating core or a
+plugin is a version bump, as `wp-admin/update-core.php` is for WordPress. WordPress swaps PHP
+files in place; a Next.js app has to be rebuilt, and on git-based hosts the running site can't
+change itself, so the update path differs by hosting. Both are supported:
+
+| Hosting                                   | Update                                         | Database changes                                        |
+| ----------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- |
+| Own server, one instance (VPS, Docker)    | `cms update`, then rebuild and restart         | At startup, as now                                      |
+| Several instances, or serverless (Vercel) | `cms update --commit`, push, the host rebuilds | `cms migrate` in the deploy step, or the admin's button |
+
+### The split
+
+- **`@cms/next`** holds everything the CMS owns in a Next.js app: the database and kernel
+  runtime, sessions, the admin (frame, core screens, plugin screens, sign-in, setup, styles), the
+  storefront page that serves plugin routes, the API handler, and `withCms()` for
+  `next.config` (plain JavaScript, since Node loads it before anything is compiled).
+- **The site** owns `cms.config.json` (plugins), `next.config.ts`, its storefront layout and
+  styles (the theme, until themes exist), `.env`, and its own routes.
+- **Managed route files.** `cms generate`, which already runs before `dev` and `build`, writes
+  the CMS's route files into the site: the admin root layout, one admin catch-all page with its
+  403 and 404 pages, the API route, the storefront catch-all, and `src/cms/site.generated.ts`
+  (the installed plugins). Each starts with a marker line; a file without it belongs to the site
+  and is never overwritten. The admin is one catch-all route, so a new core screen arrives with
+  the package, and changed route files arrive with the next `cms generate`.
+- **`create-next-cms`** scaffolds a site from the template, and `apps/web` is exactly such a
+  site, so the end-to-end suite tests the split.
+
+### Database changes
+
+- `CMS_MIGRATIONS=startup` (default) applies pending migrations when the site boots, as now.
+  `CMS_MIGRATIONS=deploy` never migrates at runtime: `cms migrate` runs in the deploy step.
+- With pending migrations and nothing to run them, plugins with pending migrations stay off
+  with the reason shown, and administrators get WooCommerce's "Database update required" notice
+  with an Update database button (`core.manage_plugins`). Activating a plugin runs its own
+  migrations, as an administrator asked for it. If core's are pending, the site doesn't start and
+  its log says to run `cms migrate`: new code against the old schema isn't safe, and the tables
+  that changed may be the ones the admin needs to sign in, so there is no maintenance screen
+  with a button, unlike WordPress.
+- The embedded database (PGlite) loads its files into one process and doesn't lock them, so a
+  lock file holds the owner's process id: a second server, or `cms migrate` beside a running
+  site, stops with an explanation instead of corrupting it. Several processes need Postgres.
+- Migrations add, never remove, within a major version, so the previous release keeps working
+  against the new schema while instances switch over, and rolling the code back is safe.
+- `cms migrate` copies the embedded database before migrating, or runs `pg_dump` (the password
+  through the environment, not the command line); without `pg_dump` it stops unless told
+  `--no-backup`, for hosts that take their own. `--dry-run` lists what would run and creates
+  nothing. A new site's `build:deploy` script migrates before building, for Vercel.
+
+### `cms update`
+
+- `cms update --check` lists newer versions of core (the `@cms/*` packages, released together)
+  and of installed plugins, and what is compatible: a plugin declares the core it works with as
+  a peer dependency on `@cms/sdk`, so this is known before anything changes, as WordPress's
+  "Requires at least" and "Tested up to" are. The kernel's `requires.core` remains the runtime
+  check.
+- `cms update` picks the newest core within the installed version's caret range (`--major` for
+  any) and the newest version of each plugin that supports it. Plugins that declare nothing stay
+  within their own caret range, flagged "compatibility unknown". It refuses if a plugin would be
+  left without a compatible version (unless `--force`), bumps `package.json` keeping each spec's
+  style, installs with the site's package manager, and regenerates the route files with the
+  newly installed CLI. It doesn't migrate: the running site may hold the embedded database, and
+  the new release's migrations should run with its code, so it ends with the steps for the
+  hosting (stop, `cms migrate`, build, start; or migrate at deploy). `--commit` needs a clean
+  working tree and puts the change on a new branch, for git-based hosts.
+- Plugins declare what they need from other plugins as peer dependencies on them (Stripe on
+  Commerce). The plan honours those between the versions it picks: a plugin another one needs
+  in an older version is held back if it can be, otherwise the one needing it is, and the report
+  says why ("1.0.0 is out, but Stripe 0.1.2 needs Commerce ^0.1.0"). Versions only go down
+  while settling, so it always ends.
+- `cms update <packages>` updates only those (`commerce`, `@acme/forum`, `core`), and
+  `--plugins-only` leaves core alone; a core update that would strand a plugin left out of it is
+  refused.
+- Versions come from `npm view` in the site's directory, so `.npmrc` applies: scoped registries
+  and tokens for private and paid plugins. A plugin npm can't reach is reported and left as it
+  is rather than stopping the update.
+- `cms` is a small JavaScript file that registers tsx, which loads the CLI, the CMS and the
+  site's plugins from TypeScript source, so it works from `node_modules` without a build step.
+
+### Versioning
+
+Semantic versioning for core and plugins. A minor or patch release of core never breaks the
+plugin API; anything to be removed logs a deprecation warning for at least one minor release
+first, as `_deprecated_function()` does, and goes in the next major.
+
+### Not in this milestone
+
+Publishing: the packages are still private, and a release needs a pipeline that versions the
+core packages together and publishes them with provenance. A `deprecated()` helper for the
+policy above. `--link` sites see two copies of shared dependencies such as `drizzle-orm`, which
+only matters to the type checker.
+
+## 6. Updates from the admin
+
+Dashboard › Updates (available versions, compatibility, security releases), one-click updates on
+your own server (build beside the running release, migrate, health-check, switch, keep the old
+one for rollback), a pull request or deploy hook on git-based hosts, and automatic patch
+releases, opt-in.
+
+## 7. Content
 
 Post types, taxonomies and meta, the core of WordPress that every big plugin builds on: courses
 and lessons are post types in LearnDash, LifterLMS and Tutor.
@@ -132,21 +233,21 @@ and lessons are post types in LearnDash, LifterLMS and Tutor.
 - Pages served by the site's catch-all route; revisions; the media library (uploads behind a
   storage interface).
 
-## 6. Accounts and email
+## 8. Accounts and email
 
 Customer sign-up and sign-in on the storefront, password reset, profile screens with fields
 plugins add (`show_user_profile`), user meta, and a mail transport with filters (`wp_mail`).
 
-## 7. LMS plugin
+## 9. LMS plugin
 
 Courses and lessons as content types, enrollment on `commerce.order.paid`, an instructor role
 limited to their own courses through meta capabilities, a learner dashboard, course settings and
 a section on Commerce's pages. The second proof that big plugins extend each other.
 
-## 8. Operations
+## 10. Operations
 
-Job queue and scheduled tasks (Action Scheduler), an outbound event outbox, caching, uninstall
-and down migrations, and the install flow (`pnpm add`, generate, blue/green rebuild).
+Job queue and scheduled tasks (Action Scheduler), an outbound event outbox, caching, uninstalling
+plugins (their data and migrations), and installing plugins from the admin.
 
 ## Later
 

@@ -89,6 +89,8 @@ export interface CoreActionDependencies {
   /** Each returns the notice to show. */
   activate(pluginId: string): Promise<string>
   deactivate(pluginId: string): Promise<string>
+  /** Runs pending migrations for core and the active plugins. */
+  updateDatabase(): Promise<string>
   /** Checks the page's own capability, which may be a plugin's rather than core's. */
   saveSettings(page: string, user: User, form: FormData): Promise<void>
 }
@@ -162,6 +164,12 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
       name: 'deactivate-plugin',
       capability: 'core.manage_plugins',
       handler: async ({ form }) => ({ notice: await deps.deactivate(field(form, 'plugin')) }),
+    },
+    {
+      // WooCommerce's "Update database" button, for sites that migrate at deploy.
+      name: 'update-database',
+      capability: 'core.manage_plugins',
+      handler: async () => ({ notice: await deps.updateDatabase() }),
     },
     {
       name: 'save-settings',

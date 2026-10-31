@@ -1,0 +1,20 @@
+{
+  "name": "create-next-cms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "create-next-cms": "./bin/create-next-cms.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "template"
+  ],
+  "exports": {
+    ".": "./src/scaffold.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

@@ -47,9 +47,9 @@ importers:
       '@cms/admin-ui':
         specifier: workspace:*
         version: link:../../packages/admin-ui
-      '@cms/core':
+      '@cms/next':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/next
       '@cms/plugin-commerce':
         specifier: workspace:*
         version: link:../../plugins/commerce
@@ -68,18 +68,12 @@ importers:
       next:
         specifier: ^16.4.3
         version: 16.4.3(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      pg:
-        specifier: ^8.23.1
-        version: 8.23.1
       react:
         specifier: ^19.3.1
         version: 19.3.1
       react-dom:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
-      server-only:
-        specifier: ^0.0.1
-        version: 0.0.1
     devDependencies:
       '@cms/cli':
         specifier: workspace:*
@@ -87,9 +81,6 @@ importers:
       '@playwright/test':
         specifier: ^1.64.1
         version: 1.64.1
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -122,7 +113,33 @@ importers:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
 
-  packages/cli: {}
+  packages/cli:
+    dependencies:
+      '@cms/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cms/next':
+        specifier: workspace:*
+        version: link:../next
+      '@cms/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@next/env':
+        specifier: ^16.4.3
+        version: 16.4.3
+      semver:
+        specifier: ^7.8.0
+        version: 7.8.5
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+    devDependencies:
+      '@types/semver':
+        specifier: ^7.7.0
+        version: 7.8.0
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@electric-sql/pglite@0.5.13)(@types/pg@8.23.1)(pg@8.23.1)
 
   packages/core:
     dependencies:
@@ -148,6 +165,51 @@ importers:
       react:
         specifier: ^19.3.1
         version: 19.3.1
+
+  packages/create-next-cms: {}
+
+  packages/next:
+    dependencies:
+      '@cms/admin-ui':
+        specifier: workspace:*
+        version: link:../admin-ui
+      '@cms/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cms/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@electric-sql/pglite':
+        specifier: ^0.5.13
+        version: 0.5.13
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@electric-sql/pglite@0.5.13)(@types/pg@8.23.1)(pg@8.23.1)
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.3.0(@types/react@19.3.0)
+      next:
+        specifier: ^16.4.3
+        version: 16.4.3(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.3.1
+        version: 19.3.1(react@19.3.1)
 
   packages/sdk:
     devDependencies:
@@ -185,19 +247,19 @@ importers:
 
   plugins/commerce:
     dependencies:
-      '@cms/admin-ui':
-        specifier: workspace:*
-        version: link:../../packages/admin-ui
-      '@cms/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
       zod:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@cms/admin-ui':
+        specifier: workspace:*
+        version: link:../../packages/admin-ui
       '@cms/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cms/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@cms/testing':
         specifier: workspace:*
         version: link:../../packages/testing
@@ -219,6 +281,10 @@ importers:
 
   plugins/commerce-stripe:
     dependencies:
+      stripe:
+        specifier: ^23.1.0
+        version: 23.1.0(@types/node@24.19.2)
+    devDependencies:
       '@cms/admin-ui':
         specifier: workspace:*
         version: link:../../packages/admin-ui
@@ -228,10 +294,6 @@ importers:
       '@cms/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      stripe:
-        specifier: ^23.1.0
-        version: 23.1.0(@types/node@24.19.2)
-    devDependencies:
       '@cms/testing':
         specifier: workspace:*
         version: link:../../packages/testing

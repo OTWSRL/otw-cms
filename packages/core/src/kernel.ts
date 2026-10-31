@@ -56,7 +56,8 @@ import { PluginBootError } from './errors'
 import { createFlashCodec, type Flash, type FlashCodec } from './flash'
 import { HookBus } from './hooks'
 import { consoleLogger, withContext } from './logger'
-import { runMigrations } from './migrations'
+import { pendingMigrations, runMigrations } from './migrations'
+import { DatabaseUpdateRequiredError, migrateSite } from './site-migrations'
 import { bumpGeneration, ensureSecret, readGeneration } from './options'
 import type { HashCost } from './passwords'
 import {
@@ -116,6 +117,12 @@ export interface KernelOptions {
   onChange?: () => void
   /** `fast` lowers the password hashing cost. Only for test suites. */
   passwordHashing?: HashCost
+  /**
+   * `startup` (default) applies pending migrations when the site boots. `deploy` never does: run
+   * `cms migrate` when deploying. Until then plugins with pending migrations stay off, and pending
+   * core migrations stop the boot with `DatabaseUpdateRequiredError`.
+   */
+  migrations?: 'startup' | 'deploy'
 }
 
 export interface ResolvedPage {
@@ -144,6 +151,8 @@ export interface Kernel {
   /** Loaded plugin ids, in load order. */
   readonly active: readonly string[]
   readonly skipped: readonly SkippedPlugin[]
+  /** Plugins kept off because their migrations haven't run (`migrations: 'deploy'`). */
+  readonly databaseUpdates: readonly string[]
   readonly warnings: readonly string[]
   readonly db: Database
   /** Changes when the admin changes activation or settings. */
@@ -205,6 +214,7 @@ interface Prepared {
   flash: FlashCodec
   configured: readonly string[]
   stored: ReadonlyMap<string, unknown>
+  databaseUpdates: readonly string[]
 }
 
 /** Used by trial boots, which test values before they are stored. */
@@ -228,7 +238,13 @@ export function createKernel(options: KernelOptions): Promise<Kernel> {
 async function startKernel(options: KernelOptions, start: StartOptions): Promise<Kernel> {
   const logger = options.logger ?? consoleLogger
   const db = new DatabaseContext(options.db)
-  await runMigrations(db, [coreDefinition], logger)
+  const atDeploy = options.migrations === 'deploy'
+  if (atDeploy) {
+    const pending = await pendingMigrations(db, [coreDefinition])
+    if (pending.length > 0) throw new DatabaseUpdateRequiredError(pending)
+  } else {
+    await runMigrations(db, [coreDefinition], logger)
+  }
   // Read the generation before the state it guards, so a change in between triggers a reboot.
   const generation = await readGeneration(db.root)
   const prepared: Prepared = {
@@ -239,8 +255,26 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
     flash: createFlashCodec(options.secret ?? (await ensureSecret(db.root))),
     configured: options.active ?? (await loadActiveIds(db.root, options.plugins)),
     stored: start.stored ?? (await loadStoredSettings(db.root)),
+    databaseUpdates: [],
   }
   const failed = new Map<string, string>()
+  if (atDeploy) {
+    // Off until their migrations run, as WooCommerce waits for "Update database".
+    const configured = options.plugins.filter((plugin) => prepared.configured.includes(plugin.id))
+    const pending = new Map<string, string[]>()
+    for (const key of await pendingMigrations(db, configured)) {
+      const id = key.slice(0, key.indexOf('/'))
+      pending.set(id, [...(pending.get(id) ?? []), key])
+    }
+    for (const [id, keys] of pending) {
+      failed.set(
+        id,
+        `Needs a database update (${keys.join(', ')}). Run \`cms migrate\`, or update it from the admin.`,
+      )
+      logger.warn(`Plugin "${id}" is waiting for a database update`, { plugin: id, pending: keys })
+    }
+    prepared.databaseUpdates = [...pending.keys()]
+  }
 
   for (;;) {
     try {
@@ -271,7 +305,7 @@ async function boot(
   }
   for (const warning of resolution.warnings) logger.warn(warning)
 
-  await runMigrations(db, resolution.order, logger)
+  if (options.migrations !== 'deploy') await runMigrations(db, resolution.order, logger)
 
   const settings = resolveSettings({
     declared: [coreDefinition, ...resolution.order].flatMap((plugin) =>
@@ -448,6 +482,9 @@ async function boot(
       const blockers = activationBlockers(plugin, installed, new Set(current), coreVersion)
       if (blockers.length > 0) throw new ActionError(blockers.join(' '))
 
+      // Switching a plugin on is the moment to update its tables, even when the site migrates at
+      // deploy: an administrator asked for it, and it runs under the same lock.
+      if (options.migrations === 'deploy') await runMigrations(db, [plugin], logger)
       // Boot once with it switched on, as WordPress does, so a fatal error never reaches visitors.
       const trial = await createKernel({ ...trialOptions, active: [...current, id] })
       if (!trial.isActive(id)) {
@@ -468,6 +505,17 @@ async function boot(
       await saveActive(db.root, id, false)
       await changed()
       return `${name} deactivated.`
+    },
+    async updateDatabase() {
+      const result = await migrateSite({
+        db: db.root,
+        plugins: options.plugins,
+        active: options.active,
+        logger,
+        coreVersion,
+      })
+      if ('applied' in result && result.applied.length > 0) await changed()
+      return 'Database updated.'
     },
     async saveSettings(key, user, form) {
       const page = settingsPages.get(key)
@@ -753,6 +801,7 @@ function buildKernel(input: {
     coreVersion: input.coreVersion,
     active,
     skipped: input.skipped,
+    databaseUpdates: prepared.databaseUpdates,
     warnings: input.warnings,
     generation: prepared.generation,
     activation: options.active ? 'pinned' : 'database',

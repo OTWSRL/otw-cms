@@ -4,12 +4,24 @@
   "private": true,
   "type": "module",
   "bin": {
-    "cms": "./src/bin.ts"
+    "cms": "./bin/cms.js"
   },
   "exports": {
-    ".": "./src/generate.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@cms/core": "workspace:*",
+    "@cms/next": "workspace:*",
+    "@cms/sdk": "workspace:*",
+    "@next/env": "^16.4.3",
+    "semver": "^7.8.0",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@types/semver": "^7.7.0",
+    "drizzle-orm": "^0.45.4"
   }
 }

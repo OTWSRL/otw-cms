@@ -1,4 +1,4 @@
-import type { Logger, PluginDefinition } from '@cms/sdk'
+import type { Database, Logger, PluginDefinition } from '@cms/sdk'
 import { and, eq, sql } from 'drizzle-orm'
 import { pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
 import type { DatabaseContext } from './database'
@@ -72,4 +72,29 @@ export async function runMigrations(
     }
   }
   return ran
+}
+
+/** `pluginId/migrationId` for each migration not yet applied, in run order. Reads only. */
+export async function pendingMigrations(
+  db: DatabaseContext,
+  plugins: readonly PluginDefinition[],
+): Promise<string[]> {
+  const rows = (await tableExists(db.root, 'cms_migrations'))
+    ? await db.root.select().from(cmsMigrations)
+    : []
+  const applied = new Set(rows.map((row) => `${row.pluginId}/${row.migrationId}`))
+  return plugins.flatMap((plugin) =>
+    (plugin.migrations ?? [])
+      .map((migration) => `${plugin.id}/${migration.id}`)
+      .filter((key) => !applied.has(key)),
+  )
+}
+
+/** Whether a table exists yet, without creating anything (for read-only checks). */
+export async function tableExists(db: Database, table: string): Promise<boolean> {
+  // node-postgres and PGlite both answer with { rows }; Drizzle's type can't know which.
+  const result = (await db.execute(sql`SELECT to_regclass(${table}) AS name`)) as {
+    rows: { name: string | null }[]
+  }
+  return result.rows[0]?.name != null
 }

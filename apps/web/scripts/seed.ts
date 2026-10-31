@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
-import { bootKernel } from '../src/cms/boot'
-import { dataDir, openDatabase } from '../src/cms/database'
+import { bootSite, dataDir, openDatabase } from '@cms/next/server'
+import { site } from '../src/cms/site.generated'
 
 const DEMO_PRODUCTS = [
   { slug: 'ceramic-mug', title: 'Ceramic Mug', description: 'Stoneware, 350 ml.', price: 1800 },
@@ -28,7 +28,7 @@ async function main(): Promise<void> {
 
   const { db, close } = openDatabase()
   try {
-    const kernel = await bootKernel(db)
+    const kernel = await bootSite(site, db)
     if (!kernel.isActive('commerce')) {
       console.log('seed: commerce is not active, nothing to seed')
       return
