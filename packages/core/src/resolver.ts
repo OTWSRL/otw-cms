@@ -1,4 +1,5 @@
 import type { PluginDefinition } from '@cms/sdk'
+import { isAdminIcon } from '@cms/sdk'
 import semver from 'semver'
 import { validateSettingDefinitions } from './settings'
 
@@ -61,6 +62,9 @@ export function validatePlugin(plugin: PluginDefinition): string[] {
     migrationIds.add(migration.id)
   }
   errors.push(...validateSettingDefinitions(`${plugin.id}.`, plugin.settings))
+  if (plugin.icon !== undefined && !isAdminIcon(plugin.icon)) {
+    errors.push('icon must be a built-in admin icon or a base64 SVG data URI')
+  }
   return errors
 }
 

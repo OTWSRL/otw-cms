@@ -22,6 +22,7 @@ export default definePlugin({
   id: 'commerce',
   version: '0.1.0',
   name: 'Commerce',
+  icon: 'cart',
   description: 'Products, checkout and orders. Other plugins add payment gateways and item types.',
   requires: { core: '^0.1.0' },
   migrations,

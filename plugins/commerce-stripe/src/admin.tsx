@@ -1,3 +1,4 @@
+import { Notice, Postbox } from '@cms/admin-ui'
 import type { Order } from '@cms/plugin-commerce'
 import type { PluginContext } from '@cms/sdk'
 import { Fragment } from 'react'
@@ -37,17 +38,19 @@ export function registerSetupNotice(cms: PluginContext, missing: readonly Missin
   cms.slots.fill('admin.notices', {
     component: ({ user }) =>
       cms.auth.can(user, 'core.manage_settings') ? (
-        <p className="cms-notice cms-notice-warning">
-          Stripe is active, but card payments are off until{' '}
-          {missing.map((name, index) => (
-            <Fragment key={name}>
-              {index > 0 && ' and '}
-              <code>{ENV_NAMES[name]}</code>
-            </Fragment>
-          ))}{' '}
-          {missing.length > 1 ? 'are' : 'is'} set on the server.{' '}
-          <a href={cms.admin.url('commerce.payments')}>Payment settings</a>
-        </p>
+        <Notice type="warning">
+          <p>
+            Stripe is active, but card payments are off until{' '}
+            {missing.map((name, index) => (
+              <Fragment key={name}>
+                {index > 0 && ' and '}
+                <code>{ENV_NAMES[name]}</code>
+              </Fragment>
+            ))}{' '}
+            {missing.length > 1 ? 'are' : 'is'} set on the server.{' '}
+            <a href={cms.admin.url('commerce.payments')}>Payment settings</a>
+          </p>
+        </Notice>
       ) : null,
   })
 }
@@ -63,8 +66,7 @@ function StripePanel({ order, dashboard }: { order: Order; dashboard: string }) 
   const reference = order.paymentRef
   if (!reference && order.status !== 'pending') return null
   return (
-    <section className="cms-panel" aria-labelledby="stripe-payment">
-      <h2 id="stripe-payment">Stripe</h2>
+    <Postbox id="stripe-payment" title="Stripe">
       {reference ? (
         <p>
           Checkout session <code>{reference}</code>.{' '}
@@ -79,6 +81,6 @@ function StripePanel({ order, dashboard }: { order: Order; dashboard: string }) 
       ) : (
         <p>Waiting for Stripe to confirm the payment. Orders update when the webhook arrives.</p>
       )}
-    </section>
+    </Postbox>
   )
 }

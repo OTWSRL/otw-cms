@@ -2,6 +2,7 @@ import type {
   AdminActionResult,
   AdminPage,
   AdminPageProps,
+  AdminTitleAction,
   ApiHandler,
   CapabilityName,
   Logger,
@@ -32,6 +33,7 @@ export type AdminResolution =
       key: string
       pluginId: string
       title: string
+      titleAction: AdminTitleAction | null
       props: AdminPageProps<unknown>
       Component: AdminPage<unknown>['component']
     }

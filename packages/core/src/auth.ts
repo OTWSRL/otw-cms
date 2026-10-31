@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { User } from '@cms/sdk'
-import { and, asc, count, eq, gt, lt, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, inArray, lt, sql } from 'drizzle-orm'
 import { ADMINISTRATOR } from './capabilities'
 import { loginFailures, sessions, users } from './core-schema'
 import type { DatabaseContext } from './database'
@@ -54,6 +54,8 @@ export interface AuthService {
   listUsers(): Promise<User[]>
   /** Refuses to demote the last administrator. */
   setRole(userId: string, role: string): Promise<User>
+  /** All or none, like WordPress's "Change role to…"; refuses to leave no administrator. */
+  setRoles(userIds: readonly string[], role: string): Promise<User[]>
   /** Throttled per email address; returns a new session token. */
   signIn(email: string, password: string): Promise<{ user: User; token: string }>
   createSession(userId: string): Promise<string>
@@ -137,7 +139,7 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
     return token
   }
 
-  return {
+  const service: AuthService = {
     async createUser(input) {
       return insertUser(await validated(input))
     },
@@ -161,11 +163,17 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
 
     listUsers: () => db.current.select(userColumns).from(users).orderBy(asc(users.email)),
 
-    setRole(userId, role) {
+    async setRole(userId, role) {
+      const [updated] = await service.setRoles([userId], role)
+      return updated!
+    },
+
+    setRoles(userIds, role) {
+      const ids = [...new Set(userIds)]
       if (!options.roleExists(role)) {
         return Promise.reject(new AuthError('unknown_role', `There is no "${role}" role.`))
       }
-      if (!UUID.test(userId)) {
+      if (ids.length === 0 || !ids.every((id) => UUID.test(id))) {
         return Promise.reject(new AuthError('not_found', 'That user no longer exists.'))
       }
       return db.transaction(async (tx) => {
@@ -175,21 +183,20 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
           .from(users)
           .where(eq(users.role, ADMINISTRATOR))
           .for('update')
-        const [target] = await tx
+        const targets = await tx
           .select(userColumns)
           .from(users)
-          .where(eq(users.id, userId))
+          .where(inArray(users.id, ids))
           .for('update')
-        if (!target) throw new AuthError('not_found', 'That user no longer exists.')
-        if (target.role === ADMINISTRATOR && role !== ADMINISTRATOR && admins.length <= 1) {
+        if (targets.length !== ids.length) {
+          throw new AuthError('not_found', 'That user no longer exists.')
+        }
+        const demoted =
+          role === ADMINISTRATOR ? 0 : targets.filter((user) => user.role === ADMINISTRATOR).length
+        if (demoted > 0 && admins.length - demoted < 1) {
           throw new AuthError('last_administrator', 'The site needs at least one administrator.')
         }
-        const [updated] = await tx
-          .update(users)
-          .set({ role })
-          .where(eq(users.id, userId))
-          .returning(userColumns)
-        return updated!
+        return tx.update(users).set({ role }).where(inArray(users.id, ids)).returning(userColumns)
       })
     },
 
@@ -237,4 +244,5 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
       await db.current.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)))
     },
   }
+  return service
 }

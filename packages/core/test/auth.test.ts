@@ -100,6 +100,31 @@ describe('roles', () => {
     await expect(auth.setRole(admin.id, 'editor')).resolves.toMatchObject({ role: 'editor' })
   })
 
+  it('changes several users at once, all or none', async () => {
+    const { auth } = await setup()
+    const admin = await auth.createFirstAdministrator({ email: 'admin@b.co', password: PASSWORD })
+    const a = await auth.createUser({ email: 'a@b.co', role: 'editor', password: PASSWORD })
+    const b = await auth.createUser({ email: 'b@b.co', role: 'editor', password: PASSWORD })
+
+    const updated = await auth.setRoles([a.id, b.id, a.id], 'administrator')
+    expect(updated.map((user) => user.email).sort()).toEqual(['a@b.co', 'b@b.co'])
+
+    // Demoting every administrator in one go would leave none.
+    await expect(auth.setRoles([admin.id, a.id, b.id], 'editor')).rejects.toMatchObject({
+      code: 'last_administrator',
+    })
+    // One missing user stops the whole change.
+    await expect(
+      auth.setRoles([a.id, '00000000-0000-4000-8000-000000000000'], 'editor'),
+    ).rejects.toMatchObject({ code: 'not_found' })
+    await expect(auth.setRoles([], 'editor')).rejects.toMatchObject({ code: 'not_found' })
+    expect((await auth.listUsers()).map((user) => user.role)).toEqual([
+      'administrator',
+      'administrator',
+      'administrator',
+    ])
+  })
+
   it('serialises concurrent demotions so one administrator always remains', async () => {
     const { auth } = await setup()
     const a = await auth.createFirstAdministrator({ email: 'a@b.co', password: PASSWORD })

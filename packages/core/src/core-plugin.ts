@@ -183,17 +183,23 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
             password: field(form, 'password'),
           }),
         )
-        return { notice: `Added ${user.email}.` }
+        return { redirect: '/admin/users', notice: `Added ${user.email}.` }
       },
     },
     {
       name: 'set-role',
       capability: 'core.manage_users',
       async handler({ form }) {
-        const user = await asActionError(() =>
-          auth.setRole(field(form, 'user'), field(form, 'role')),
-        )
-        return { notice: `Updated ${user.email}.` }
+        const ids = form.getAll('users').filter((value) => typeof value === 'string')
+        if (ids.length === 0) throw new ActionError('Select the users to change.')
+        if (!field(form, 'role')) throw new ActionError('Choose the role to change them to.')
+        const updated = await asActionError(() => auth.setRoles(ids, field(form, 'role')))
+        return {
+          notice:
+            updated.length === 1
+              ? `Updated ${updated[0]!.email}.`
+              : `Changed the role of ${updated.length} users.`,
+        }
       },
     },
   ]

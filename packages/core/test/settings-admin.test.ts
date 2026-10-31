@@ -17,6 +17,9 @@ declare module '@cms/sdk' {
   interface Capabilities {
     'shop.manage_settings': true
   }
+  interface Services {
+    'ledger.books': { currency(): string | undefined }
+  }
 }
 
 const shopSettings = {
@@ -323,10 +326,79 @@ describe('saving settings pages', () => {
     expect(redirectOf(kernel, response).flash).toEqual({
       kind: 'error',
       message:
-        'Settings not saved: Shop, Gateway could not start with them. Plugin "shop" failed during setup: XXX is not a real currency',
+        'Settings not saved: Shop could not start with them. Plugin "shop" failed during setup: XXX is not a real currency',
     })
     expect(await kernel.isCurrent()).toBe(true)
     expect((await boot()).setting('shop.currency')).toBe('USD')
+  })
+
+  it('trial-boots only the plugins that read a changed setting at startup', async () => {
+    const setups = { shop: 0, watcher: 0, extra: 0, bystander: 0 }
+    const counted = (id: keyof typeof setups, definition: Partial<PluginDefinition> = {}) =>
+      plugin(id, {
+        ...definition,
+        async setup(cms) {
+          setups[id] += 1
+          await definition.setup?.(cms)
+        },
+      })
+    // Reads the shop's currency at startup, with an optional dependency that is active.
+    const watcher = counted('watcher', {
+      optional: { extra: '^1.0.0' },
+      setup(cms) {
+        cms.settings.get('shop.currency')
+      },
+    })
+    const boot = site({
+      plugins: [counted('shop', shop), watcher, counted('extra'), counted('bystander')],
+    })
+    const kernel = await boot()
+    const { cookie } = await signIn(kernel)
+    expect(setups).toEqual({ shop: 1, watcher: 1, extra: 1, bystander: 1 })
+
+    await kernel.handleApi(save('shop.store', { 'shop.currency': 'EUR' }, cookie))
+    expect(setups).toEqual({ shop: 2, watcher: 2, extra: 2, bystander: 1 })
+    expect((await boot()).setting('shop.currency')).toBe('EUR')
+  })
+
+  it('saves without a trial boot when no plugin reads the changed settings at startup', async () => {
+    let setups = 0
+    const kernel = await site({
+      plugins: [{ ...shop, setup: (cms) => ((setups += 1), shop.setup!(cms)) }],
+    })()
+    const { cookie } = await signIn(kernel)
+
+    // Guest checkout is read per request, so no startup can fail on it; the currency is unchanged.
+    const response = await kernel.handleApi(
+      save('shop.store', { 'shop.currency': 'USD', 'shop.guests': 'on' }, cookie),
+    )
+    expect(response.status).toBe(303)
+    expect(setups).toBe(1)
+  })
+
+  it('counts reads through another plugin’s service as the reader’s', async () => {
+    const reporter = plugin('reporter', {
+      name: 'Reporter',
+      requires: { ledger: '^1.0.0' },
+      setup(cms) {
+        if (cms.services.get('ledger.books').currency() === 'JPY') {
+          throw new Error('Reports need a currency with cents')
+        }
+      },
+    })
+    const ledger = plugin('ledger', {
+      setup(cms) {
+        cms.services.provide('ledger.books', { currency: () => cms.settings.get('shop.currency') })
+      },
+    })
+    const kernel = await site({ plugins: [shop, ledger, reporter] })()
+    const { cookie } = await signIn(kernel)
+    const response = await kernel.handleApi(save('shop.store', { 'shop.currency': 'JPY' }, cookie))
+    expect(redirectOf(kernel, response).flash).toEqual({
+      kind: 'error',
+      message:
+        'Settings not saved: Reporter could not start with them. Plugin "reporter" failed during setup: Reports need a currency with cents',
+    })
   })
 
   it('keeps trial boots out of the log unless something fails', async () => {

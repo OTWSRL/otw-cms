@@ -150,11 +150,13 @@ describe('commerce admin screens', () => {
       {
         id: 'dashboard',
         label: 'Dashboard',
+        icon: 'dashboard',
         items: [{ key: 'core.dashboard', label: 'Home', url: '/admin' }],
       },
       {
         id: 'commerce',
         label: 'Commerce',
+        icon: 'cart',
         items: [
           { key: 'commerce.products', label: 'Products', url: '/admin/commerce/products' },
           { key: 'commerce.orders', label: 'Orders', url: '/admin/commerce/orders' },
@@ -163,6 +165,7 @@ describe('commerce admin screens', () => {
       {
         id: 'settings',
         label: 'Settings',
+        icon: 'settings',
         items: [
           { key: 'commerce.settings', label: 'Shop', url: '/admin/commerce/settings' },
           { key: 'commerce.payments', label: 'Payments', url: '/admin/commerce/settings/payments' },

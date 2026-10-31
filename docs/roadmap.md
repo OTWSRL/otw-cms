@@ -13,6 +13,7 @@ extensibility and drop the flaw.
 2. **Admin.** Users, sessions, roles and capabilities; plugin activation and settings in the
    database; plugin admin pages and form actions; first-run setup.
 3. **Admin extensibility.** Below, kept as the spec it was built to.
+4. **WordPress admin UI.** Below.
 
 ## 3. Admin extensibility (done)
 
@@ -65,8 +66,12 @@ What a plugin needs to extend the admin, and other plugins' admin, as in WordPre
   with unplaced fields and no settings page gets one automatically, so a plugin that only
   declares settings still works.
 - Each page has a capability (default `core.manage_settings`). Saving a page writes only the
-  editable fields placed on it, after a trial boot with the new values: if any plugin fails to
-  start, nothing is saved and the error says which plugin and why.
+  editable fields placed on it. The kernel records which plugins read each setting during
+  `setup()` (a read through another plugin's service counts as the plugin being set up); a save
+  boots only those plugins, with the new values and their dependencies. If one fails to start,
+  nothing is saved and the error says which plugin and why. A value nobody reads at startup is
+  saved without a boot, so the cost tracks the change, not the number of plugins (40 plugins:
+  40 setups and ~90 ms per save before, 1 setup and ~7 ms after).
 
 ### Admin slots
 
@@ -80,7 +85,42 @@ Editable roles in the admin (a role editor needs stored overrides and a reboot p
 field renderers for settings, cross-field validation beyond the trial boot, removing other
 plugins' menu items.
 
-## 4. Content
+## 4. WordPress admin UI (done)
+
+The admin should feel like WordPress to the people who run sites and to the developers who write
+plugins, on every screen size. Measured against WordPress 7.1.4's default ("modern") scheme in a
+browser, at desktop, folded and phone widths.
+
+- **Frame.** Admin bar (32px; 46px below 783px, scrolling away below 601px) with the site link
+  and the account menu; the left menu with icons, the current section's submenu inline and the
+  others flying out on hover or focus; Collapse Menu, remembered in a cookie so the server
+  renders it folded; the footer.
+- **Breakpoints, as WordPress.** Over 960px: full menu. 783–960px: icons only, submenus fly out,
+  Collapse Menu keeps it open instead. Up to 782px: the menu opens from the bar's button and
+  pushes the screen aside, list tables collapse to their primary column with a row toggle, form
+  tables stack, controls grow to 40px with 16px text. Touch screens open a section's submenu on
+  the first tap, as WordPress's `opensub` does.
+- **Components.** `@cms/admin-ui` renders WordPress's markup and class names, so plugins get the
+  look and the phone layout by using it: `ListTable` (primary column, row actions, bulk-select
+  column, row toggle), `Views` (`subsubsub`), `TableNav` (count and pages), `FormTable` and
+  `FormField`, `SubmitButton`, `Postbox`, `EditColumns` (`#poststuff`), `Notice` (dismissible),
+  `Button`, `FormButton`, `AdminIcon`. Hand-written WordPress markup is styled too.
+- **Plugin API.** `icon` on the plugin definition (a built-in icon or a base64 SVG data URI,
+  validated so it can't break out of CSS), and `titleAction` on admin pages for "Add New".
+- **Core screens.** Dashboard with At a Glance and plugin widgets in WordPress's columns;
+  Plugins with views, highlighted active rows and actions under the name; All Users with role
+  views and "Change role to…" for the ticked users; Add User; Roles; settings pages as form
+  tables; log-in and first-run setup in wp-login.php's layout; 403 as `wp_die()`.
+- **Tests.** Component tests for the markup; Playwright on desktop Chrome, iPhone SE and 15
+  (WebKit), Pixel 7 portrait and landscape, and iPad Pro 11 portrait and landscape (WebKit).
+
+### Not in this milestone
+
+Admin colour schemes (the CSS uses variables so they can come), screen options and help tabs,
+drag-and-drop dashboard widgets, a user edit and profile screen, bulk plugin actions, the
+front-end admin bar, right-to-left layout.
+
+## 5. Content
 
 Post types, taxonomies and meta, the core of WordPress that every big plugin builds on: courses
 and lessons are post types in LearnDash, LifterLMS and Tutor.
@@ -92,18 +132,18 @@ and lessons are post types in LearnDash, LifterLMS and Tutor.
 - Pages served by the site's catch-all route; revisions; the media library (uploads behind a
   storage interface).
 
-## 5. Accounts and email
+## 6. Accounts and email
 
 Customer sign-up and sign-in on the storefront, password reset, profile screens with fields
 plugins add (`show_user_profile`), user meta, and a mail transport with filters (`wp_mail`).
 
-## 6. LMS plugin
+## 7. LMS plugin
 
 Courses and lessons as content types, enrollment on `commerce.order.paid`, an instructor role
 limited to their own courses through meta capabilities, a learner dashboard, course settings and
 a section on Commerce's pages. The second proof that big plugins extend each other.
 
-## 7. Operations
+## 8. Operations
 
 Job queue and scheduled tasks (Action Scheduler), an outbound event outbox, caching, uninstall
 and down migrations, and the install flow (`pnpm add`, generate, blue/green rebuild).

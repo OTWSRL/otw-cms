@@ -1,3 +1,14 @@
+import {
+  EditColumns,
+  FormButton,
+  FormField,
+  FormTable,
+  ListTable,
+  Postbox,
+  SubmitButton,
+  TableNav,
+  Views,
+} from '@cms/admin-ui'
 import type { PluginContext, SearchParams } from '@cms/sdk'
 import { ActionError } from '@cms/sdk'
 import type { ReactNode } from 'react'
@@ -61,12 +72,13 @@ export function registerAdmin(
     capability: 'commerce.manage_products',
     menu: { label: 'Products', order: 10 },
     load: () => commerce.listProducts(),
+    titleAction: () => ({ label: 'Add Product', url: cms.admin.url('commerce.product-new') }),
     component: ({ data }) => (
       <ProductsAdmin
         products={data}
         format={format}
-        newUrl={cms.admin.url('commerce.product-new')}
         editUrl={(product) => cms.admin.url('commerce.product', { id: product.id })}
+        viewUrl={(product) => cms.routes.url('commerce.product', { slug: product.slug })}
       />
     ),
   })
@@ -74,7 +86,7 @@ export function registerAdmin(
   cms.admin.page({
     name: 'product-new',
     path: '/products/new',
-    title: 'Add product',
+    title: 'Add Product',
     capability: 'commerce.manage_products',
     component: () => (
       <ProductForm
@@ -282,14 +294,13 @@ function registerDashboard(cms: PluginContext, commerce: CommerceService): void 
       if (!cms.auth.can(user, 'commerce.manage_orders')) return null
       const { total } = await commerce.listOrders({ status: 'pending', limit: 1 })
       return (
-        <section className="cms-widget" aria-labelledby="widget-commerce-orders">
-          <h2 id="widget-commerce-orders">Orders</h2>
+        <Postbox id="commerce-orders-widget" title="Orders">
           <p>
             <a href={`${cms.admin.url('commerce.orders')}?status=pending`}>
               {total} awaiting payment
             </a>
           </p>
-        </section>
+        </Postbox>
       )
     },
   })
@@ -298,49 +309,49 @@ function registerDashboard(cms: PluginContext, commerce: CommerceService): void 
 function ProductsAdmin({
   products,
   format,
-  newUrl,
   editUrl,
+  viewUrl,
 }: {
   products: Product[]
   format: Format
-  newUrl: string
   editUrl: (product: Product) => string
+  viewUrl: (product: Product) => string
 }) {
   return (
     <>
-      <p>
-        <a className="cms-button" href={newUrl}>
-          Add product
-        </a>
-      </p>
-      {products.length === 0 ? (
-        <p>No products yet.</p>
-      ) : (
-        <table className="cms-table">
-          <thead>
-            <tr>
-              <th scope="col">Title</th>
-              <th scope="col">Slug</th>
-              <th scope="col" className="cms-numeric">
-                Price
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product.id}>
-                <td>
-                  <a href={editUrl(product)}>{product.title}</a>
-                </td>
-                <td>
-                  <code>{product.slug}</code>
-                </td>
-                <td className="cms-numeric">{format(product.price)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <TableNav total={products.length} noun={['item', 'items']} />
+      <ListTable
+        caption="Products"
+        rows={products}
+        rowKey={(product) => product.id}
+        empty="No products found."
+        rowActions={(product) => [
+          <a key="edit" href={editUrl(product)}>
+            Edit<span className="screen-reader-text"> “{product.title}”</span>
+          </a>,
+          <a key="view" href={viewUrl(product)}>
+            View<span className="screen-reader-text"> “{product.title}”</span>
+          </a>,
+        ]}
+        columns={[
+          {
+            key: 'title',
+            label: 'Name',
+            render: (product) => (
+              <strong>
+                <a href={editUrl(product)}>{product.title}</a>
+              </strong>
+            ),
+          },
+          { key: 'slug', label: 'Slug', render: (product) => <code>{product.slug}</code> },
+          {
+            key: 'price',
+            label: 'Price',
+            numeric: true,
+            render: (product) => format(product.price),
+          },
+        ]}
+      />
     </>
   )
 }
@@ -360,50 +371,76 @@ function ProductForm({
 }) {
   const digits = currencyDigits(currency)
   return (
-    <form method="post" action={actionUrl} className="cms-form">
+    <form method="post" action={actionUrl}>
       {product && <input type="hidden" name="id" value={product.id} />}
-      <label>
-        Title
-        <input name="title" required maxLength={200} defaultValue={product?.title} />
-      </label>
-      <label>
-        Slug
-        <input
-          name="slug"
-          required
-          pattern="[a-z0-9]+(-[a-z0-9]+)*"
-          defaultValue={product?.slug}
-          aria-describedby="slug-help"
-        />
-        <small id="slug-help">Lowercase letters, digits and dashes. Used in the product URL.</small>
-      </label>
-      <label>
-        Price ({currency})
-        <input
-          name="price"
-          required
-          inputMode={digits === 0 ? 'numeric' : 'decimal'}
-          pattern={digits === 0 ? '\\d+' : `\\d+(\\.\\d{1,${digits}})?`}
-          defaultValue={product ? toMoneyInput(product.price, currency) : undefined}
-        />
-      </label>
-      <label>
-        Description
-        <textarea
-          name="description"
-          rows={4}
-          maxLength={5000}
-          defaultValue={product?.description}
-        />
-      </label>
-      <div className="cms-form-actions">
-        <button type="submit" className="cms-button">
-          {product ? 'Save product' : 'Create product'}
-        </button>
-        <a href={listUrl}>Back to products</a>
-        {publicUrl && <a href={publicUrl}>View in shop</a>}
-      </div>
+      <FormTable>
+        <FormField label="Title" htmlFor="product-title">
+          <input
+            id="product-title"
+            name="title"
+            className="regular-text"
+            required
+            maxLength={200}
+            defaultValue={product?.title}
+          />
+        </FormField>
+        <FormField
+          label="Slug"
+          htmlFor="product-slug"
+          description="Lowercase letters, digits and dashes. Used in the product URL."
+          descriptionId="slug-help"
+        >
+          <input
+            id="product-slug"
+            name="slug"
+            className="regular-text"
+            required
+            pattern="[a-z0-9]+(-[a-z0-9]+)*"
+            defaultValue={product?.slug}
+            aria-describedby="slug-help"
+          />
+        </FormField>
+        <FormField label={`Price (${currency})`} htmlFor="product-price">
+          <input
+            id="product-price"
+            name="price"
+            className="small-text"
+            required
+            inputMode={digits === 0 ? 'numeric' : 'decimal'}
+            pattern={digits === 0 ? '\\d+' : `\\d+(\\.\\d{1,${digits}})?`}
+            defaultValue={product ? toMoneyInput(product.price, currency) : undefined}
+          />
+        </FormField>
+        <FormField label="Description" htmlFor="product-description">
+          <textarea
+            id="product-description"
+            name="description"
+            className="large-text"
+            rows={5}
+            maxLength={5000}
+            defaultValue={product?.description}
+          />
+        </FormField>
+      </FormTable>
+      <SubmitButton>{product ? 'Save Product' : 'Create Product'}</SubmitButton>
+      <p>
+        <a href={listUrl}>← Back to products</a>
+        {publicUrl && (
+          <>
+            {' | '}
+            <a href={publicUrl}>View in shop</a>
+          </>
+        )}
+      </p>
     </form>
+  )
+}
+
+function OrderStatus({ status, testId }: { status: OrderStatus; testId?: string }) {
+  return (
+    <mark className={`order-status status-${status}`} data-testid={testId}>
+      {STATUS_LABELS[status]}
+    </mark>
   )
 }
 
@@ -435,63 +472,67 @@ function OrdersAdmin({
   }
   return (
     <>
-      <nav aria-label="Filter orders" className="cms-filters">
-        <a href={link({})} aria-current={status === undefined ? 'page' : undefined}>
-          All
-        </a>
-        {STATUSES.map((value) => (
-          <a
-            key={value}
-            href={link({ status: value })}
-            aria-current={status === value ? 'page' : undefined}
-          >
-            {STATUS_LABELS[value]}
-          </a>
-        ))}
-      </nav>
-      {orders.length === 0 ? (
-        <p>No orders.</p>
-      ) : (
-        <table className="cms-table">
-          <thead>
-            <tr>
-              <th scope="col">Order</th>
-              <th scope="col">Customer</th>
-              <th scope="col">Status</th>
-              <th scope="col">Placed</th>
-              <th scope="col" className="cms-numeric">
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order.id}>
-                <td>
-                  <a href={orderUrl(order)}>#{order.number}</a>
-                </td>
-                <td>{order.email}</td>
-                <td>{STATUS_LABELS[order.status]}</td>
-                <td>
-                  <time dateTime={order.createdAt.toISOString()}>
-                    {order.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC
-                  </time>
-                </td>
-                <td className="cms-numeric">{format(order.total)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <p className="cms-pagination">
-        {total} {total === 1 ? 'order' : 'orders'}
-        {page > 1 && <a href={link({ status, page: page - 1 })}>Previous</a>}
-        {page < pages && <a href={link({ status, page: page + 1 })}>Next</a>}
-      </p>
+      <Views
+        label="Filter orders"
+        views={[
+          { label: 'All', href: link({}), current: status === undefined },
+          ...STATUSES.map((value) => ({
+            label: STATUS_LABELS[value],
+            href: link({ status: value }),
+            current: status === value,
+          })),
+        ]}
+      />
+      <TableNav
+        total={total}
+        noun={['order', 'orders']}
+        page={page}
+        pages={pages}
+        pageUrl={(target) => link({ status, page: target })}
+      />
+      <ListTable
+        caption="Orders"
+        rows={orders}
+        rowKey={(order) => order.id}
+        empty="No orders found."
+        columns={[
+          {
+            key: 'order',
+            label: 'Order',
+            render: (order) => (
+              <strong>
+                <a href={orderUrl(order)}>#{order.number}</a>
+              </strong>
+            ),
+          },
+          { key: 'customer', label: 'Customer', render: (order) => order.email },
+          {
+            key: 'date',
+            label: 'Date',
+            render: (order) => (
+              <time dateTime={order.createdAt.toISOString()}>
+                {order.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC
+              </time>
+            ),
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            render: (order) => <OrderStatus status={order.status} />,
+          },
+          {
+            key: 'total',
+            label: 'Total',
+            numeric: true,
+            render: (order) => format(order.total),
+          },
+        ]}
+      />
     </>
   )
 }
 
+/** The edit-order screen: details and items on the left, actions and plugin panels on the right. */
 function OrderAdmin({
   order,
   format,
@@ -508,68 +549,93 @@ function OrderAdmin({
   cancelUrl?: string
   panels: ReactNode[]
 }) {
-  return (
+  const main = (
     <>
-      <dl className="cms-details">
-        <dt>Status</dt>
-        <dd data-testid="admin-order-status">{STATUS_LABELS[order.status]}</dd>
-        <dt>Customer</dt>
-        <dd>{order.email}</dd>
-        <dt>Payment</dt>
-        <dd>
-          {order.gateway}
-          {order.paymentRef && (
-            <>
-              {' '}
-              <code>{order.paymentRef}</code>
-            </>
-          )}
-        </dd>
-      </dl>
-      <table className="cms-table">
-        <tbody>
-          {order.lines.map((line) => (
-            <tr key={`${line.itemType}:${line.itemId}`}>
-              <td>
-                {line.title} × {line.quantity}
+      <Postbox id="order-details" title="Details">
+        <dl className="details">
+          <dt>Status</dt>
+          <dd>
+            <OrderStatus status={order.status} testId="admin-order-status" />
+          </dd>
+          <dt>Customer</dt>
+          <dd>{order.email}</dd>
+          <dt>Payment</dt>
+          <dd>
+            {order.gateway}
+            {order.paymentRef && (
+              <>
+                {' '}
+                <code>{order.paymentRef}</code>
+              </>
+            )}
+          </dd>
+        </dl>
+      </Postbox>
+      <Postbox id="order-items" title="Items">
+        <table className="widefat">
+          <thead>
+            <tr>
+              <th scope="col">Item</th>
+              <th scope="col" className="num">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.lines.map((line) => (
+              <tr key={`${line.itemType}:${line.itemId}`}>
+                <td>
+                  {line.title} × {line.quantity}
+                </td>
+                <td className="num">{format(line.unitPrice * line.quantity)}</td>
+              </tr>
+            ))}
+            {order.adjustments.map((adjustment) => (
+              <tr key={adjustment.code}>
+                <td>{adjustment.label}</td>
+                <td className="num">{format(adjustment.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">Total</th>
+              <td className="num">
+                <strong>{format(order.total)}</strong>
               </td>
-              <td className="cms-numeric">{format(line.unitPrice * line.quantity)}</td>
             </tr>
-          ))}
-          {order.adjustments.map((adjustment) => (
-            <tr key={adjustment.code}>
-              <td>{adjustment.label}</td>
-              <td className="cms-numeric">{format(adjustment.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr>
-            <th scope="row">Total</th>
-            <td className="cms-numeric">{format(order.total)}</td>
-          </tr>
-        </tfoot>
-      </table>
-      {panels}
-      <div className="cms-form-actions">
-        {markPaidUrl && (
-          <form method="post" action={markPaidUrl}>
-            <input type="hidden" name="order" value={order.id} />
-            <button type="submit" className="cms-button">
-              Mark as paid
-            </button>
-          </form>
-        )}
-        {cancelUrl && (
-          <form method="post" action={cancelUrl}>
-            <input type="hidden" name="order" value={order.id} />
-            <button type="submit" className="cms-button cms-button-danger">
-              Cancel order
-            </button>
-          </form>
-        )}
-        <a href={listUrl}>Back to orders</a>
-      </div>
+          </tfoot>
+        </table>
+      </Postbox>
     </>
   )
+  const side = (
+    <>
+      <Postbox id="order-actions" title="Order actions">
+        {markPaidUrl || cancelUrl ? (
+          <div className="box-actions">
+            {cancelUrl ? (
+              <FormButton action={cancelUrl} fields={{ order: order.id }} variant="delete">
+                Cancel order
+              </FormButton>
+            ) : (
+              <span />
+            )}
+            {markPaidUrl && (
+              <FormButton action={markPaidUrl} fields={{ order: order.id }} variant="primary">
+                Mark as paid
+              </FormButton>
+            )}
+          </div>
+        ) : (
+          <p>Nothing to do: the order is {STATUS_LABELS[order.status].toLowerCase()}.</p>
+        )}
+      </Postbox>
+      {panels}
+      <p>
+        <a href={listUrl}>← Back to orders</a>
+      </p>
+    </>
+  )
+  return <EditColumns main={main} side={side} />
 }

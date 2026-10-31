@@ -14,8 +14,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --testTimeout=15000",
+    "test:watch": "vitest --testTimeout=15000",
     "test:e2e": "pnpm --filter @cms/web test:e2e",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
   },

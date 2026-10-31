@@ -311,6 +311,9 @@ async function boot(
   const installed = new Map(options.plugins.map((plugin) => [plugin.id, plugin]))
   const activeSet = new Set(resolution.order.map((plugin) => plugin.id))
   const overridesUsed = new Set<string>()
+  // Who read each setting while setting up: only they can fail to start on a new value.
+  const startupReaders = new Map<string, Set<string>>()
+  let settingUp: string | undefined
   const requiredCapabilities: { what: string; capability: string }[] = []
   const auth = createAuthService(db, {
     roleExists: (role) => stores.capabilities.hasRole(role),
@@ -478,18 +481,44 @@ async function boot(
   })
   for (const action of actions) registerAction(CORE, action)
 
+  /** These plugins and, transitively, the active plugins they require or optionally use. */
+  const withDependencies = (ids: Iterable<string>): string[] => {
+    const needed = new Set<string>()
+    const visit = (id: string) => {
+      if (needed.has(id) || !activeSet.has(id)) return
+      needed.add(id)
+      const { requires, optional } = installed.get(id)!
+      for (const dependency of Object.keys({ ...requires, ...optional })) visit(dependency)
+    }
+    for (const id of ids) visit(id)
+    return resolution.order.map((plugin) => plugin.id).filter((id) => needed.has(id))
+  }
+
   /**
-   * Boots once with the new values, as activation does, so a value a plugin rejects at startup
-   * never reaches visitors. Field validation can't catch these: they depend on other values or
-   * on what the plugin does with them.
+   * Boots the plugins that read a changed setting while starting, with the new values, so a value
+   * a plugin rejects at startup never reaches visitors. Field validation can't catch these: they
+   * depend on other values or on what the plugin does with them. Plugins that didn't read the
+   * setting can't fail on it, so they stay out and a save costs what it touches, not every plugin.
    */
   const trialSettings = async (updates: ReadonlyMap<string, SettingValue | undefined>) => {
+    const read = [...updates.keys()].filter((key) => {
+      const setting = settingsByKey.get(key)!
+      const fallback = setting.definition.type === 'secret' ? undefined : setting.definition.default
+      return startupReaders.has(key) && (updates.get(key) ?? fallback) !== setting.value
+    })
+    if (read.length === 0) return
+    const readers = read.flatMap((key) => [...startupReaders.get(key)!])
+    // The owners declare the settings, so their values resolve in the trial.
+    const owners = read.map((key) => settingsByKey.get(key)!.pluginId)
     const stored = new Map(await loadStoredSettings(db.root))
     for (const [key, value] of updates) {
       if (value === undefined) stored.delete(key)
       else stored.set(key, value)
     }
-    const trial = await startKernel(trialOptions, { stored })
+    const trial = await startKernel(
+      { ...trialOptions, active: withDependencies([...readers, ...owners]) },
+      { stored },
+    )
     const broken = trial.skipped.filter((plugin) => activeSet.has(plugin.id))
     if (broken.length > 0) {
       const names = broken.map((plugin) => displayName(installed.get(plugin.id), plugin.id))
@@ -540,7 +569,15 @@ async function boot(
           stores.slots.fill(plugin.id, name, fill.component as SlotComponent, fill.priority),
         get: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
       },
-      settings: { get: (key) => values[key] },
+      settings: {
+        get: (key) => {
+          if (settingUp !== undefined) {
+            const readers = startupReaders.get(key) ?? new Set()
+            startupReaders.set(key, readers.add(settingUp))
+          }
+          return values[key]
+        },
+      },
       auth: {
         role: (id, definition) => stores.capabilities.role(plugin.id, id, definition),
         capability: (name, definition) =>
@@ -591,12 +628,15 @@ async function boot(
   }
 
   for (const plugin of resolution.order) {
+    // Setups run one at a time, so a read through another plugin's service counts as this one's.
+    settingUp = plugin.id
     try {
       await plugin.setup?.(contextFor(plugin))
     } catch (error) {
       throw new PluginBootError(plugin.id, 'setup', error)
     }
   }
+  settingUp = undefined
   sealed = true
   stores.capabilities.seal()
   const label = (pluginId: string) => displayName(installed.get(pluginId), pluginId)
@@ -629,6 +669,7 @@ async function boot(
     active: resolution.order.map((plugin) => plugin.id),
     installed: new Set(installed.keys()),
     label,
+    icon: (pluginId) => installed.get(pluginId)?.icon ?? 'admin',
   })
 
   const registrationWarnings = [
@@ -801,6 +842,7 @@ function buildKernel(input: {
         key: match.route.key,
         pluginId,
         title: typeof page.title === 'function' ? page.title(props) : page.title,
+        titleAction: page.titleAction?.(props) ?? null,
         props,
         Component: page.component,
       }

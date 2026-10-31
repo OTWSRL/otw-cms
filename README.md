@@ -12,6 +12,7 @@ screen, with no rebuild.
 ```
 apps/web               Next.js app: catch-all route, plugin API route, layout slots
 packages/sdk           @cms/sdk: the only package plugin authors depend on (types + definePlugin)
+packages/admin-ui      @cms/admin-ui: WordPress-style admin components (list and form tables, boxes)
 packages/core          @cms/core: the kernel (resolver, hooks, registries, services, router, migrations)
 packages/testing       @cms/testing: boots the kernel on in-memory Postgres for plugin tests
 packages/cli           @cms/cli: `cms generate` writes the static plugin import map
@@ -26,8 +27,11 @@ pnpm install
 pnpm seed            # demo products in the embedded database (apps/web/.data)
 pnpm dev             # http://localhost:3000, admin at /admin
 pnpm check           # lint, format, typecheck, unit + integration tests
-pnpm test:e2e        # Playwright against a production build
+pnpm test:e2e        # Playwright against a production build, desktop plus phone and tablet
 ```
+
+The phone and tablet runs use Playwright's WebKit as well as Chromium; install it once with
+`pnpm --filter @cms/web exec playwright install webkit`.
 
 There's no database to set up: without `DATABASE_URL` the app uses embedded PGlite. Set
 `DATABASE_URL` for Postgres in production. Other settings are in `apps/web/.env.example`.
@@ -63,6 +67,7 @@ export default definePlugin({
   id: 'lms',
   version: '1.0.0',
   name: 'Courses',
+  icon: 'book', // the menu icon: a built-in name, or a base64 SVG data URI as in add_menu_page()
   requires: { core: '^0.1.0' },
   optional: { commerce: '^0.1.0' }, // works alone; integrates when commerce is active
   migrations: [{ id: '0001_courses', up: (db) => db.execute(sql`CREATE TABLE lms_courses (...)`) }],
@@ -101,10 +106,20 @@ export default definePlugin({
       capability: 'lms.manage_courses',
       menu: { label: 'Courses' },
       load: () => listCourses(cms.db), // write load before title and component, for inference
+      titleAction: () => ({ label: 'Add Course', url: cms.admin.url('lms.course-new') }),
       component: ({ data, user }) => (
-        <CourseTable
-          courses={data.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
-          action={cms.admin.actionUrl('publish')}
+        // From @cms/admin-ui: WP_List_Table's markup, striped, with a phone layout.
+        <ListTable
+          caption="Courses"
+          rows={data.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
+          rowKey={(course) => course.id}
+          rowActions={(course) => [
+            <a key="edit" href={cms.admin.url('lms.course', { id: course.id })}>
+              Edit
+            </a>,
+          ]}
+          columns={[{ key: 'title', label: 'Title', render: (course) => course.title }]}
+          empty="No courses found."
         />
       ),
     })
@@ -174,22 +189,32 @@ Rules the kernel enforces or relies on:
   Administrators have every capability. Core defines `administrator` and `customer`; commerce
   adds `shop_manager`. Plugins add roles, declare capabilities (`lms.manage_courses`), and
   `grant()` or `revoke()` them on any role. Nothing is stored: roles and grants are rebuilt on
-  every boot from the active plugins, so deactivating a plugin removes what it added. The Users
-  screen lists what each role can do.
+  every boot from the active plugins, so deactivating a plugin removes what it added. Users ›
+  All Users filters by role and changes the role of the ticked users at once (all or none, and
+  never the last administrator); Add User and Roles are their own screens, as in WordPress.
 - **Meta capabilities** map an object to the capabilities it requires, like `map_meta_cap`:
   `can(user, 'commerce.mark_order_paid', order)`. A map returns the required capabilities, or
   `false` to deny everyone, administrators included. Other plugins adjust a mapping with
   `extendCapability()`: a bank-transfer gateway lets shop managers confirm its orders by hand.
   Checks receive the loaded object, so they are synchronous and list screens need no extra
   queries.
-- **Menu.** Sections in order: Dashboard, one per plugin (load order), Plugins, Users, Settings.
-  A page joins another section with `menu.parent` (a core section or a plugin id); a parent whose
-  plugin is inactive falls back to the page's own section. A section with one item shows as a
-  single link.
+- **Look.** The admin is WordPress 7.1's, default colour scheme: the black admin bar, the menu on
+  the left with icons and fly-out submenus, Collapse Menu (remembered in a cookie), and the same
+  breakpoints. From 960px down the menu folds to icons; below 783px it hides behind the admin
+  bar's button, list tables show one column with a toggle for the rest, form tables stack, and
+  fields use 16px text so iOS doesn't zoom. On touch screens the first tap on a section opens
+  its submenu, as in WordPress. The stylesheet is our own, written to WordPress's measurements,
+  not copied from it. There is no dark mode, as in WordPress.
+- **Menu.** Sections in order: Dashboard, one per plugin (load order, with the plugin's `icon`),
+  Plugins, Users, Settings. A section links to its first page and lists the rest as its
+  submenu. A page joins another section with `menu.parent` (a core section or a plugin id); a
+  parent whose plugin is inactive falls back to the page's own section.
 - **Screens.** Plugin pages mount at `/admin/{pluginId}/...` and appear for users with the page's
-  capability. Style them with the `cms-*` classes in `apps/web/src/app/admin/admin.css`
-  (`cms-table`, `cms-form`, `cms-button`, `cms-form-actions`, `cms-details`, `cms-panel`,
-  `cms-widget`).
+  capability. The title and notices come from core; `titleAction` adds the "Add New" button.
+  Build the body from `@cms/admin-ui` (`ListTable`, `Views`, `TableNav`, `FormTable`,
+  `FormField`, `SubmitButton`, `Postbox`, `EditColumns`, `Notice`, `Button`, `FormButton`), or
+  write WordPress's markup by hand: the admin styles its class names (`wrap`, `button-primary`,
+  `notice-warning`, `form-table`, `wp-list-table`, `postbox`, `subsubsub`, `row-actions`).
 - **Slots.** `admin.notices` shows on every screen and `admin.dashboard` on the dashboard.
   Commerce offers `commerce.admin.order`, which Stripe fills with the Checkout session. Fills
   decide what to show from the `user` prop.
@@ -211,8 +236,10 @@ Rules the kernel enforces or relies on:
   Payments; Stripe adds its section to Payments. A section aimed at an inactive plugin's page
   moves to its owner's page, and fields nobody placed get a section there, or a page of their
   own. Each page has a capability (default `core.manage_settings`), so shop managers edit shop
-  settings but not the site's. Saving a page writes only the editable fields on it, after a trial
-  boot with the new values; if a plugin can't start with them, nothing is saved.
+  settings but not the site's. Saving a page writes only the editable fields on it. Plugins that
+  read a changed setting during `setup()` are first booted with the new values (with what they
+  depend on); if one can't start, nothing is saved. The rest can't fail on the change and aren't
+  booted, so a save costs what it touches, not every plugin.
 
 ## Security model
 

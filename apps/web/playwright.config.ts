@@ -12,7 +12,24 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // The admin's phone, tablet and touch layouts, in the engines those devices ship. They run
+    // after the desktop project, which sets the site up.
+    ...[
+      'iPhone SE',
+      'iPhone 15',
+      'Pixel 7',
+      'Pixel 7 landscape',
+      'iPad Pro 11',
+      'iPad Pro 11 landscape',
+    ].map((device) => ({
+      name: device,
+      use: { ...devices[device] },
+      testMatch: 'responsive.spec.ts',
+      dependencies: ['chromium'],
+    })),
+  ],
   webServer: {
     command: `pnpm build && pnpm seed --reset && pnpm start --port ${PORT}`,
     url: `http://localhost:${PORT}`,

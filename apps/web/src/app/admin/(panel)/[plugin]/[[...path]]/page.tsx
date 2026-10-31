@@ -54,7 +54,7 @@ export default async function PluginAdminPage(props: Props) {
   }
   const { Component } = page
   return (
-    <AdminScreen title={page.title} flash={flash}>
+    <AdminScreen title={page.title} titleAction={page.titleAction} flash={flash}>
       <Component {...page.props} />
     </AdminScreen>
   )

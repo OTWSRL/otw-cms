@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@cms/admin-ui": "workspace:*",
     "@cms/plugin-commerce": "workspace:*",
     "@cms/sdk": "workspace:*",
     "stripe": "^23.1.0"

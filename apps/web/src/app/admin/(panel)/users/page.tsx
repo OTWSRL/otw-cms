@@ -1,11 +1,13 @@
-import { ADMINISTRATOR, MIN_PASSWORD_LENGTH } from '@cms/core'
+import { AdminIcon, Button, ListTable, TableNav, Views } from '@cms/admin-ui'
 import type { SearchParams } from '@cms/sdk'
 import type { Metadata } from 'next'
 import { AdminScreen } from '@/components/admin'
+import { firstParam } from '@/cms/search-params'
 import { requireAdmin } from '@/cms/session'
 
 export const metadata: Metadata = { title: 'Users' }
 
+/** users.php: filter by role, tick users and change their role in one go. */
 export default async function UsersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const [{ kernel, user: me }, params] = await Promise.all([
     requireAdmin('/admin/users', 'core.manage_users'),
@@ -13,117 +15,77 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   ])
   const [users, roles] = [await kernel.auth.listUsers(), kernel.roles()]
   const roleLabel = new Map(roles.map((role) => [role.id, role.label]))
-  const capabilityLabel = new Map(kernel.capabilities().map((c) => [c.name, c.label]))
-  const setRoleUrl = kernel.actionUrl('core', 'set-role')
+  const filter = roles.find((role) => role.id === firstParam(params.role))?.id
+  const shown = filter ? users.filter((user) => user.role === filter) : users
+  const count = (role: string) => users.filter((user) => user.role === role).length
 
   return (
-    <AdminScreen title="Users" flash={kernel.readFlash(params.flash)}>
-      <table className="cms-table">
-        <thead>
-          <tr>
-            <th scope="col">Email</th>
-            <th scope="col">Name</th>
-            <th scope="col">Role</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>
-                {user.email}
-                {user.id === me.id && <small> (you)</small>}
-              </td>
-              <td>{user.name}</td>
-              <td>
-                <form method="post" action={setRoleUrl} className="cms-inline-form">
-                  <input type="hidden" name="user" value={user.id} />
-                  <select
-                    name="role"
-                    defaultValue={user.role}
-                    aria-label={`Role for ${user.email}`}
-                  >
-                    {!roleLabel.has(user.role) && (
-                      // The plugin that defined it is inactive; the user has no capabilities.
-                      <option value={user.role}>{user.role} (inactive)</option>
-                    )}
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="submit" className="cms-button">
-                    Save<span className="cms-visually-hidden"> role for {user.email}</span>
-                  </button>
-                </form>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <section aria-labelledby="add-user" className="cms-section">
-        <h2 id="add-user">Add user</h2>
-        <form method="post" action={kernel.actionUrl('core', 'create-user')} className="cms-form">
-          <label>
-            Email
-            <input type="email" name="email" autoComplete="off" required />
+    <AdminScreen
+      title="Users"
+      titleAction={{ label: 'Add User', url: '/admin/users/new' }}
+      flash={kernel.readFlash(params.flash)}
+    >
+      <Views
+        label="Filter users by role"
+        views={[
+          { label: 'All', count: users.length, href: '/admin/users', current: !filter },
+          ...roles
+            .filter((role) => count(role.id) > 0)
+            .map((role) => ({
+              label: role.label,
+              count: count(role.id),
+              href: `/admin/users?role=${encodeURIComponent(role.id)}`,
+              current: filter === role.id,
+            })),
+        ]}
+      />
+      <form method="post" action={kernel.actionUrl('core', 'set-role')}>
+        <TableNav total={shown.length} noun={['item', 'items']}>
+          <label className="screen-reader-text" htmlFor="new-role">
+            Change role to…
           </label>
-          <label>
-            Name
-            <input name="name" autoComplete="off" maxLength={100} />
-          </label>
-          <label>
-            Role
-            <select name="role" defaultValue="customer">
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              name="password"
-              autoComplete="new-password"
-              minLength={MIN_PASSWORD_LENGTH}
-              required
-            />
-          </label>
-          <button type="submit" className="cms-button">
-            Add user
-          </button>
-        </form>
-      </section>
-
-      <section aria-labelledby="roles" className="cms-section">
-        <h2 id="roles">Roles</h2>
-        <p>Plugins add roles and capabilities; they change when plugins are switched on or off.</p>
-        <table className="cms-table">
-          <thead>
-            <tr>
-              <th scope="col">Role</th>
-              <th scope="col">Can</th>
-            </tr>
-          </thead>
-          <tbody>
+          <select id="new-role" name="role" defaultValue="">
+            <option value="" disabled>
+              Change role to…
+            </option>
             {roles.map((role) => (
-              <tr key={role.id}>
-                <th scope="row">{role.label}</th>
-                <td>
-                  {role.id === ADMINISTRATOR
-                    ? 'Everything'
-                    : role.capabilities.map((name) => capabilityLabel.get(name)).join(', ') ||
-                      'Nothing in the admin'}
-                </td>
-              </tr>
+              <option key={role.id} value={role.id}>
+                {role.label}
+              </option>
             ))}
-          </tbody>
-        </table>
-      </section>
+          </select>
+          <Button type="submit">Change</Button>
+        </TableNav>
+        <ListTable
+          caption="Users"
+          rows={shown}
+          rowKey={(user) => user.id}
+          select={{ name: 'users', value: (user) => user.id, label: (user) => user.email }}
+          empty="No users found."
+          columns={[
+            {
+              key: 'email',
+              label: 'Email',
+              render: (user) => (
+                <span className="user-identity">
+                  <span className="avatar avatar-list" aria-hidden="true">
+                    <AdminIcon icon="users" />
+                  </span>
+                  <strong>{user.email}</strong>
+                  {user.id === me.id && <span className="description"> (you)</span>}
+                </span>
+              ),
+            },
+            { key: 'name', label: 'Name', render: (user) => user.name || '—' },
+            {
+              key: 'role',
+              label: 'Role',
+              // The plugin that defined it is inactive; the user has no capabilities.
+              render: (user) => roleLabel.get(user.role) ?? `${user.role} (inactive)`,
+            },
+          ]}
+        />
+      </form>
     </AdminScreen>
   )
 }

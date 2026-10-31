@@ -8,7 +8,7 @@ const { plugins } = JSON.parse(readFileSync(resolve(process.cwd(), 'cms.config.j
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@cms/sdk', '@cms/core', ...plugins],
+  transpilePackages: ['@cms/sdk', '@cms/core', '@cms/admin-ui', ...plugins],
   // PGlite loads its WebAssembly from its own package directory at runtime.
   serverExternalPackages: ['@electric-sql/pglite'],
   // forbidden() answers admin pages a user may not open with a real 403.

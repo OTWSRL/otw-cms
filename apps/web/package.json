@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@cms/admin-ui": "workspace:*",
     "@cms/core": "workspace:*",
     "@cms/plugin-commerce": "workspace:*",
     "@cms/plugin-commerce-stripe": "workspace:*",

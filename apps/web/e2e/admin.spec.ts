@@ -1,22 +1,8 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { ADMIN, MANAGER, mainMenu, notice, openSection, signIn, submenu } from './helpers'
 
 // One site, set up by the first test; the rest build on it.
 test.describe.configure({ mode: 'serial' })
-
-const ADMIN = { name: 'Ada Admin', email: 'ada@example.com', password: 'a strong e2e password' }
-const MANAGER = { email: 'max@example.com', password: 'another e2e password' }
-
-async function signIn(page: Page, user: { email: string; password: string }, path = '/admin') {
-  await page.goto(path)
-  await expect(page).toHaveURL(/\/admin\/login\?next=/)
-  await page.getByLabel('Email').fill(user.email)
-  await page.getByLabel('Password').fill(user.password)
-  await page.getByRole('button', { name: 'Sign in' }).click()
-}
-
-function notice(page: Page, message: string) {
-  return expect(page.getByRole('status').filter({ hasText: message })).toBeVisible()
-}
 
 test('the first visit sets up the administrator', async ({ page }) => {
   await page.goto('/admin')
@@ -44,41 +30,47 @@ test('signed-out visitors sign in and land where they were going', async ({ page
 
 test('a wrong password is explained on the form', async ({ page }) => {
   await signIn(page, { email: ADMIN.email, password: 'not the password' })
-  await expect(page.getByText('Incorrect email or password.')).toHaveAttribute('role', 'alert')
-  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+  // Filtered: Next's route announcer is an alert too.
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Incorrect email or password.' }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Log In' })).toBeVisible()
 })
 
 test('plugins deactivate and reactivate in dependency order', async ({ page }) => {
   await signIn(page, ADMIN)
-  await page
-    .getByRole('navigation', { name: 'Admin' })
-    .getByRole('link', { name: 'Plugins' })
-    .click()
+  await openSection(page, 'Plugins')
   await expect(page).toHaveURL('/admin/plugins')
 
-  const commerce = page.getByTestId('plugin-commerce')
+  // Rows are named by their first cell, the plugin's name.
+  const commerce = page.getByRole('row', { name: /^Commerce/ })
+  const stripe = page.getByRole('row', { name: /^Stripe/ })
+  await expect(commerce).toHaveClass('active')
   await expect(commerce.getByRole('button', { name: 'Deactivate Commerce' })).toBeDisabled()
   await expect(commerce.getByText('Stripe requires it. Deactivate that first.')).toBeVisible()
 
-  const stripe = page.getByTestId('plugin-commerce-stripe')
   await stripe.getByRole('button', { name: 'Deactivate Stripe' }).click()
   await notice(page, 'Stripe deactivated.')
-  await expect(stripe.getByRole('cell', { name: 'Inactive' })).toBeVisible()
+  await expect(stripe).toHaveClass('inactive')
   await expect(commerce.getByRole('button', { name: 'Deactivate Commerce' })).toBeEnabled()
+  await page.getByRole('link', { name: /^Inactive/ }).click()
+  await expect(page.getByRole('row', { name: /^(Commerce|Stripe)/ })).toHaveCount(1)
 
   await stripe.getByRole('button', { name: 'Activate Stripe' }).click()
   await notice(page, 'Stripe activated.')
-  await expect(stripe.getByRole('cell', { name: 'Active', exact: true })).toBeVisible()
+  // Back on the Inactive view, as WordPress returns to the filter you were on.
+  await expect(page).toHaveURL(/plugin_status=inactive/)
+  await expect(stripe).toHaveCount(0)
+  await page.getByRole('link', { name: /^All/ }).click()
+  await expect(stripe).toHaveClass('active')
 })
 
 test('products created in the admin go live in the shop', async ({ page }) => {
   await signIn(page, ADMIN)
-  await page
-    .getByRole('navigation', { name: 'Admin' })
-    .getByRole('link', { name: 'Products' })
-    .click()
-  await page.getByRole('link', { name: 'Add product' }).click()
-  await expect(page).toHaveTitle('Add product · Admin · Next CMS')
+  await openSection(page, 'Commerce')
+  await expect(page).toHaveURL('/admin/commerce/products')
+  await page.getByRole('link', { name: 'Add Product' }).click()
+  await expect(page).toHaveTitle('Add Product · Admin · Next CMS')
 
   await page.getByLabel('Title').fill('Linen Apron')
   await page.getByLabel('Slug').fill('linen-apron')
@@ -106,19 +98,19 @@ test('the product form explains invalid input', async ({ page }) => {
   await page.getByLabel('Slug').fill('ceramic-mug')
   await page.getByLabel('Price (USD)').fill('1')
   await page.getByRole('button', { name: 'Create product' }).click()
-  await expect(page.getByText('Another product already uses that slug.')).toHaveAttribute(
-    'role',
-    'alert',
-  )
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Another product already uses that slug.' }),
+  ).toBeVisible()
 })
 
 test('settings saved in the admin change the site', async ({ page }) => {
   await signIn(page, ADMIN)
-  await page
-    .getByRole('navigation', { name: 'Admin' })
-    .getByRole('link', { name: 'General' })
-    .click()
+  await openSection(page, 'Settings')
   await expect(page).toHaveURL('/admin/settings')
+  await expect(submenu(page, 'Settings').getByRole('link', { name: 'General' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
   await expect(page).toHaveTitle('General settings · Admin · Next CMS')
 
   const site = page.getByRole('region', { name: 'Site' })
@@ -140,9 +132,8 @@ test('settings saved in the admin change the site', async ({ page }) => {
 
 test('plugins add pages under Settings and sections to each other’s pages', async ({ page }) => {
   await signIn(page, ADMIN)
-  const settings = page.getByRole('navigation', { name: 'Admin' }).getByRole('region', {
-    name: 'Settings',
-  })
+  await openSection(page, 'Settings')
+  const settings = submenu(page, 'Settings')
   await expect(settings.getByRole('link')).toHaveText(['General', 'Shop', 'Payments'])
   await settings.getByRole('link', { name: 'Payments' }).click()
   await expect(page).toHaveURL('/admin/commerce/settings/payments')
@@ -189,16 +180,22 @@ test('a shop manager confirms a pay-later order but cannot manage plugins', asyn
   browser,
 }) => {
   await signIn(page, ADMIN)
-  await page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Users' }).click()
-  const addUser = page.getByRole('region', { name: 'Add user' })
-  await addUser.getByLabel('Email').fill(MANAGER.email)
-  await addUser.getByLabel('Role').selectOption({ label: 'Shop manager' })
-  await addUser.getByLabel('Password').fill(MANAGER.password)
-  await addUser.getByRole('button', { name: 'Add user' }).click()
+  await openSection(page, 'Users')
+  await page.getByRole('link', { name: 'Add User' }).first().click()
+  await expect(page).toHaveURL('/admin/users/new')
+  await page.getByLabel('Email').fill(MANAGER.email)
+  await page.getByLabel('Role').selectOption({ label: 'Shop manager' })
+  await page.getByLabel('Password').fill(MANAGER.password)
+  await page.getByRole('button', { name: 'Add User' }).click()
+  await expect(page).toHaveURL(/\/admin\/users\?flash=/)
   await notice(page, `Added ${MANAGER.email}.`)
-  await expect(
-    page.getByRole('region', { name: 'Roles' }).getByRole('row', { name: /Shop manager/ }),
-  ).toContainText('Change shop settings')
+  await expect(page.getByRole('row', { name: new RegExp(MANAGER.email) })).toContainText(
+    'Shop manager',
+  )
+  await submenu(page, 'Users').getByRole('link', { name: 'Roles' }).click()
+  await expect(page.getByRole('row', { name: /^Shop manager/ })).toContainText(
+    'Change shop settings',
+  )
 
   // A shopper places an order in a separate browser session.
   const shopper = await browser.newPage()
@@ -210,15 +207,13 @@ test('a shop manager confirms a pay-later order but cannot manage plugins', asyn
 
   const manager = await browser.newPage()
   await signIn(manager, MANAGER)
-  const nav = manager.getByRole('navigation', { name: 'Admin' })
-  await expect(nav.getByRole('link', { name: 'Plugins' })).toHaveCount(0)
-  await expect(nav.getByRole('region', { name: 'Settings' }).getByRole('link')).toHaveText([
-    'Shop',
-    'Payments',
-  ])
+  await expect(mainMenu(manager).getByRole('link', { name: 'Plugins' })).toHaveCount(0)
+  await openSection(manager, 'Settings')
+  await expect(submenu(manager, 'Settings').getByRole('link')).toHaveText(['Shop', 'Payments'])
   // Only people who can change the server's environment are told about missing keys.
   await expect(manager.getByText('Stripe is active')).toHaveCount(0)
-  await nav.getByRole('link', { name: 'Orders' }).click()
+  await openSection(manager, 'Commerce')
+  await submenu(manager, 'Commerce').getByRole('link', { name: 'Orders' }).click()
   await manager.getByRole('link', { name: number, exact: true }).click()
   await expect(manager.getByTestId('admin-order-status')).toHaveText('Awaiting payment')
   await manager.getByRole('button', { name: 'Mark as paid' }).click()
@@ -232,13 +227,14 @@ test('a shop manager confirms a pay-later order but cannot manage plugins', asyn
   const forbidden = await manager.goto('/admin/plugins')
   expect(forbidden?.status()).toBe(403)
   await expect(
-    manager.getByRole('heading', { name: "You don't have access to this page" }),
+    manager.getByRole('heading', { name: 'Sorry, you are not allowed to access this page.' }),
   ).toBeVisible()
 })
 
 test('signing out ends the session', async ({ page }) => {
   await signIn(page, ADMIN)
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { name: /^Howdy, Ada Admin/ }).click()
+  await page.getByRole('button', { name: 'Log Out' }).click()
   await notice(page, 'You are signed out.')
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/admin\/login\?next=%2Fadmin$/)

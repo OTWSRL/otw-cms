@@ -128,17 +128,65 @@ describe('users', () => {
         { cookie },
       ),
     )
-    expect(redirectOf(kernel, created).flash).toEqual({ kind: 'notice', message: 'Added bo@b.co.' })
+    // Back to the list, as user-new.php returns to users.php.
+    expect(redirectOf(kernel, created)).toMatchObject({
+      path: '/admin/users',
+      flash: { kind: 'notice', message: 'Added bo@b.co.' },
+    })
     const bo = (await kernel.auth.listUsers()).find((user) => user.email === 'bo@b.co')!
 
     const updated = await kernel.handleApi(
-      formPost(action('set-role'), { user: bo.id, role: 'administrator' }, { cookie }),
+      formPost(action('set-role'), { users: [bo.id], role: 'administrator' }, { cookie }),
     )
     expect(redirectOf(kernel, updated).flash).toEqual({
       kind: 'notice',
       message: 'Updated bo@b.co.',
     })
     expect((await kernel.auth.userForSession(cookie.split('=')[1]))?.role).toBe('administrator')
+  })
+
+  it('changes the role of every selected user at once', async () => {
+    const kernel = await bootKernel({ plugins: [] })
+    const { user, cookie } = await signIn(kernel)
+    const add = (email: string) =>
+      kernel.handleApi(
+        formPost(
+          action('create-user'),
+          { email, role: 'customer', password: PASSWORD },
+          { cookie },
+        ),
+      )
+    await add('a@b.co')
+    await add('b@b.co')
+    const ids = (await kernel.auth.listUsers())
+      .filter((each) => each.id !== user.id)
+      .map((each) => each.id)
+
+    const changed = await kernel.handleApi(
+      formPost(action('set-role'), { users: ids, role: 'administrator' }, { cookie }),
+    )
+    expect(redirectOf(kernel, changed).flash).toEqual({
+      kind: 'notice',
+      message: 'Changed the role of 2 users.',
+    })
+    expect((await kernel.auth.listUsers()).map((each) => each.role)).toEqual([
+      'administrator',
+      'administrator',
+      'administrator',
+    ])
+
+    const none = await kernel.handleApi(
+      formPost(action('set-role'), { role: 'customer' }, { cookie }),
+    )
+    expect(redirectOf(kernel, none).flash).toEqual({
+      kind: 'error',
+      message: 'Select the users to change.',
+    })
+    const noRole = await kernel.handleApi(formPost(action('set-role'), { users: ids }, { cookie }))
+    expect(redirectOf(kernel, noRole).flash).toEqual({
+      kind: 'error',
+      message: 'Choose the role to change them to.',
+    })
   })
 
   it('reports problems on the form instead of failing', async () => {
@@ -156,7 +204,7 @@ describe('users', () => {
       message: 'A user with that email address already exists.',
     })
     const demoteSelf = await kernel.handleApi(
-      formPost(action('set-role'), { user: user.id, role: 'customer' }, { cookie }),
+      formPost(action('set-role'), { users: [user.id], role: 'customer' }, { cookie }),
     )
     expect(redirectOf(kernel, demoteSelf).flash).toEqual({
       kind: 'error',

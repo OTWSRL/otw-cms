@@ -1,4 +1,4 @@
-import { ActionError, ForbiddenError, type PluginDefinition } from '@cms/sdk'
+import { ActionError, ForbiddenError, type PluginContext, type PluginDefinition } from '@cms/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, formPost, ORIGIN, plugin, redirectOf, signIn } from './helpers'
 
@@ -123,6 +123,7 @@ describe('admin pages', () => {
     const dashboard = {
       id: 'dashboard',
       label: 'Dashboard',
+      icon: 'dashboard',
       items: [{ key: 'core.dashboard', label: 'Home', url: '/admin' }],
     }
     expect(kernel.adminMenu(admin.user)).toEqual([
@@ -130,6 +131,7 @@ describe('admin pages', () => {
       {
         id: 'shop',
         label: 'Shop',
+        icon: 'admin',
         items: [
           { key: 'shop.products', label: 'Products', url: '/admin/shop/products' },
           { key: 'shop.orders', label: 'Orders', url: '/admin/shop/orders' },
@@ -138,21 +140,63 @@ describe('admin pages', () => {
       {
         id: 'plugins',
         label: 'Plugins',
-        items: [{ key: 'core.plugins', label: 'Installed plugins', url: '/admin/plugins' }],
+        icon: 'plugins',
+        items: [{ key: 'core.plugins', label: 'Installed Plugins', url: '/admin/plugins' }],
       },
       {
         id: 'users',
         label: 'Users',
-        items: [{ key: 'core.users', label: 'All users', url: '/admin/users' }],
+        icon: 'users',
+        items: [
+          { key: 'core.users', label: 'All Users', url: '/admin/users' },
+          { key: 'core.user-new', label: 'Add User', url: '/admin/users/new' },
+          { key: 'core.roles', label: 'Roles', url: '/admin/users/roles' },
+        ],
       },
       {
         id: 'settings',
         label: 'Settings',
+        icon: 'settings',
         items: [{ key: 'core.general', label: 'General', url: '/admin/settings' }],
       },
     ])
     expect(kernel.adminMenu((await signIn(kernel, 'support')).user)).toEqual([dashboard])
     expect(kernel.adminMenu((await signIn(kernel, 'customer')).user)).toEqual([])
+  })
+
+  it('shows each plugin’s section with its icon, and skips plugins with an unknown one', async () => {
+    const menuPage = (cms: PluginContext) =>
+      cms.admin.page({
+        name: 'home',
+        path: '/',
+        title: 'Home',
+        capability: 'core.access_admin',
+        menu: { label: 'Home' },
+        component: () => null,
+      })
+    const svg = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg"/>')}`
+    const kernel = await bootKernel({
+      plugins: [
+        { ...shopPlugin(), icon: 'cart' },
+        plugin('drawn', { icon: svg as `data:image/svg+xml;base64,${string}`, setup: menuPage }),
+        // A raw SVG string could break out of CSS url(); only base64 is accepted.
+        plugin('raw', { icon: 'data:image/svg+xml;base64,"x' as never, setup: menuPage }),
+        plugin('typo', { icon: 'kart' as never }),
+      ],
+    })
+    const icons = kernel.adminMenu((await signIn(kernel)).user).map(({ id, icon }) => [id, icon])
+    expect(icons).toEqual([
+      ['dashboard', 'dashboard'],
+      ['drawn', svg],
+      ['shop', 'cart'],
+      ['plugins', 'plugins'],
+      ['users', 'users'],
+      ['settings', 'settings'],
+    ])
+    expect(kernel.skipped).toEqual([
+      expect.objectContaining({ id: 'raw', reason: expect.stringContaining('icon must be') }),
+      expect.objectContaining({ id: 'typo', reason: expect.stringContaining('icon must be') }),
+    ])
   })
 
   it('puts pages under the parent they name, falling back to their own section', async () => {
@@ -192,7 +236,7 @@ describe('admin pages', () => {
       'settings',
     ])
     expect(items('shop')).toEqual(['shop.products', 'reports.sales', 'shop.orders'])
-    expect(items('users')).toEqual(['core.users', 'reports.signups'])
+    expect(items('users')).toEqual(['core.users', 'core.user-new', 'core.roles', 'reports.signups'])
     expect(items('reports')).toEqual(['reports.threads', 'reports.lost'])
     expect(kernel.warnings).toEqual([
       'Admin page "reports.lost" names unknown menu parent "nowhere"',

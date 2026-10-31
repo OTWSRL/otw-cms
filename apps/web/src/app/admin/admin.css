@@ -1,334 +1,1971 @@
-/* Admin shell and the cms-* classes plugin admin screens use. Colours come from globals.css. */
+/*
+ * The admin's look, after WordPress 7.1's default ("modern") colour scheme: same sizes, colours
+ * and breakpoints (960px folds the menu, 782px is the phone layout), and the same class names,
+ * so WordPress developers can write familiar markup. Written for this project, not copied from
+ * WordPress. Everything is scoped to the admin roots so the storefront is untouched.
+ */
+
+/* ── Roots ─────────────────────────────────────────────────────────────────── */
+
+.cms-admin,
+.cms-login {
+  --wp-highlight: #3858e9;
+  --wp-highlight-10: #2145e6;
+  --wp-highlight-20: #183ad6;
+  --wp-highlight-rgb: 56 88 233;
+  --wp-link-hover: #1739d6;
+  --wp-menu-bg: #1e1e1e;
+  --wp-submenu-bg: #0c0c0c;
+  --wp-submenu-text: #bcbcbc;
+  --wp-submenu-focus: #7b90ff;
+  --wp-menu-icon: #f3f1f1;
+  --wp-page-bg: #f0f0f0;
+  --wp-text: #3c434a;
+  --wp-heading: #1d2327;
+  --wp-muted: #646970;
+  --wp-footer: #50575e;
+  --wp-border: #c3c4c7;
+  --wp-input-border: #949494;
+  --wp-input-text: #1e1e1e;
+  --wp-danger: #d63638;
+  --wp-focus: 0 0 0 1.5px var(--wp-highlight);
+
+  color-scheme: light;
+  min-height: 100vh;
+  background: var(--wp-page-bg);
+  color: var(--wp-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell,
+    'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+body:has(> .cms-admin),
+body:has(> .cms-login) {
+  background: #f0f0f0;
+  color-scheme: light;
+}
+
+:is(.cms-admin, .cms-login) a {
+  color: var(--wp-highlight);
+  transition-property: border, background, color;
+  transition-duration: 0.05s;
+  transition-timing-function: ease-in-out;
+}
+
+:is(.cms-admin, .cms-login) a:hover,
+:is(.cms-admin, .cms-login) a:active {
+  color: var(--wp-link-hover);
+}
+
+:is(.cms-admin, .cms-login) :is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 1px solid transparent;
+  box-shadow: var(--wp-focus);
+  border-radius: 2px;
+}
+
+:is(.cms-admin, .cms-login) code {
+  padding: 3px 5px 2px;
+  margin: 0 1px;
+  background: rgb(0 0 0 / 7%);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+:is(.cms-admin, .cms-login) p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+
+:is(.cms-admin, .cms-login) .screen-reader-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+  word-wrap: normal !important;
+}
+
+.cms-admin .screen-reader-shortcut {
+  position: absolute;
+  top: -1000em;
+  left: 6px;
+  z-index: 100000;
+  height: auto;
+  padding: 23px 14px 14px;
+  background: #f0f0f1;
+  color: var(--wp-highlight);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: normal;
+  text-decoration: none;
+  box-shadow: 0 0 2px 2px rgb(0 0 0 / 60%);
+}
+
+.cms-admin .screen-reader-shortcut:focus {
+  top: -25px;
+}
+
+/* ── Admin bar ─────────────────────────────────────────────────────────────── */
 
 .cms-admin {
-  display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
-  min-height: 100vh;
+  position: relative;
+  padding-top: 32px;
 }
 
-.cms-admin-sidebar {
+.cms-admin #wpadminbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 99999;
+  width: 100%;
+  height: 32px;
+  background: var(--wp-menu-bg);
+  color: #fff;
+  font-size: 13px;
+  line-height: 32px;
+}
+
+.cms-admin #wpadminbar .quicklinks {
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.25rem 1rem;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
+  justify-content: space-between;
+  height: 100%;
 }
 
-.cms-admin-brand {
-  color: var(--text);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.cms-admin-sidebar nav {
-  display: grid;
-  gap: 1.25rem;
-}
-
-.cms-admin-sidebar h2 {
-  margin: 0 0 0.25rem;
-  color: var(--muted);
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.cms-admin-sidebar ul {
-  display: grid;
-  gap: 0.125rem;
+.cms-admin #wpadminbar ul {
+  display: flex;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.cms-admin-sidebar nav a {
-  display: block;
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.375rem;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.cms-admin-sidebar nav a:hover {
-  background: var(--bg);
-}
-
-.cms-admin-sidebar nav a[aria-current='page'] {
-  background: var(--bg);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.cms-admin-account {
-  display: grid;
-  gap: 0.25rem;
-  margin-top: auto;
-  color: var(--muted);
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-}
-
-.cms-admin-main {
-  min-width: 0;
-  max-width: 64rem;
-  padding: 1.5rem 2rem 3rem;
-}
-
-.cms-admin-main h1 {
-  margin-top: 0;
-}
-
-.cms-auth {
-  max-width: 24rem;
-  margin: 10vh auto;
-  padding: 2rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--surface);
-}
-
-.cms-section {
-  margin-top: 2.5rem;
-}
-
-.cms-form {
-  display: grid;
-  gap: 1rem;
-  max-width: 32rem;
-}
-
-.cms-form label,
-.cms-field {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.cms-form small,
-.cms-field small,
-.cms-table small {
-  color: var(--muted);
-}
-
-.cms-checkbox {
-  grid-template-columns: auto 1fr;
-  align-items: baseline;
-  column-gap: 0.5rem;
-}
-
-.cms-checkbox small {
-  grid-column: 2;
-}
-
-.cms-form input:not([type='checkbox']),
-.cms-form select,
-.cms-form textarea,
-.cms-inline-form select {
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--bg);
-  color: inherit;
-  font: inherit;
-}
-
-.cms-form :disabled {
-  opacity: 0.7;
-}
-
-.cms-form-actions,
-.cms-inline-form {
+.cms-admin #wpadminbar .ab-item {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.cms-button {
-  display: inline-block;
-  padding: 0.5rem 0.9rem;
+  gap: 6px;
+  height: 32px;
+  margin: 0;
+  padding: 0 8px 0 7px;
   border: 0;
-  border-radius: 0.375rem;
-  background: var(--accent);
-  color: var(--bg);
+  background: none;
+  color: #fff;
   font: inherit;
-  font-weight: 600;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }
 
-.cms-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.cms-admin #wpadminbar .ab-item svg {
+  flex: none;
+  color: var(--wp-menu-icon);
 }
 
-.cms-button-danger {
-  background: var(--danger);
+.cms-admin #wpadminbar .ab-top-menu > li > .ab-item:focus-visible,
+.cms-admin #wpadminbar .ab-top-menu > li.hover > .ab-item {
+  background: var(--wp-submenu-bg);
+  color: var(--wp-submenu-focus);
+  box-shadow: none;
 }
 
-.cms-link-button {
+@media (hover: hover) {
+  .cms-admin #wpadminbar .ab-top-menu > li:hover > .ab-item {
+    background: var(--wp-submenu-bg);
+    color: var(--wp-submenu-focus);
+  }
+
+  .cms-admin #wpadminbar .ab-top-menu > li:hover > .ab-item svg {
+    color: var(--wp-submenu-focus);
+  }
+
+  .cms-admin #wpadminbar .menupop:hover > .ab-sub-wrapper {
+    display: block;
+  }
+}
+
+.cms-admin #wp-admin-bar-menu-toggle {
+  display: none;
+}
+
+.cms-admin #wpadminbar .menupop {
+  position: relative;
+}
+
+.cms-admin #wpadminbar .ab-sub-wrapper {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 100%;
+  background: var(--wp-submenu-bg);
+  box-shadow: 0 3px 5px rgb(0 0 0 / 20%);
+}
+
+.cms-admin #wpadminbar .menupop.hover > .ab-sub-wrapper {
+  display: block;
+}
+
+.cms-admin #wpadminbar .ab-submenu {
+  display: block;
+  padding: 6px 0;
+}
+
+.cms-admin #wp-admin-bar-user-info {
+  display: grid;
+  grid-template-columns: 64px auto;
+  column-gap: 12px;
+  align-content: center;
+  min-width: 220px;
+  padding: 6px 16px 8px;
+  line-height: 1.4;
+}
+
+.cms-admin #wp-admin-bar-user-info .avatar {
+  grid-row: span 2;
+}
+
+.cms-admin #wp-admin-bar-user-info .display-name {
+  align-self: end;
+  color: #fff;
+}
+
+.cms-admin #wp-admin-bar-user-info .username {
+  color: var(--wp-submenu-text);
+  font-size: 12px;
+}
+
+.cms-admin #wp-admin-bar-logout form {
+  margin: 0;
+}
+
+.cms-admin #wp-admin-bar-logout .ab-item {
+  width: 100%;
+  height: 26px;
+  padding: 0 16px;
+  color: var(--wp-submenu-text);
+  line-height: 26px;
+}
+
+.cms-admin #wp-admin-bar-logout .ab-item:hover,
+.cms-admin #wp-admin-bar-logout .ab-item:focus-visible {
+  color: var(--wp-submenu-focus);
+  box-shadow: none;
+}
+
+.cms-admin .avatar {
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #c3c4c7;
+  color: #fff;
+}
+
+.cms-admin .avatar-small {
+  width: 16px;
+  height: 16px;
+}
+
+.cms-admin .avatar-small svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+}
+
+.cms-admin .avatar-large {
+  width: 64px;
+  height: 64px;
+}
+
+.cms-admin .avatar-large svg {
+  width: 52px;
+  height: 52px;
+  margin-top: 14px;
+}
+
+.cms-admin #wpadminbar .avatar svg {
+  color: #fff;
+}
+
+/* ── Admin menu ────────────────────────────────────────────────────────────── */
+
+.cms-admin #adminmenuback,
+.cms-admin #adminmenuwrap,
+.cms-admin #adminmenu {
+  width: 160px;
+  background: var(--wp-menu-bg);
+}
+
+.cms-admin #adminmenuback {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.cms-admin #adminmenuwrap {
+  position: absolute;
+  top: 32px;
+  left: 0;
+  z-index: 9990;
+}
+
+/* WordPress keeps the menu in view while it fits (`sticky-menu`). */
+@media (min-height: 600px) {
+  .cms-admin #adminmenuback,
+  .cms-admin #adminmenuwrap {
+    position: fixed;
+  }
+}
+
+.cms-admin #adminmenu {
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin #adminmenu li {
+  margin: 0;
+  padding: 0;
+}
+
+.cms-admin #adminmenu li.menu-top {
+  position: relative;
+  min-height: 34px;
+  border: none;
+}
+
+/* The gap WordPress draws with `wp-menu-separator`. */
+.cms-admin #adminmenu li.menu-top-separated {
+  margin-top: 11px;
+}
+
+.cms-admin #adminmenu a.menu-top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  min-height: 34px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.cms-admin #adminmenu .wp-menu-image {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  color: var(--wp-menu-icon);
+}
+
+.cms-admin #adminmenu .wp-menu-image > * {
+  width: 20px;
+  height: 20px;
+}
+
+.cms-admin #adminmenu .wp-menu-name {
+  padding: 8px 8px 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin #adminmenu li.menu-top:hover > a.menu-top,
+.cms-admin #adminmenu li.opensub > a.menu-top,
+.cms-admin #adminmenu a.menu-top:focus-visible,
+.cms-admin #adminmenu li.wp-has-current-submenu > a.menu-top {
+  background: var(--wp-highlight);
+  color: #fff;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.cms-admin #adminmenu li.menu-top:hover .wp-menu-image,
+.cms-admin #adminmenu li.opensub .wp-menu-image,
+.cms-admin #adminmenu a.menu-top:focus-visible .wp-menu-image,
+.cms-admin #adminmenu li.wp-has-current-submenu .wp-menu-image {
+  color: #fff;
+}
+
+/* The notch pointing at the screen from the current section, or at an open flyout. */
+.cms-admin #adminmenu a.menu-top::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  margin-top: -8px;
+  border: 8px solid transparent;
+  pointer-events: none;
+}
+
+.cms-admin #adminmenu li.wp-has-current-submenu > a.menu-top::after {
+  border-right-color: var(--wp-page-bg);
+}
+
+.cms-admin #adminmenu .wp-submenu {
+  margin: 0;
+  padding: 7px 0 8px;
+  list-style: none;
+  background: var(--wp-submenu-bg);
+}
+
+.cms-admin #adminmenu .wp-submenu-head,
+.cms-admin #adminmenu li.menu-top:not(.wp-has-submenu) > .wp-submenu {
+  display: none;
+}
+
+.cms-admin #adminmenu .wp-submenu a {
+  display: block;
+  padding: 5px 12px;
+  color: var(--wp-submenu-text);
+  font-size: 13px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.cms-admin #adminmenu .wp-submenu a:hover,
+.cms-admin #adminmenu .wp-submenu a:focus-visible {
+  color: var(--wp-submenu-focus);
+  box-shadow: none;
+}
+
+.cms-admin #adminmenu .wp-submenu li.current a {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Other sections' submenus fly out to the right. */
+.cms-admin #adminmenu .wp-not-current-submenu .wp-submenu {
+  display: none;
+  position: absolute;
+  top: -1px;
+  left: 160px;
+  z-index: 9999;
+  min-width: 160px;
+  box-shadow: 0 3px 5px rgb(0 0 0 / 20%);
+}
+
+.cms-admin #adminmenu .wp-not-current-submenu:is(:focus-within, .opensub) > .wp-submenu {
+  display: block;
+}
+
+.cms-admin
+  #adminmenu
+  .wp-not-current-submenu.wp-has-submenu:is(:focus-within, .opensub)
+  > a.menu-top::after {
+  border-right-color: var(--wp-submenu-bg);
+}
+
+@media (hover: hover) and (min-width: 783px) {
+  .cms-admin #adminmenu .wp-not-current-submenu:hover > .wp-submenu {
+    display: block;
+  }
+
+  .cms-admin #adminmenu .wp-not-current-submenu.wp-has-submenu:hover > a.menu-top::after {
+    border-right-color: var(--wp-submenu-bg);
+  }
+}
+
+.cms-admin #collapse-menu {
+  margin-top: 12px;
+}
+
+.cms-admin #collapse-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 34px;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--wp-menu-icon);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cms-admin #collapse-button:hover,
+.cms-admin #collapse-button:focus-visible {
+  background: var(--wp-highlight);
+  color: #fff;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.cms-admin .collapse-button-icon {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  height: 34px;
+}
+
+/* Folded by the Collapse Menu button. */
+@media (min-width: 783px) {
+  .cms-admin.folded #adminmenuback,
+  .cms-admin.folded #adminmenuwrap,
+  .cms-admin.folded #adminmenu,
+  .cms-admin.folded #adminmenu li.menu-top {
+    width: 36px;
+  }
+
+  .cms-admin.folded #wpcontent,
+  .cms-admin.folded #wpfooter {
+    margin-left: 36px;
+  }
+
+  .cms-admin.folded #adminmenu .wp-menu-name,
+  .cms-admin.folded .collapse-button-label {
+    position: absolute;
+    left: -999em;
+  }
+
+  .cms-admin.folded #adminmenu .wp-submenu,
+  .cms-admin.folded #adminmenu .wp-has-current-submenu .wp-submenu {
+    display: none;
+    position: absolute;
+    top: -1px;
+    left: 36px;
+    min-width: 160px;
+    z-index: 9999;
+    padding: 0 0 8px;
+    box-shadow: 0 3px 5px rgb(0 0 0 / 20%);
+  }
+
+  .cms-admin.folded #adminmenu li.menu-top:is(:hover, :focus-within, .opensub) > .wp-submenu {
+    display: block;
+  }
+
+  .cms-admin.folded #adminmenu li.menu-top:not(.wp-has-submenu) > .wp-submenu {
+    padding: 0;
+  }
+
+  .cms-admin.folded #adminmenu .wp-submenu-head {
+    display: block;
+    padding: 8px 4px 8px 11px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.3;
+  }
+
+  .cms-admin.folded #adminmenu .wp-has-current-submenu .wp-submenu-head {
+    background: var(--wp-highlight);
+  }
+
+  .cms-admin.folded #adminmenu li.menu-top:is(:hover, :focus-within, .opensub) > a.menu-top::after {
+    border-right-color: var(--wp-submenu-bg);
+  }
+
+  .cms-admin.folded #collapse-button .collapse-button-icon svg {
+    transform: rotate(180deg);
+  }
+}
+
+/* Folded by the screen width, unless the user asked to keep it open. */
+@media (min-width: 783px) and (max-width: 960px) {
+  .cms-admin.auto-fold #adminmenuback,
+  .cms-admin.auto-fold #adminmenuwrap,
+  .cms-admin.auto-fold #adminmenu,
+  .cms-admin.auto-fold #adminmenu li.menu-top {
+    width: 36px;
+  }
+
+  .cms-admin.auto-fold #wpcontent,
+  .cms-admin.auto-fold #wpfooter {
+    margin-left: 36px;
+  }
+
+  .cms-admin.auto-fold #adminmenu .wp-menu-name,
+  .cms-admin.auto-fold .collapse-button-label {
+    position: absolute;
+    left: -999em;
+  }
+
+  .cms-admin.auto-fold #adminmenu .wp-submenu,
+  .cms-admin.auto-fold #adminmenu .wp-has-current-submenu .wp-submenu {
+    display: none;
+    position: absolute;
+    top: -1px;
+    left: 36px;
+    min-width: 160px;
+    z-index: 9999;
+    padding: 0 0 8px;
+    box-shadow: 0 3px 5px rgb(0 0 0 / 20%);
+  }
+
+  .cms-admin.auto-fold #adminmenu li.menu-top:is(:hover, :focus-within, .opensub) > .wp-submenu {
+    display: block;
+  }
+
+  .cms-admin.auto-fold #adminmenu li.menu-top:not(.wp-has-submenu) > .wp-submenu {
+    padding: 0;
+  }
+
+  .cms-admin.auto-fold #adminmenu .wp-submenu-head {
+    display: block;
+    padding: 8px 4px 8px 11px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.3;
+  }
+
+  .cms-admin.auto-fold #adminmenu .wp-has-current-submenu .wp-submenu-head {
+    background: var(--wp-highlight);
+  }
+
+  .cms-admin.auto-fold
+    #adminmenu
+    li.menu-top:is(:hover, :focus-within, .opensub)
+    > a.menu-top::after {
+    border-right-color: var(--wp-submenu-bg);
+  }
+
+  .cms-admin.auto-fold #collapse-button .collapse-button-icon svg {
+    transform: rotate(180deg);
+  }
+}
+
+/* ── Content and footer ────────────────────────────────────────────────────── */
+
+.cms-admin #wpcontent,
+.cms-admin #wpfooter {
+  margin-left: 160px;
+}
+
+.cms-admin #wpcontent {
+  height: 100%;
+  padding-left: 20px;
+}
+
+.cms-admin #wpbody-content {
+  display: block;
+  padding-bottom: 65px;
+  outline: none;
+}
+
+.cms-admin #wpbody-content:focus-visible {
+  box-shadow: none;
+}
+
+.cms-admin #wpfooter {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  color: var(--wp-footer);
+}
+
+.cms-admin #wpfooter p {
+  margin: 0;
+  line-height: 20px;
+}
+
+.cms-admin .wrap {
+  margin: 10px 20px 0 2px;
+}
+
+.cms-admin .wrap h1,
+.cms-admin .wrap > h2:first-child {
+  margin: 0;
+  padding: 9px 0 4px;
+  color: var(--wp-heading);
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.cms-admin .wrap h1.wp-heading-inline {
+  display: inline-block;
+  margin-right: 5px;
+}
+
+.cms-admin .wrap .page-title-action {
+  position: relative;
+  top: -3px;
+  display: inline-block;
+  min-height: 32px;
+  margin-left: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--wp-highlight);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--wp-highlight);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 30px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cms-admin .wrap .page-title-action:hover {
+  background: rgb(var(--wp-highlight-rgb) / 4%);
+  border-color: var(--wp-highlight-20);
+  color: var(--wp-highlight-20);
+}
+
+.cms-admin .wp-header-end {
+  visibility: hidden;
+  margin: -2px 0 0;
+  border: 0;
+}
+
+:is(.cms-admin, .cms-login) h2 {
+  margin: 1em 0;
+  color: var(--wp-heading);
+  font-size: 1.3em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+:is(.cms-admin, .cms-login) h3 {
+  margin: 1.33em 0;
+  color: var(--wp-heading);
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+/* ── Notices ───────────────────────────────────────────────────────────────── */
+
+:is(.cms-admin, .cms-login) .notice {
+  position: relative;
+  margin: 5px 0 15px;
+  padding: 8px 12px;
+  border-left: 4px solid var(--wp-border);
+  background: #fff;
+}
+
+:is(.cms-admin, .cms-login) .notice.is-dismissible {
+  padding-right: 48px;
+}
+
+:is(.cms-admin, .cms-login) .notice p,
+:is(.cms-admin, .cms-login) .notice li {
+  margin: 0.5em 0;
+  padding: 0;
+  color: #1e1e1e;
+  font-size: 13px;
+  line-height: 1.54;
+}
+
+:is(.cms-admin, .cms-login) .notice ul {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+:is(.cms-admin, .cms-login) .notice-success {
+  border-left-color: #4ab866;
+  background: #eff9f1;
+}
+
+:is(.cms-admin, .cms-login) .notice-warning {
+  border-left-color: #f0b849;
+  background: #fef8ee;
+}
+
+:is(.cms-admin, .cms-login) .notice-error {
+  border-left-color: #cc1818;
+  background: #fcf0f0;
+}
+
+:is(.cms-admin, .cms-login) .notice-info {
+  border-left-color: var(--wp-highlight);
+  background: #fff;
+}
+
+:is(.cms-admin, .cms-login) .notice-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1e1e1e;
+  cursor: pointer;
+}
+
+:is(.cms-admin, .cms-login) .notice-dismiss::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  clip-path: polygon(
+    12% 0,
+    50% 38%,
+    88% 0,
+    100% 12%,
+    62% 50%,
+    100% 88%,
+    88% 100%,
+    50% 62%,
+    12% 100%,
+    0 88%,
+    38% 50%,
+    0 12%
+  );
+}
+
+:is(.cms-admin, .cms-login) .notice-dismiss:hover {
+  color: #cc1818;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+
+:is(.cms-admin, .cms-login) .button {
+  display: inline-block;
+  box-sizing: border-box;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid var(--wp-highlight);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--wp-highlight);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 38px;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: top;
+  cursor: pointer;
+  appearance: none;
+}
+
+:is(.cms-admin, .cms-login) .button:hover {
+  border-color: var(--wp-highlight-20);
+  background: rgb(var(--wp-highlight-rgb) / 4%);
+  color: var(--wp-highlight-20);
+}
+
+:is(.cms-admin, .cms-login) .button:active {
+  border-color: var(--wp-highlight-20);
+  background: rgb(var(--wp-highlight-rgb) / 8%);
+  color: var(--wp-highlight-20);
+}
+
+:is(.cms-admin, .cms-login) .button-primary {
+  border-color: var(--wp-highlight);
+  background: var(--wp-highlight);
+  color: #fff;
+}
+
+:is(.cms-admin, .cms-login) .button-primary:hover {
+  border-color: var(--wp-highlight-10);
+  background: var(--wp-highlight-10);
+  color: #fff;
+}
+
+:is(.cms-admin, .cms-login) .button-primary:active {
+  border-color: var(--wp-highlight-20);
+  background: var(--wp-highlight-20);
+  color: #fff;
+}
+
+:is(.cms-admin, .cms-login) .button-primary:focus-visible {
+  box-shadow:
+    var(--wp-focus),
+    inset 0 0 0 1px #fff;
+}
+
+:is(.cms-admin, .cms-login) .button:disabled,
+:is(.cms-admin, .cms-login) .button.disabled {
+  border-color: #d8d8d8;
+  background: transparent;
+  color: #8a8a8a;
+  box-shadow: none;
+  cursor: default;
+}
+
+:is(.cms-admin, .cms-login) .button-primary:disabled {
+  border-color: #e2e2e2;
+  background: #e2e2e2;
+}
+
+:is(.cms-admin, .cms-login) .button-small {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 22px;
+}
+
+/* List screens use WordPress's compact size. */
+.cms-admin :is(.tablenav, .page-title-action, .row-actions) .button,
+.cms-admin .button-compact {
+  min-height: 32px;
+  padding: 0 12px;
+  line-height: 30px;
+}
+
+:is(.cms-admin, .cms-login) .button-link {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wp-highlight);
   font: inherit;
   text-align: left;
   text-decoration: underline;
   cursor: pointer;
 }
 
-.cms-table {
-  width: 100%;
-  border-collapse: collapse;
+:is(.cms-admin, .cms-login) .button-link:hover {
+  color: var(--wp-highlight-20);
 }
 
-.cms-table th,
-.cms-table td {
-  padding: 0.6rem 0.5rem;
-  border-bottom: 1px solid var(--border);
+:is(.cms-admin, .cms-login) .button-link:disabled {
+  color: #8a8a8a;
+  cursor: default;
+}
+
+:is(.cms-admin, .cms-login) .button-link-delete,
+:is(.cms-admin, .cms-login) .button-link-delete:hover {
+  color: var(--wp-danger);
+}
+
+:is(.cms-admin, .cms-login) .inline-form {
+  display: inline;
+  margin: 0;
+}
+
+/* ── Form controls ─────────────────────────────────────────────────────────── */
+
+/* :where() keeps these at one class, so select and textarea rules below can refine them. */
+:is(.cms-admin, .cms-login)
+  :where(
+    input[type='text'],
+    input[type='password'],
+    input[type='email'],
+    input[type='number'],
+    input[type='search'],
+    input[type='tel'],
+    input[type='url'],
+    input:not([type]),
+    select,
+    textarea
+  ) {
+  box-sizing: border-box;
+  min-height: 40px;
+  margin: 0 1px;
+  padding: 0 12px;
+  border: 1px solid var(--wp-input-border);
+  border-radius: 2px;
+  background-color: #fff;
+  color: var(--wp-input-text);
+  font: inherit;
+  font-size: 14px;
+  box-shadow: 0 0 0 transparent;
+}
+
+:is(.cms-admin, .cms-login) textarea {
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+
+:is(.cms-admin, .cms-login) select {
+  padding: 0 32px 0 12px;
+  line-height: 38px;
+  background: #fff
+    url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%206l5%205%205-5%202%201-7%207-7-7%202-1z%22%20fill%3D%22%23555%22%2F%3E%3C%2Fsvg%3E')
+    no-repeat right 8px top 55%;
+  background-size: 16px 16px;
+  cursor: pointer;
+  appearance: none;
+}
+
+:is(.cms-admin, .cms-login)
+  :is(input:not([type='checkbox'], [type='radio'], [type='hidden']), select, textarea):focus {
+  border-color: var(--wp-highlight);
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--wp-highlight);
+}
+
+:is(.cms-admin, .cms-login) :is(input, select, textarea):disabled {
+  border-color: #dcdcde;
+  background: #f6f7f7;
+  color: #a7aaad;
+  box-shadow: none;
+  cursor: default;
+}
+
+:is(.cms-admin, .cms-login) input[type='checkbox'] {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: -0.25rem 0.25rem 0 0;
+  padding: 0;
+  border: 1px solid #1e1e1e;
+  border-radius: 2px;
+  background: #fff;
+  vertical-align: middle;
+  cursor: pointer;
+  appearance: none;
+}
+
+:is(.cms-admin, .cms-login) input[type='checkbox']:checked {
+  border-color: var(--wp-highlight);
+  background: var(--wp-highlight);
+}
+
+:is(.cms-admin, .cms-login) input[type='checkbox']:checked::before {
+  content: '';
+  width: 70%;
+  height: 70%;
+  background: #fff;
+  clip-path: polygon(14% 44%, 0 62%, 38% 100%, 100% 23%, 86% 9%, 38% 70%);
+}
+
+:is(.cms-admin, .cms-login) input[type='checkbox']:disabled {
+  border-color: #dcdcde;
+  background: #f6f7f7;
+}
+
+:is(.cms-admin, .cms-login) .regular-text {
+  width: 25em;
+  max-width: 100%;
+}
+
+:is(.cms-admin, .cms-login) .large-text {
+  width: 99%;
+}
+
+:is(.cms-admin, .cms-login) .small-text {
+  width: 6em;
+}
+
+:is(.cms-admin, .cms-login) .description,
+:is(.cms-admin, .cms-login) p.description {
+  color: var(--wp-muted);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.cms-admin .form-table {
+  width: 100%;
+  margin-top: 0.5em;
+  border-collapse: collapse;
+  clear: both;
+}
+
+.cms-admin .form-table th,
+.cms-admin .form-table td {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.cms-admin .form-table th {
+  width: 200px;
+  padding: 20px 10px 20px 0;
+  color: var(--wp-heading);
+  font-weight: 600;
   text-align: left;
   vertical-align: top;
 }
 
-.cms-table td p {
-  margin: 0.25rem 0 0;
+.cms-admin .form-table td {
+  margin-bottom: 9px;
+  padding: 15px 10px;
+  vertical-align: middle;
 }
 
-.cms-numeric {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
+.cms-admin .form-table td p {
+  margin: 4px 0 0;
 }
 
-.cms-flash,
-.cms-notice {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface);
+.cms-admin .form-table p.description {
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.cms-flash-notice {
-  border-color: var(--accent);
-}
-
-.cms-flash-error,
-.cms-notice-error {
-  border-color: var(--danger);
-}
-
-.cms-notice h2 {
-  margin-top: 0;
-  font-size: 1rem;
-}
-
-.cms-error {
-  color: var(--danger);
-}
-
-.cms-filters,
-.cms-pagination {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin: 1rem 0;
-}
-
-.cms-filters a[aria-current='page'] {
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.cms-details {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.25rem 1.5rem;
-}
-
-.cms-details dt {
-  color: var(--muted);
-}
-
-.cms-details dd {
+.cms-admin .form-table fieldset {
   margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-.cms-visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+.cms-admin .form-table fieldset label {
+  display: inline-block;
+  margin: 0.35em 0 0.5em;
+}
+
+.cms-admin .form-table .field-value {
+  display: inline-block;
+  padding: 10px 0;
+  font-weight: 600;
+}
+
+:is(.cms-admin, .cms-login) p.submit {
+  max-width: 100%;
+  margin-top: 20px;
+  padding-top: 10px;
+}
+
+/* ── List tables ───────────────────────────────────────────────────────────── */
+
+.cms-admin .views {
+  margin: 8px 0 0;
+}
+
+.cms-admin .subsubsub {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--wp-muted);
+  font-size: 13px;
+}
+
+.cms-admin .subsubsub li {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
   white-space: nowrap;
 }
 
-@media (max-width: 48rem) {
-  .cms-admin {
-    grid-template-columns: 1fr;
-  }
-
-  .cms-admin-sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .cms-admin-main {
-    padding: 1.25rem 1rem 2rem;
-  }
-
-  .cms-table {
-    display: block;
-    overflow-x: auto;
-  }
+.cms-admin .subsubsub a {
+  padding: 0.2em;
+  line-height: 2;
+  text-decoration: none;
 }
 
-.cms-section-description {
+.cms-admin .subsubsub a.current {
+  border: none;
+  color: #000;
+  font-weight: 600;
+}
+
+.cms-admin .subsubsub .count {
+  color: var(--wp-footer);
+  font-weight: 400;
+}
+
+.cms-admin .tablenav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  margin: 6px 0 4px;
+}
+
+.cms-admin .tablenav .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.cms-admin .tablenav .actions select {
+  min-height: 32px;
+  line-height: 30px;
+  font-size: 14px;
+}
+
+.cms-admin .tablenav-pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.cms-admin .tablenav-pages .button {
+  min-width: 32px;
+  padding: 0 4px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.cms-admin .widefat {
+  width: 100%;
   margin: 0;
-  color: var(--muted);
+  border: 1px solid var(--wp-border);
+  border-spacing: 0;
+  background: #fff;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 4%);
+  clear: both;
 }
 
-.cms-settings > .cms-section:first-of-type {
-  margin-top: 1.5rem;
+.cms-admin .widefat th,
+.cms-admin .widefat td {
+  padding: 8px 10px;
+  color: #50575e;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  vertical-align: top;
 }
 
-.cms-settings .cms-section h2 {
+.cms-admin .widefat thead th {
+  border-bottom: 1px solid var(--wp-border);
+  color: #2c3338;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.cms-admin .widefat td.column-primary,
+.cms-admin .widefat td.column-primary strong {
+  color: var(--wp-heading);
+}
+
+.cms-admin .widefat td.column-primary strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cms-admin .widefat td.column-primary strong a {
+  text-decoration: none;
+}
+
+.cms-admin .widefat :is(th, td).num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cms-admin .widefat td p {
+  margin: 2px 0 0.8em;
+}
+
+.cms-admin .widefat .no-items td {
+  color: #50575e;
+}
+
+.cms-admin .striped > tbody > :nth-child(odd) {
+  background: #f6f7f7;
+}
+
+.cms-admin .wp-list-table tr.active td {
+  background: rgb(var(--wp-highlight-rgb) / 8%);
+}
+
+.cms-admin .wp-list-table tr.active td:first-child {
+  box-shadow: inset 4px 0 0 var(--wp-highlight);
+}
+
+.cms-admin .wp-list-table tr.active + tr.active td {
+  border-top: 1px solid rgb(0 0 0 / 5%);
+}
+
+.cms-admin .row-actions {
+  position: relative;
+  left: -9999em;
+  padding: 2px 0 0;
+  color: #a7aaad;
+  font-size: 13px;
+}
+
+.cms-admin .row-actions :is(a, .button-link) {
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.cms-admin tr:is(:hover, :focus-within) .row-actions {
+  position: static;
+}
+
+@media (hover: none) {
+  .cms-admin .row-actions {
+    position: static;
+  }
+}
+
+/* WordPress always shows Activate and Deactivate on the plugins screen. */
+.cms-admin .plugins .row-actions {
+  position: static;
+}
+
+.cms-admin .toggle-row {
+  display: none;
+}
+
+.cms-admin .widefat .check-column {
+  width: 2.2em;
+  padding: 8px 0 0 3px;
+  vertical-align: top;
+}
+
+.cms-admin .widefat thead .check-column {
+  padding: 4px 0 0 3px;
+  vertical-align: middle;
+}
+
+.cms-admin .widefat .check-column input[type='checkbox'] {
+  margin: 0 0 0 8px;
+}
+
+.cms-admin .widefat td .plugin-version {
   margin: 0;
-  font-size: 1.125rem;
+  color: #50575e;
 }
 
-.cms-notice-warning {
-  border-color: var(--warning);
+.cms-admin .widefat td .plugin-error {
+  color: var(--wp-danger);
 }
 
-.cms-admin-main > .cms-notice {
-  margin: 0 0 1rem;
+.cms-admin .user-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.cms-widgets {
+.cms-admin .avatar-list {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+.cms-admin .avatar-list svg {
+  width: 26px;
+  height: 26px;
+  margin-top: 8px;
+}
+
+/* ── Boxes ─────────────────────────────────────────────────────────────────── */
+
+.cms-admin .postbox {
+  position: relative;
+  min-width: 255px;
+  margin-bottom: 20px;
+  border: 1px solid var(--wp-border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 4%);
+  break-inside: avoid;
+}
+
+.cms-admin .postbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--wp-border);
+}
+
+.cms-admin .postbox .hndle {
+  flex-grow: 1;
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--wp-heading);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.cms-admin .postbox-actions {
+  padding-right: 12px;
+}
+
+.cms-admin .postbox .inside {
+  margin: 11px 0 0;
+  padding: 0 12px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cms-admin .postbox .inside > :first-child {
+  margin-top: 0;
+}
+
+.cms-admin .postbox .inside > :last-child {
+  margin-bottom: 0;
+}
+
+.cms-admin .postbox .inside .widefat {
+  border: 0;
+  box-shadow: none;
+}
+
+/* The dashboard's widget columns: one, then two from 800px, three from 1500px, four from 1801px. */
+.cms-admin .dashboard-widgets {
+  columns: 1;
+  column-gap: 20px;
+  margin-top: 10px;
+}
+
+@media (min-width: 800px) {
+  .cms-admin .dashboard-widgets {
+    columns: 2;
+  }
+}
+
+@media (min-width: 1500px) {
+  .cms-admin .dashboard-widgets {
+    columns: 3;
+  }
+}
+
+@media (min-width: 1801px) {
+  .cms-admin .dashboard-widgets {
+    columns: 4;
+  }
+}
+
+.cms-admin .dashboard-widgets .postbox {
+  display: inline-block;
+  width: 100%;
+}
+
+.cms-admin .at-a-glance {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 1rem;
-  margin: 1.5rem 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.cms-widget,
-.cms-panel {
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface);
-}
-
-.cms-widget h2,
-.cms-panel h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-}
-
-.cms-widget p,
-.cms-panel p {
+.cms-admin .at-a-glance li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
 }
 
-.cms-panel {
-  margin: 1.5rem 0;
+.cms-admin .at-a-glance svg {
+  color: #646970;
+}
+
+.cms-admin .edit-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 0 20px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+@media (max-width: 850px) {
+  .cms-admin .edit-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cms-admin .postbox .details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.cms-admin .postbox .details dt {
+  color: var(--wp-muted);
+}
+
+.cms-admin .postbox .details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin .box-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px -12px -12px;
+  padding: 10px 12px;
+  border-top: 1px solid #dcdcde;
+  border-radius: 0 0 8px 8px;
+  background: #f6f7f7;
+}
+
+.cms-admin .order-status {
+  display: inline-flex;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: #e5e5e5;
+  color: #454545;
+  line-height: 2em;
+  white-space: nowrap;
+}
+
+.cms-admin .order-status.status-pending {
+  background: #f8dda7;
+  color: #94660c;
+}
+
+.cms-admin .order-status.status-paid {
+  background: #c6e1c6;
+  color: #2c4700;
+}
+
+/* ── Sign-in and setup (wp-login.php) ──────────────────────────────────────── */
+
+.cms-login {
+  display: block;
+  padding: 1px 0;
+  background: #f0f0f1;
+}
+
+.cms-login #login {
+  width: 320px;
+  max-width: calc(100% - 32px);
+  margin: auto;
+  padding: 5% 0 0;
+}
+
+.cms-login .login-logo {
+  display: block;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 24px;
+  color: #3c434a;
+}
+
+.cms-login h1 {
+  margin: 0;
+  text-align: center;
+}
+
+.cms-login .login-title {
+  margin: 0 0 4px;
+  color: var(--wp-heading);
+  font-size: 20px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.cms-login .login-intro {
+  margin: 0;
+  color: var(--wp-muted);
+  text-align: center;
+}
+
+.cms-login form {
+  margin: 24px 0;
+  padding: 26px 24px;
+  overflow: hidden;
+  border: 1px solid var(--wp-border);
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
+}
+
+.cms-login form label {
+  display: inline-block;
+  margin-bottom: 3px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cms-login form .input {
+  width: 100%;
+  min-height: 40px;
+  margin: 0 6px 16px 0;
+  padding: 3px 5px;
+  font-size: 24px;
+  line-height: 1.33333333;
+}
+
+.cms-login form .field-help {
+  margin: -12px 0 16px;
+  color: var(--wp-muted);
+}
+
+.cms-login .login-submit {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.cms-login .notice {
+  margin: 24px 0 0;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 4%);
+}
+
+.cms-login .login-links {
+  margin: 24px 0 0;
+  padding: 0 24px;
+  font-size: 13px;
+}
+
+.cms-login .login-links a {
+  color: #50575e;
+}
+
+.cms-login .login-links a:hover {
+  color: var(--wp-highlight);
+}
+
+@media (max-height: 550px) {
+  .cms-login #login {
+    padding: 20px 0;
+  }
+}
+
+/* ── Phones and small tablets (WordPress: 782px) ───────────────────────────── */
+
+@media (max-width: 782px) {
+  .cms-admin {
+    padding-top: 46px;
+    overflow-x: clip;
+  }
+
+  .cms-admin #wpadminbar {
+    height: 46px;
+  }
+
+  .cms-admin #wpadminbar .ab-item {
+    justify-content: center;
+    min-width: 52px;
+    height: 46px;
+    padding: 0;
+  }
+
+  .cms-admin #wpadminbar .ab-item svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .cms-admin #wpadminbar .ab-label {
+    position: absolute;
+    left: -999em;
+  }
+
+  .cms-admin #wp-admin-bar-menu-toggle {
+    display: block;
+  }
+
+  .cms-admin #wp-admin-bar-my-account .avatar-small {
+    width: 28px;
+    height: 28px;
+  }
+
+  .cms-admin #wp-admin-bar-my-account .avatar-small svg {
+    width: 24px;
+    height: 24px;
+    margin-top: 6px;
+  }
+
+  .cms-admin #wpadminbar .ab-sub-wrapper {
+    position: fixed;
+    top: 46px;
+    right: 0;
+    left: 0;
+  }
+
+  .cms-admin #wp-admin-bar-logout .ab-item {
+    height: 44px;
+    justify-content: flex-start;
+    padding: 0 16px;
+    font-size: 16px;
+  }
+
+  .cms-admin #adminmenuback,
+  .cms-admin #adminmenuwrap {
+    display: none;
+  }
+
+  .cms-admin.wp-responsive-open #adminmenuback,
+  .cms-admin.wp-responsive-open #adminmenuwrap {
+    display: block;
+    position: absolute;
+    width: 190px;
+  }
+
+  .cms-admin.wp-responsive-open #adminmenuback {
+    z-index: 99;
+  }
+
+  .cms-admin.wp-responsive-open #adminmenuwrap {
+    top: 46px;
+    z-index: 100;
+  }
+
+  .cms-admin #adminmenu {
+    width: 190px;
+  }
+
+  .cms-admin #adminmenu a.menu-top {
+    padding: 5px;
+    font-size: 16px;
+  }
+
+  .cms-admin #adminmenu .wp-submenu a {
+    padding: 10px 10px 10px 20px;
+    font-size: 16px;
+  }
+
+  .cms-admin #adminmenu a.menu-top::after,
+  .cms-admin #collapse-menu {
+    display: none;
+  }
+
+  .cms-admin #adminmenu .wp-not-current-submenu .wp-submenu {
+    position: static;
+    box-shadow: none;
+  }
+
+  .cms-admin.wp-responsive-open #wpcontent,
+  .cms-admin.wp-responsive-open #wpfooter {
+    position: relative;
+    left: 190px;
+  }
+
+  .cms-admin #wpcontent,
+  .cms-admin #wpfooter {
+    margin-left: 0;
+  }
+
+  .cms-admin #wpcontent {
+    padding-left: 10px;
+  }
+
+  .cms-admin #wpfooter {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+
+  .cms-admin .wrap {
+    margin: 10px 12px 0 0;
+  }
+
+  .cms-admin .wrap .page-title-action {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 14px;
+    line-height: 38px;
+  }
+
+  :is(.cms-admin, .cms-login)
+    :where(
+      input[type='text'],
+      input[type='password'],
+      input[type='email'],
+      input[type='number'],
+      input[type='search'],
+      input[type='tel'],
+      input[type='url'],
+      input:not([type]),
+      select,
+      textarea
+    ) {
+    font-size: 16px;
+  }
+
+  :is(.cms-admin, .cms-login) .button,
+  .cms-admin :is(.tablenav, .row-actions) .button {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 14px;
+    line-height: 38px;
+  }
+
+  .cms-admin input[type='checkbox'] {
+    width: 25px;
+    height: 25px;
+  }
+
+  .cms-admin .form-table th,
+  .cms-admin .form-table td {
+    display: block;
+    width: auto;
+    vertical-align: middle;
+  }
+
+  .cms-admin .form-table th {
+    padding: 10px 0 0;
+    border-bottom: 0;
+  }
+
+  .cms-admin .form-table td {
+    margin-bottom: 0;
+    padding: 4px 0 6px;
+  }
+
+  .cms-admin .form-table :is(.regular-text, select, textarea) {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .cms-admin .subsubsub {
+    margin-bottom: 15px;
+    font-size: 16px;
+  }
+
+  .cms-admin .subsubsub a {
+    line-height: 2.5;
+  }
+
+  .cms-admin .tablenav .actions,
+  .cms-admin .tablenav-pages {
+    width: 100%;
+  }
+
+  .cms-admin .tablenav-pages {
+    justify-content: space-between;
+  }
+
+  /* One column per row, with a toggle for the rest, as WP_List_Table does on phones. */
+  .cms-admin .wp-list-table,
+  .cms-admin .wp-list-table :is(thead, tbody, tr) {
+    display: block;
+  }
+
+  .cms-admin .wp-list-table thead th:not(.column-primary),
+  .cms-admin .wp-list-table tbody td:not(.column-primary) {
+    display: none;
+  }
+
+  .cms-admin .wp-list-table thead th.column-primary,
+  .cms-admin .wp-list-table td {
+    display: block;
+  }
+
+  .cms-admin .wp-list-table tbody tr {
+    position: relative;
+  }
+
+  .cms-admin .wp-list-table tbody td.column-primary {
+    padding-right: 50px;
+  }
+
+  .cms-admin .wp-list-table tr.is-expanded td:not(.column-primary) {
+    position: relative;
+    display: block;
+    padding: 3px 8px 3px 35%;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .cms-admin .wp-list-table tr.is-expanded td:not(.column-primary):last-child {
+    padding-bottom: 12px;
+  }
+
+  .cms-admin .wp-list-table tr.is-expanded td:not(.column-primary)::before {
+    content: attr(data-colname);
+    position: absolute;
+    left: 10px;
+    display: block;
+    width: 32%;
+    overflow: hidden;
+    color: #50575e;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cms-admin .wp-list-table .no-items td {
+    display: block;
+  }
+
+  .cms-admin .wp-list-table tr:has(> .check-column) {
+    position: relative;
+    padding-left: 2.8em;
+  }
+
+  .cms-admin .wp-list-table .check-column {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+    width: 2.8em;
+    padding: 10px 0 0 4px;
+  }
+
+  .cms-admin .toggle-row {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #3c434a;
+    cursor: pointer;
+  }
+
+  .cms-admin .toggle-row::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  .cms-admin .is-expanded .toggle-row::before {
+    transform: translateY(2px) rotate(-135deg);
+  }
+
+  .cms-admin .row-actions {
+    position: static;
+    padding: 4px 0 0;
+  }
+
+  .cms-admin .row-actions :is(a, .button-link) {
+    display: inline-block;
+    padding: 4px 0;
+    font-size: 14px;
+  }
+
+  .cms-admin .postbox {
+    min-width: 0;
+  }
+
+  .cms-admin .at-a-glance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cms-login form .input {
+    font-size: 24px;
+  }
+}
+
+/* The admin bar scrolls away on small phones, as in WordPress. */
+@media (max-width: 600px) {
+  .cms-admin #wpadminbar {
+    position: absolute;
+  }
+
+  .cms-admin #wpadminbar .ab-sub-wrapper {
+    position: absolute;
+  }
+}
+
+/* ── Error screens (wp_die) ────────────────────────────────────────────────── */
+
+.cms-die {
+  max-width: 700px;
+  margin: 2em auto;
+  padding: 1em 2em;
+  border: 1px solid var(--wp-border);
+  background: #fff;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 4%);
+}
+
+.cms-die h1 {
+  margin: 0.5em 0 0;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #dadada;
+  color: #666;
+  font-size: 1.5em;
+  font-weight: 400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.cms-admin, .cms-login) * {
+    transition: none !important;
+  }
 }

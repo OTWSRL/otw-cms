@@ -39,9 +39,13 @@ export const ORIGIN = 'http://cms.test'
 /** A same-origin browser form post, unless the headers say otherwise. */
 export function formPost(
   path: string,
-  fields: Record<string, string>,
+  fields: Record<string, string | readonly string[]>,
   headers: Record<string, string> = {},
 ): Request {
+  const body = new URLSearchParams()
+  for (const [name, value] of Object.entries(fields)) {
+    for (const item of typeof value === 'string' ? [value] : value) body.append(name, item)
+  }
   return new Request(new URL(path, ORIGIN), {
     method: 'POST',
     headers: {
@@ -49,7 +53,7 @@ export function formPost(
       'content-type': 'application/x-www-form-urlencoded',
       ...headers,
     },
-    body: new URLSearchParams(fields).toString(),
+    body: body.toString(),
   })
 }
 

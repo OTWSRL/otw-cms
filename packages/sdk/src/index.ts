@@ -1,6 +1,8 @@
 import type { PluginDefinition, User } from './types'
 
 export type * from './types'
+export type { AdminIcon, AdminIconName } from './admin-icons'
+export { ADMIN_ICON_NAMES, isAdminIcon } from './admin-icons'
 export { ActionError } from './action-error'
 export { ForbiddenError } from './forbidden-error'
 export { HttpError } from './http-error'

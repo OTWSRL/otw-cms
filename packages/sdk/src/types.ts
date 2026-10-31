@@ -1,3 +1,4 @@
+import type { AdminIcon } from './admin-icons'
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import type { ReactNode } from 'react'
 import type {
@@ -250,7 +251,14 @@ export interface AdminPage<TData = undefined> {
   menu?: AdminMenuPlacement
   /** Return `null` to render a 404. */
   load?: (context: AdminPageContext) => TData | null | Promise<TData | null>
+  /** A button beside the title, such as "Add Product" on a list (`page-title-action`). */
+  titleAction?: (props: AdminPageProps<TData>) => AdminTitleAction | null
   component: (props: AdminPageProps<TData>) => ReactNode | Promise<ReactNode>
+}
+
+export interface AdminTitleAction {
+  label: string
+  url: string
 }
 
 export interface AdminActionContext {
@@ -445,5 +453,7 @@ export interface PluginDefinition {
   migrations?: readonly Migration[]
   /** Declared up front so the admin can show them and values resolve before `setup()` runs. */
   settings?: SettingDefinitions
+  /** Beside the plugin's section in the admin menu. Defaults to `admin`, a gear. */
+  icon?: AdminIcon
   setup?: (cms: PluginContext) => void | Promise<void>
 }
