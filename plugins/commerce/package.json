@@ -1,0 +1,29 @@
+{
+  "name": "@cms/plugin-commerce",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@cms/sdk": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.45.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@cms/core": "workspace:*",
+    "@cms/testing": "workspace:*",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.2.0",
+    "drizzle-orm": "^0.45.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

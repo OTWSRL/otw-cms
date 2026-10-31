@@ -1,0 +1,15 @@
+{
+  "name": "@cms/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cms": "./src/bin.ts"
+  },
+  "exports": {
+    ".": "./src/generate.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

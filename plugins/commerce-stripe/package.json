@@ -1,0 +1,27 @@
+{
+  "name": "@cms/plugin-commerce-stripe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@cms/plugin-commerce": "workspace:*",
+    "@cms/sdk": "workspace:*",
+    "stripe": "^23.1.0"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.45.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@cms/testing": "workspace:*",
+    "@types/react": "^19.3.0",
+    "drizzle-orm": "^0.45.4",
+    "react": "^19.3.1"
+  }
+}

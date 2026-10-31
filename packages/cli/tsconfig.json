@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The bin runs on Node's built-in type stripping, which needs explicit .ts extensions.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "test"]
+}

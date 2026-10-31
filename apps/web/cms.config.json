@@ -1,0 +1,3 @@
+{
+  "plugins": ["@cms/plugin-commerce", "@cms/plugin-commerce-stripe"]
+}

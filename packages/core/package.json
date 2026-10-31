@@ -1,0 +1,27 @@
+{
+  "name": "@cms/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@cms/sdk": "workspace:*",
+    "semver": "^7.8.0"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.45.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "@types/react": "^19.3.0",
+    "@types/semver": "^7.7.0",
+    "drizzle-orm": "^0.45.4",
+    "react": "^19.3.1"
+  }
+}

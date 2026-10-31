@@ -1,0 +1,22 @@
+{
+  "name": "@cms/testing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@cms/core": "workspace:*",
+    "@cms/sdk": "workspace:*",
+    "@electric-sql/pglite": "^0.5.13",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1"
+  }
+}
