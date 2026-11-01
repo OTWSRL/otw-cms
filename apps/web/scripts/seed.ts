@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
-import { bootSite, dataDir, openDatabase } from '@cms/next/server'
+import { bootSite, dataDir, openDatabase } from '@otw/next/server'
 import { site } from '../src/cms/site.generated'
 
 const DEMO_PRODUCTS = [

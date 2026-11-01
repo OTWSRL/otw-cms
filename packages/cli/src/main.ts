@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs, promisify } from 'node:util'
-import { consoleLogger } from '@cms/core'
-import { migrationModeFromEnv } from '@cms/next/server'
-import { displayPath, generate } from './generate.ts'
+import { consoleLogger, DEFAULT_BRAND, type Brand } from '@otw/core'
+import { migrationModeFromEnv } from '@otw/next/server'
+import { displayPath, generate, readConfig } from './generate.ts'
 import { migrate } from './migrate.ts'
 import { serve } from './serve/index.ts'
 import { loadEnv, loadSite } from './site.ts'
@@ -12,6 +12,7 @@ import {
   detectPackageManager,
   install,
   planSite,
+  updateCommitMessage,
   writeChanges,
   type UpdatePlan,
 } from './update.ts'
@@ -65,7 +66,7 @@ async function runGenerate(root: string): Promise<void> {
     if (status === 'removed') console.log(`cms: removed ${displayPath(root, path)}`)
     if (status === 'kept') {
       console.warn(
-        `cms: kept ${displayPath(root, path)}: it has no "@generated" line, so it is yours. Compare it with a new site from create-next-cms after updating.`,
+        `cms: kept ${displayPath(root, path)}: it has no "@generated" line, so it is yours. Compare it with a new site from create-otw-cms after updating.`,
       )
     }
   }
@@ -111,9 +112,11 @@ const COMPATIBILITY: Record<UpdatePlan['plugins'][number]['compatible'], string>
   no: 'does not support this core',
 }
 
-function report(plan: UpdatePlan): void {
+function report(plan: UpdatePlan, brand: Brand): void {
   console.log(
-    plan.core ? `Next CMS ${plan.core.from} → ${plan.core.to}` : 'Next CMS stays where it is',
+    plan.core
+      ? `${brand.name} ${plan.core.from} → ${plan.core.to}`
+      : `${brand.name} stays where it is`,
   )
   if (plan.plugins.length > 0) {
     console.log('Plugins:')
@@ -132,7 +135,7 @@ function report(plan: UpdatePlan): void {
 
 /** Runs the newly installed CLI, so its route files and migrations are the new version's. */
 async function runInstalledCli(root: string, args: string[]): Promise<void> {
-  const bin = join(root, 'node_modules', '@cms', 'cli', 'bin', 'cms.js')
+  const bin = join(root, 'node_modules', '@otw', 'cli', 'bin', 'cms.js')
   const { stdout } = await run(process.execPath, [bin, ...args, '--root', root], { cwd: root })
   process.stdout.write(stdout)
 }
@@ -143,7 +146,8 @@ async function runUpdate(root: string, names: readonly string[]): Promise<void> 
     pluginsOnly: values['plugins-only'],
     packages: names,
   })
-  report(plan)
+  const brand = (await readConfig(join(root, 'cms.config.json'))).brand ?? DEFAULT_BRAND
+  report(plan, brand)
   if (values.check) return
   if (plan.changes.length === 0) {
     console.log('cms: nothing to update')
@@ -167,8 +171,7 @@ async function runUpdate(root: string, names: readonly string[]): Promise<void> 
   const target = plan.core?.to
   if (values.commit) {
     const branch = `cms-update-${target ?? 'plugins'}-${Date.now().toString(36)}`
-    const message = target ? `Update Next CMS to ${target}` : 'Update Next CMS plugins'
-    await commitUpdate(root, branch, message)
+    await commitUpdate(root, branch, updateCommitMessage(brand, target))
     console.log(
       `cms: committed on ${branch}. Push it and open a pull request; your host builds it, and runs \`cms migrate\` if you deploy with CMS_MIGRATIONS=deploy.`,
     )

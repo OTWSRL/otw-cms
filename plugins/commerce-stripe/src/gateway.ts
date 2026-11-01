@@ -1,4 +1,4 @@
-import type { PaymentGateway } from '@cms/plugin-commerce'
+import type { PaymentGateway } from '@otw/plugin-commerce'
 import type Stripe from 'stripe'
 
 export const GATEWAY_ID = 'stripe'

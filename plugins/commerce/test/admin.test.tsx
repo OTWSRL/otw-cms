@@ -1,5 +1,5 @@
-import { definePlugin, type User } from '@cms/sdk'
-import { TEST_ORIGIN, type TestKernel } from '@cms/testing'
+import { definePlugin, type User } from '@otw/sdk'
+import { TEST_ORIGIN, type TestKernel } from '@otw/testing'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'

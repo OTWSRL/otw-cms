@@ -1,4 +1,4 @@
-import { getCurrentUser, getKernel, Slot } from '@cms/next/site'
+import { getCurrentUser, getKernel, Slot } from '@otw/next/site'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
@@ -12,7 +12,7 @@ import '../globals.css'
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const site = (await getKernel()).setting('site.title') ?? 'Next CMS'
+  const site = (await getKernel()).setting('site.title') ?? 'My Site'
   return { title: { default: site, template: `%s · ${site}` } }
 }
 
@@ -23,7 +23,7 @@ export default async function SiteLayout({ children }: { children: ReactNode }) 
       <body>
         <header className="site-header">
           <Link href="/" className="site-title">
-            {kernel.setting('site.title') ?? 'Next CMS'}
+            {kernel.setting('site.title') ?? 'My Site'}
           </Link>
           <nav aria-label="Main">
             <Slot name="header.nav" />

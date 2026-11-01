@@ -1,5 +1,5 @@
 {
-  "name": "@cms/plugin-commerce",
+  "name": "@otw/plugin-commerce",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,16 +13,16 @@
     "zod": "^4.6.7"
   },
   "peerDependencies": {
-    "@cms/admin-ui": "^0.1.0",
-    "@cms/sdk": "^0.1.0",
+    "@otw/admin-ui": "^0.1.0",
+    "@otw/sdk": "^0.1.0",
     "drizzle-orm": ">=0.45.0",
     "react": "^19.0.0"
   },
   "devDependencies": {
-    "@cms/admin-ui": "workspace:*",
-    "@cms/core": "workspace:*",
-    "@cms/sdk": "workspace:*",
-    "@cms/testing": "workspace:*",
+    "@otw/admin-ui": "workspace:*",
+    "@otw/core": "workspace:*",
+    "@otw/sdk": "workspace:*",
+    "@otw/testing": "workspace:*",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.2.0",
     "drizzle-orm": "^0.45.4",

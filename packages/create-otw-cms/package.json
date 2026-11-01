@@ -1,10 +1,10 @@
 {
-  "name": "create-next-cms",
+  "name": "create-otw-cms",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "create-next-cms": "./bin/create-next-cms.js"
+    "create-otw-cms": "./bin/create-otw-cms.js"
   },
   "files": [
     "bin",

@@ -1,4 +1,4 @@
-import { definePlugin, type PluginDefinition } from '@cms/sdk'
+import { definePlugin, type PluginDefinition } from '@otw/sdk'
 import Stripe from 'stripe'
 import {
   dashboardUrl,
@@ -12,7 +12,7 @@ import { createWebhookHandler } from './webhook'
 
 export { GATEWAY_ID, type StripeClient } from './gateway'
 
-declare module '@cms/sdk' {
+declare module '@otw/sdk' {
   interface Settings {
     'commerce-stripe.enabled': boolean
     'commerce-stripe.secretKey': string

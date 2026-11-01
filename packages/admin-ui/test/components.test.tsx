@@ -1,4 +1,4 @@
-import { ADMIN_ICON_NAMES } from '@cms/sdk'
+import { ADMIN_ICON_NAMES } from '@otw/sdk'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'

@@ -1,4 +1,4 @@
-import type { SearchParams } from '@cms/sdk'
+import type { SearchParams } from '@otw/sdk'
 
 /** Stable string form, so React's per-request cache can key on it. */
 export function serializeSearchParams(params: SearchParams): string {

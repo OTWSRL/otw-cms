@@ -1,4 +1,4 @@
-import type { Database, Logger, PluginDefinition } from '@cms/sdk'
+import type { Database, Logger, PluginDefinition } from '@otw/sdk'
 import { and, eq, sql } from 'drizzle-orm'
 import { pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
 import type { DatabaseContext } from './database'

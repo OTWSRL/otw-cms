@@ -1,4 +1,4 @@
-import { HttpError } from '@cms/sdk'
+import { HttpError } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel } from '../src/kernel'
 import { createDb, memoryLogger, plugin } from './helpers'

@@ -1,5 +1,5 @@
 {
-  "name": "@cms/web",
+  "name": "@otw/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,11 +13,11 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@cms/admin-ui": "workspace:*",
-    "@cms/next": "workspace:*",
-    "@cms/plugin-commerce": "workspace:*",
-    "@cms/plugin-commerce-stripe": "workspace:*",
-    "@cms/sdk": "workspace:*",
+    "@otw/admin-ui": "workspace:*",
+    "@otw/next": "workspace:*",
+    "@otw/plugin-commerce": "workspace:*",
+    "@otw/plugin-commerce-stripe": "workspace:*",
+    "@otw/sdk": "workspace:*",
     "@electric-sql/pglite": "^0.5.13",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
@@ -25,7 +25,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@cms/cli": "workspace:*",
+    "@otw/cli": "workspace:*",
     "@playwright/test": "^1.64.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.2.0",

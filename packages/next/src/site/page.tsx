@@ -1,4 +1,4 @@
-import type { SearchParams } from '@cms/sdk'
+import type { SearchParams } from '@otw/sdk'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cache } from 'react'

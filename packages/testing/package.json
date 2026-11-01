@@ -1,5 +1,5 @@
 {
-  "name": "@cms/testing",
+  "name": "@otw/testing",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@cms/core": "workspace:*",
-    "@cms/sdk": "workspace:*",
+    "@otw/core": "workspace:*",
+    "@otw/sdk": "workspace:*",
     "@electric-sql/pglite": "^0.5.13",
     "drizzle-orm": "^0.45.4"
   },

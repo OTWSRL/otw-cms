@@ -1,5 +1,5 @@
-import { MIN_PASSWORD_LENGTH } from '@cms/core'
-import type { SearchParams } from '@cms/sdk'
+import { MIN_PASSWORD_LENGTH } from '@otw/core'
+import type { SearchParams } from '@otw/sdk'
 import { redirect } from 'next/navigation'
 import { getKernel } from '../../runtime/kernel'
 import { BrandMark } from '../brand-mark'
@@ -13,7 +13,7 @@ export async function SetupScreen({ searchParams: params }: { searchParams: Sear
   return (
     <>
       <div className="login-logo">
-        <BrandMark />
+        <BrandMark brand={kernel.brand} />
       </div>
       <h1 className="login-title">Welcome</h1>
       <p className="login-intro">Create the administrator account. You can add more users later.</p>

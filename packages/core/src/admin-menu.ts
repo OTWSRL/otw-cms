@@ -1,4 +1,4 @@
-import type { AdminIcon, CapabilityName, User } from '@cms/sdk'
+import type { AdminIcon, CapabilityName, User } from '@otw/sdk'
 
 /** Sections core owns. Plugin sections sit between the dashboard and these, in load order. */
 const CORE_SECTIONS = {

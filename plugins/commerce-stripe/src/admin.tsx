@@ -1,6 +1,6 @@
-import { Notice, Postbox } from '@cms/admin-ui'
-import type { Order } from '@cms/plugin-commerce'
-import type { PluginContext } from '@cms/sdk'
+import { Notice, Postbox } from '@otw/admin-ui'
+import type { Order } from '@otw/plugin-commerce'
+import type { PluginContext } from '@otw/sdk'
 import { Fragment } from 'react'
 import { GATEWAY_ID } from './gateway'
 

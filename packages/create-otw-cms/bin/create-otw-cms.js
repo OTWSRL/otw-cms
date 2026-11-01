@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { detectPackageManager, scaffold } from '../src/scaffold.js'
 
-const USAGE = `Usage: create-next-cms <directory> [options]
+const USAGE = `Usage: create-otw-cms <directory> [options]
 
 Options:
   --plugins <list>   Plugins to install, comma-separated: commerce, commerce-stripe, or package names
@@ -49,6 +49,6 @@ try {
     `\nCreated ${target}. Next:\n\n  cd ${target}\n  ${commands.run} dev\n\nThen open http://localhost:3000/admin to set up the administrator.`,
   )
 } catch (error) {
-  console.error(`create-next-cms: ${error instanceof Error ? error.message : String(error)}`)
+  console.error(`create-otw-cms: ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)
 }

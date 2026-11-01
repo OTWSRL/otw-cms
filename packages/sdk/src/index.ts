@@ -15,7 +15,7 @@ export function definePlugin(definition: PluginDefinition): PluginDefinition {
 /*
  * Extension points. They are declared here, in the entry module, so plugins can augment them:
  *
- *   declare module '@cms/sdk' {
+ *   declare module '@otw/sdk' {
  *     interface Registries { 'commerce.gateways': PaymentGateway }
  *     interface Filters { 'commerce.cart.totals': [CartTotals, { lines: QuotedLine[] }] }
  *     interface Actions { 'commerce.order.paid': { order: Order } }

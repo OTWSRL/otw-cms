@@ -1,4 +1,4 @@
-import type { Database, PluginDefinition } from '@cms/sdk'
+import type { Database, PluginDefinition } from '@otw/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach } from 'vitest'

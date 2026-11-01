@@ -19,6 +19,9 @@ extensibility and drop the flaw.
 
 Next: 7, Content.
 
+The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
+sell it under another name with a `brand` in `cms.config.json` (README, White label).
+
 ## 3. Admin extensibility (done)
 
 What a plugin needs to extend the admin, and other plugins' admin, as in WordPress.
@@ -104,7 +107,7 @@ browser, at desktop, folded and phone widths.
   pushes the screen aside, list tables collapse to their primary column with a row toggle, form
   tables stack, controls grow to 40px with 16px text. Touch screens open a section's submenu on
   the first tap, as WordPress's `opensub` does.
-- **Components.** `@cms/admin-ui` renders WordPress's markup and class names, so plugins get the
+- **Components.** `@otw/admin-ui` renders WordPress's markup and class names, so plugins get the
   look and the phone layout by using it: `ListTable` (primary column, row actions, bulk-select
   column, row toggle), `Views` (`subsubsub`), `TableNav` (count and pages), `FormTable` and
   `FormField`, `SubmitButton`, `Postbox`, `EditColumns` (`#poststuff`), `Notice` (dismissible),
@@ -126,7 +129,7 @@ front-end admin bar, right-to-left layout.
 
 ## 5. Packaging and updates (done)
 
-A site is a small Next.js app that depends on versioned `@cms/*` packages, so updating core or a
+A site is a small Next.js app that depends on versioned `@otw/*` packages, so updating core or a
 plugin is a version bump, as `wp-admin/update-core.php` is for WordPress. WordPress swaps PHP
 files in place; a Next.js app has to be rebuilt, and on git-based hosts the running site can't
 change itself, so the update path differs by hosting. Both are supported:
@@ -138,7 +141,7 @@ change itself, so the update path differs by hosting. Both are supported:
 
 ### The split
 
-- **`@cms/next`** holds everything the CMS owns in a Next.js app: the database and kernel
+- **`@otw/next`** holds everything the CMS owns in a Next.js app: the database and kernel
   runtime, sessions, the admin (frame, core screens, plugin screens, sign-in, setup, styles), the
   storefront page that serves plugin routes, the API handler, and `withCms()` for
   `next.config` (plain JavaScript, since Node loads it before anything is compiled).
@@ -151,7 +154,7 @@ change itself, so the update path differs by hosting. Both are supported:
   starts with a marker line; a file without it belongs to the site and is never overwritten, and
   one a newer version no longer writes is removed. The admin is one catch-all route, so a new core screen arrives with
   the package, and changed route files arrive with the next `cms generate`.
-- **`create-next-cms`** scaffolds a site from the template, and `apps/web` is exactly such a
+- **`create-otw-cms`** scaffolds a site from the template, and `apps/web` is exactly such a
   site, so the end-to-end suite tests the split.
 
 ### Database changes
@@ -177,9 +180,9 @@ change itself, so the update path differs by hosting. Both are supported:
 
 ### `cms update`
 
-- `cms update --check` lists newer versions of core (the `@cms/*` packages, released together)
+- `cms update --check` lists newer versions of core (the `@otw/*` packages, released together)
   and of installed plugins, and what is compatible: a plugin declares the core it works with as
-  a peer dependency on `@cms/sdk`, so this is known before anything changes, as WordPress's
+  a peer dependency on `@otw/sdk`, so this is known before anything changes, as WordPress's
   "Requires at least" and "Tested up to" are. The kernel's `requires.core` remains the runtime
   check.
 - `cms update` picks the newest core within the installed version's caret range (`--major` for

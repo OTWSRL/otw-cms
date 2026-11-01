@@ -1,9 +1,10 @@
-import { availableUpdates, CORE_VERSION, type Kernel } from '@cms/core'
-import type { User } from '@cms/sdk'
+import { availableUpdates, CORE_VERSION, type Kernel } from '@otw/core'
+import type { User } from '@otw/sdk'
 import { cookies } from 'next/headers'
 import type { ReactNode } from 'react'
 import { AdminBar } from './admin-bar'
 import { AdminFrame, AdminMenu } from './admin-frame'
+import { BrandName } from './brand-mark'
 import { MENU_COOKIE, menuPreference } from './admin-menu-preference'
 import { updateOverview } from './update-overview'
 
@@ -30,7 +31,7 @@ export async function AdminShell({
         Skip to main content
       </a>
       <AdminBar
-        site={kernel.setting('site.title') ?? 'Next CMS'}
+        site={kernel.setting('site.title') ?? 'My Site'}
         user={user}
         logoutUrl={kernel.actionUrl('core', 'logout')}
       />
@@ -41,7 +42,9 @@ export async function AdminShell({
         </main>
       </div>
       <footer id="wpfooter">
-        <p id="footer-left">Thank you for creating with Next CMS.</p>
+        <p id="footer-left">
+          Thank you for creating with <BrandName brand={kernel.brand} />.
+        </p>
         <p id="footer-upgrade">Version {CORE_VERSION}</p>
       </footer>
     </AdminFrame>

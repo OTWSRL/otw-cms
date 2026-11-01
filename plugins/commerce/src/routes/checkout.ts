@@ -1,5 +1,5 @@
-import type { ApiHandler, PluginContext } from '@cms/sdk'
-import { HttpError } from '@cms/sdk'
+import type { ApiHandler, PluginContext } from '@otw/sdk'
+import { HttpError } from '@otw/sdk'
 import { z } from 'zod'
 import { CommerceError, type CommerceErrorCode } from '../errors'
 import { MAX_QUANTITY } from '../service'

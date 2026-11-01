@@ -1,4 +1,4 @@
-import type { PluginDefinition } from '@cms/sdk'
+import type { PluginDefinition } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type KernelOptions } from '../src/kernel'
 import { createDb, formPost, memoryLogger, plugin, redirectOf, signIn } from './helpers'

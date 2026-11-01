@@ -1,4 +1,4 @@
-import type { CapabilityDefinition, RequiredCapabilities, RoleDefinition, User } from '@cms/sdk'
+import type { CapabilityDefinition, RequiredCapabilities, RoleDefinition, User } from '@otw/sdk'
 
 export const ADMINISTRATOR = 'administrator'
 

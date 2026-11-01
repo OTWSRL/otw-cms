@@ -1,5 +1,5 @@
 import 'server-only'
-import { createKernelHolder, type Kernel, type KernelHolder } from '@cms/core'
+import { createKernelHolder, type Kernel, type KernelHolder } from '@otw/core'
 import { currentSite, type Site } from '../site-registry'
 import { bootSite } from './boot'
 import { openDatabase, type DatabaseHandle } from './database'

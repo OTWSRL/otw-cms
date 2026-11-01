@@ -1,6 +1,6 @@
 # {{name}}
 
-A Next CMS site: Next.js with WordPress-style plugins, roles and admin.
+An OTW CMS site: Next.js with WordPress-style plugins, roles and admin.
 
 ```sh
 {{run}} dev      # http://localhost:3000; the admin is at /admin
@@ -11,9 +11,10 @@ uses an embedded database in `.data/`; see `.env.example` for the other settings
 
 ## What's yours and what's the CMS's
 
-- **Yours:** `cms.config.json` (installed plugins), `next.config.ts`, `src/app/(site)/layout.tsx`
-  and `src/app/globals.css` (the storefront's look), `.env`, and any routes you add. For your
-  own home page, write `src/app/(site)/page.tsx` without the `@generated` line.
+- **Yours:** `cms.config.json` (installed plugins, and a `brand` to rename the CMS in the
+  admin), `next.config.ts`, `src/app/(site)/layout.tsx` and `src/app/globals.css` (the
+  storefront's look), `.env`, and any routes you add. For your own home page, write
+  `src/app/(site)/page.tsx` without the `@generated` line.
 - **The CMS's:** the files whose first line says `@generated`. `cms generate` writes them
   before every `dev` and `build`, so updates can change them. Delete that line to keep a file
   as your own; it is never overwritten again.

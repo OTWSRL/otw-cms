@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { Database } from '@cms/sdk'
+import type { Database } from '@otw/sdk'
 
 /**
  * Tracks the active transaction per async call chain, so a filter running inside checkout

@@ -1,5 +1,5 @@
-import { CommerceError, type CommerceErrorCode, type CommerceService } from '@cms/plugin-commerce'
-import { HttpError, type ApiHandler, type PluginContext } from '@cms/sdk'
+import { CommerceError, type CommerceErrorCode, type CommerceService } from '@otw/plugin-commerce'
+import { HttpError, type ApiHandler, type PluginContext } from '@otw/sdk'
 import type Stripe from 'stripe'
 import { GATEWAY_ID, type StripeClient } from './gateway'
 

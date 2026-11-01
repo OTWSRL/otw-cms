@@ -1,6 +1,6 @@
-import type { KernelOptions } from '@cms/core'
-import { definePlugin, type PluginDefinition } from '@cms/sdk'
-import { createTestKernel, type TestKernel } from '@cms/testing'
+import type { KernelOptions } from '@otw/core'
+import { definePlugin, type PluginDefinition } from '@otw/sdk'
+import { createTestKernel, type TestKernel } from '@otw/testing'
 import { afterEach } from 'vitest'
 import commerce, { type Order, type PaymentGateway, type PaymentUrls } from '../src'
 

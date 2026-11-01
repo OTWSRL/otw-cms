@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import type { PackageChange } from '@cms/core'
+import type { PackageChange } from '@otw/core'
 import { MARKER, removeRoute } from '../generate.ts'
 import { CORE_PACKAGES, readSitePackages, writeChanges, type PackageManager } from '../update.ts'
 import type { BuiltRelease, Log } from './supervisor.ts'

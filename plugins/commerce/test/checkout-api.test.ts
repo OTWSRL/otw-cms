@@ -1,4 +1,4 @@
-import { TEST_ORIGIN } from '@cms/testing'
+import { TEST_ORIGIN } from '@otw/testing'
 import { describe, expect, it } from 'vitest'
 import { bootShop, capturingGateway } from './fixtures'
 

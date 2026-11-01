@@ -1,4 +1,4 @@
-import { definePlugin } from '@cms/sdk'
+import { definePlugin } from '@otw/sdk'
 import { registerAdmin } from './admin'
 import { OrderReceivedPage, ProductPage, ShopPage } from './components'
 import { migrations } from './migrations'

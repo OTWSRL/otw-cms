@@ -1,6 +1,6 @@
 import { isSiteOrigin, type OriginPolicy } from './origins'
-import type { ApiHandler, HttpMethod, Logger } from '@cms/sdk'
-import { ForbiddenError, HttpError } from '@cms/sdk'
+import type { ApiHandler, HttpMethod, Logger } from '@otw/sdk'
+import { ForbiddenError, HttpError } from '@otw/sdk'
 import type { Router } from './router'
 
 export const API_PREFIX = '/api/p'

@@ -1,4 +1,4 @@
-import type { SlotComponent } from '@cms/sdk'
+import type { SlotComponent } from '@otw/sdk'
 import { DEFAULT_PRIORITY } from './hooks'
 
 const SLOT_NAME = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/

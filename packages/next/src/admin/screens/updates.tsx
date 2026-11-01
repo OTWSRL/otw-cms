@@ -1,4 +1,4 @@
-import { FormButton, ListTable, Notice, SubmitButton } from '@cms/admin-ui'
+import { FormButton, ListTable, Notice, SubmitButton } from '@otw/admin-ui'
 import type {
   Kernel,
   PluginUpdate,
@@ -6,7 +6,7 @@ import type {
   UpdateCheck,
   UpdateJob,
   UpdateOverview,
-} from '@cms/core'
+} from '@otw/core'
 import { AutoRefresh } from '../auto-refresh'
 import { AdminScreen } from '../screen'
 import { updateOverview } from '../update-overview'
@@ -14,7 +14,7 @@ import type { ScreenContext } from './context'
 
 type Serve = Extract<UpdateOverview, { channel: 'serve' }>
 
-const CORE_PACKAGE = '@cms/next'
+const CORE_PACKAGE = '@otw/next'
 
 const COMPATIBILITY: Record<PluginUpdate['compatible'], string> = {
   yes: 'Yes (according to its author)',
@@ -71,9 +71,10 @@ function ManualUpdates({ kernel }: { kernel: Kernel }) {
   return (
     <>
       <p>
-        You have Next CMS {kernel.coreVersion}. This site can’t update itself from the admin. To
-        update from here, either start it with <code>cms serve</code> on your own server, or, if it
-        builds from git, set <code>CMS_GITHUB_REPO</code> and <code>CMS_GITHUB_TOKEN</code>.
+        You have {kernel.brand.name} {kernel.coreVersion}. This site can’t update itself from the
+        admin. To update from here, either start it with <code>cms serve</code> on your own server,
+        or, if it builds from git, set <code>CMS_GITHUB_REPO</code> and{' '}
+        <code>CMS_GITHUB_TOKEN</code>.
       </p>
       <p>Until then, on the server:</p>
       <pre className="code-block">
@@ -103,10 +104,10 @@ function ServeUpdates({ kernel, overview }: { kernel: Kernel; overview: Serve })
         </Notice>
       )}
 
-      <h2>Next CMS</h2>
+      <h2>{kernel.brand.name}</h2>
       {lastCheck?.core ? (
         <>
-          <p>An updated version of Next CMS is available.</p>
+          <p>An updated version of {kernel.brand.name} is available.</p>
           <FormButton
             action={action('update')}
             fields={{ packages: 'core' }}
@@ -118,8 +119,8 @@ function ServeUpdates({ kernel, overview }: { kernel: Kernel; overview: Serve })
         </>
       ) : (
         <p>
-          You have {lastCheck ? 'the latest version of ' : ''}Next CMS{' '}
-          {current?.versions[CORE_PACKAGE] ?? kernel.coreVersion}.
+          You have {lastCheck ? 'the latest version of ' : ''}
+          {kernel.brand.name} {current?.versions[CORE_PACKAGE] ?? kernel.coreVersion}.
         </p>
       )}
 
@@ -150,7 +151,8 @@ function ServeUpdates({ kernel, overview }: { kernel: Kernel; overview: Serve })
               value="patch"
               defaultChecked={overview.autoUpdate === 'patch'}
             />{' '}
-            Patch releases of Next CMS and plugins, installed twice a day as they come out
+            Patch releases of {kernel.brand.name} and plugins, installed twice a day as they come
+            out
           </label>
         </fieldset>
         <SubmitButton>Save</SubmitButton>
@@ -211,8 +213,8 @@ function PluginUpdates({
                       You have version {plugin.from} installed. Update to {plugin.to}.
                     </p>
                     <p className="description">
-                      Compatibility with Next CMS{coreTarget ? ` ${coreTarget}` : ''}:{' '}
-                      {COMPATIBILITY[plugin.compatible]}
+                      Compatibility with {kernel.brand.name}
+                      {coreTarget ? ` ${coreTarget}` : ''}: {COMPATIBILITY[plugin.compatible]}
                     </p>
                     {plugin.note && (
                       <p className="description">

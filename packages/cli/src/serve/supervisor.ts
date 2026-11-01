@@ -6,7 +6,7 @@ import type {
   UpdateJob,
   UpdateOverview,
   UpdateRequest,
-} from '@cms/core'
+} from '@otw/core'
 import type { UpdatePlan, UpdateScope } from '../update.ts'
 import { ControlError } from './control.ts'
 

@@ -1,5 +1,5 @@
-import type { PluginDefinition, SettingDefinitions, User } from '@cms/sdk'
-import { ActionError } from '@cms/sdk'
+import type { PluginDefinition, SettingDefinitions, User } from '@otw/sdk'
+import { ActionError } from '@otw/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
 import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, type CapabilityStore } from './capabilities'
@@ -32,7 +32,7 @@ function validateLocale(value: string): string | null {
 }
 
 const coreSettings: SettingDefinitions = {
-  'site.title': { type: 'text', label: 'Site title', default: 'Next CMS', maxLength: 100 },
+  'site.title': { type: 'text', label: 'Site title', default: 'My Site', maxLength: 100 },
   'site.url': {
     type: 'text',
     label: 'Site address',

@@ -1,4 +1,4 @@
-import type { SlotComponent, SlotName, Slots } from '@cms/sdk'
+import type { SlotComponent, SlotName, Slots } from '@otw/sdk'
 import { getKernel } from '../runtime/kernel'
 
 type SlotProps<K extends SlotName> = { name: K } & (Slots[K] extends Record<string, never>

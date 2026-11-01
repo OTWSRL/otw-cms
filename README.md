@@ -1,4 +1,4 @@
-# Next CMS
+# OTW CMS
 
 A WordPress-style CMS on Next.js where third parties build large plugins (commerce, community,
 LMS) that extend each other.
@@ -11,14 +11,14 @@ is a switch on the admin's Plugins screen, with no rebuild.
 ## Layout
 
 ```
-apps/web               the CMS's own site, exactly what create-next-cms makes, plus e2e tests
-packages/next          @cms/next: the admin, the storefront route, the API route and the runtime
-packages/sdk           @cms/sdk: the only package plugin authors depend on (types + definePlugin)
-packages/admin-ui      @cms/admin-ui: WordPress-style admin components (list and form tables, boxes)
-packages/core          @cms/core: the kernel (resolver, hooks, registries, services, router, migrations)
-packages/testing       @cms/testing: boots the kernel on in-memory Postgres for plugin tests
-packages/cli           @cms/cli: `cms generate`, `cms migrate`, `cms update`, `cms serve`
-packages/create-next-cms  scaffolds a new site (`pnpm create next-cms my-site`)
+apps/web               the CMS's own site, exactly what create-otw-cms makes, plus e2e tests
+packages/next          @otw/next: the admin, the storefront route, the API route and the runtime
+packages/sdk           @otw/sdk: the only package plugin authors depend on (types + definePlugin)
+packages/admin-ui      @otw/admin-ui: WordPress-style admin components (list and form tables, boxes)
+packages/core          @otw/core: the kernel (resolver, hooks, registries, services, router, migrations)
+packages/testing       @otw/testing: boots the kernel on in-memory Postgres for plugin tests
+packages/cli           @otw/cli: `cms generate`, `cms migrate`, `cms update`, `cms serve`
+packages/create-otw-cms  scaffolds a new site (`pnpm create otw-cms my-site`)
 plugins/commerce       products, orders, checkout; defines the extension points other plugins use
 plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
 ```
@@ -34,7 +34,7 @@ pnpm test:e2e        # Playwright against a production build, desktop plus phone
 ```
 
 The phone and tablet runs use Playwright's WebKit as well as Chromium; install it once with
-`pnpm --filter @cms/web exec playwright install webkit`.
+`pnpm --filter @otw/web exec playwright install webkit`.
 
 There's no database to set up: without `DATABASE_URL` the app uses embedded PGlite. Set
 `DATABASE_URL` for Postgres in production. Other settings are in `apps/web/.env.example`.
@@ -52,6 +52,14 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   overwritten. The admin is one route, so new core screens arrive with the package. For its own
   home page a site writes `src/app/(site)/page.tsx`; otherwise plugins can claim `/`. Files a
   version stops managing are removed while they still carry the line.
+- **White label.** The admin calls the CMS "OTW CMS": the footer, the Dashboard, Updates, and
+  the logo on the sign-in screens. A `brand` in `cms.config.json` gives it another name:
+  `"brand": { "name": "Acme Sites", "url": "https://acme.example", "logo": "/brand/logo.svg" }`.
+  The name links to `url`, as WordPress links to wordpress.org, and `logo` (a path on the site,
+  or an https URL) replaces the mark. It's set per deploy rather than in the admin, so a client
+  can't take it off, and `cms generate` rejects any other kind of link. The code keeps its own
+  names (`@otw/*`, the `cms` command, `CMS_*` variables, `cms_*` tables), as a white-labelled
+  WordPress keeps its `wp_` tables. A new site is called "My Site" until it gets a title.
 - **Database changes.** `CMS_MIGRATIONS=startup` (default) migrates when the site starts, for one
   server. `CMS_MIGRATIONS=deploy` never migrates at runtime: run `cms migrate` in the deploy
   step (`build:deploy` in a new site), for several instances or serverless. Until then plugins
@@ -61,7 +69,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   `pg_dump`), and `--dry-run` lists what would run. The embedded database belongs to one
   process: a lock file stops a second server, or `cms migrate` beside a running site.
 - **Updating.** `cms update --check` lists newer core and plugin versions and which plugins
-  support the new core. Plugins declare it as a peer dependency on `@cms/sdk`, and what they
+  support the new core. Plugins declare it as a peer dependency on `@otw/sdk`, and what they
   need from each other as peer dependencies on those plugins, so this is known before anything
   changes: a plugin another one still needs in an older version is held back, and says why.
   `cms update` bumps `package.json` within core's compatible range (`--major` to cross it),
@@ -85,7 +93,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   Set `CMS_TRUST_PROXY=1` so the admin trusts `X-Forwarded-Host` and `X-Forwarded-Proto`, or set
   `SITE_URL` (the site address on Settings › General); until one is set, admin forms answer 403.
   `cms serve` sets `CMS_TRUST_PROXY` for its releases.
-- **A new site:** `pnpm create next-cms my-site --plugins commerce,commerce-stripe`, or
+- **A new site:** `pnpm create otw-cms my-site --plugins commerce,commerce-stripe`, or
   `--link <checkout>` to try unreleased changes. It includes a Dockerfile for your own server.
 
 ## How the kernel boots
@@ -104,7 +112,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
 3. **Set up.** Each plugin registers its hooks, registries, services, routes and slots. After boot
    the registry is sealed, so a late registration fails loudly instead of leaking.
 4. **Recovery mode.** If a plugin throws during migrate or setup, the kernel boots again without it
-   and without anything that requires it. `strict: true` (the default in `@cms/testing`) throws
+   and without anything that requires it. `strict: true` (the default in `@otw/testing`) throws
    instead.
 5. **Reboot on change.** Activating a plugin or saving settings bumps a generation counter in the
    database. The app keeps one kernel per bundle and replaces it when the counter moves: at once
@@ -113,8 +121,8 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
 ## Writing a plugin
 
 ```tsx
-import { ActionError, definePlugin } from '@cms/sdk'
-import type {} from '@cms/plugin-commerce' // loads commerce's extension-point types
+import { ActionError, definePlugin } from '@otw/sdk'
+import type {} from '@otw/plugin-commerce' // loads commerce's extension-point types
 
 export default definePlugin({
   id: 'lms',
@@ -161,7 +169,7 @@ export default definePlugin({
       load: () => listCourses(cms.db), // write load before title and component, for inference
       titleAction: () => ({ label: 'Add Course', url: cms.admin.url('lms.course-new') }),
       component: ({ data, user }) => (
-        // From @cms/admin-ui: WP_List_Table's markup, striped, with a phone layout.
+        // From @otw/admin-ui: WP_List_Table's markup, striped, with a phone layout.
         <ListTable
           caption="Courses"
           rows={data.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
@@ -216,7 +224,7 @@ Rules the kernel enforces or relies on:
 - **Expose extension points** with declaration merging, so other plugins get types:
 
   ```ts
-  declare module '@cms/sdk' {
+  declare module '@otw/sdk' {
     interface Actions {
       'lms.course.completed': { userId: string; courseId: string }
     }
@@ -232,7 +240,7 @@ Rules the kernel enforces or relies on:
 - **Throw `ForbiddenError`** from an admin loader, action or API route when a check needs the
   loaded object (a meta capability). It answers 403.
 
-- **Test with `@cms/testing`:** `createTestKernel({ plugins: [...] })` gives you a kernel on a fresh
+- **Test with `@otw/testing`:** `createTestKernel({ plugins: [...] })` gives you a kernel on a fresh
   migrated database, `request()` for API routes and admin actions, `signIn(role)` for a session
   cookie, and `reboot()` to see activation and settings changes.
 
@@ -264,7 +272,7 @@ Rules the kernel enforces or relies on:
   parent whose plugin is inactive falls back to the page's own section.
 - **Screens.** Plugin pages mount at `/admin/{pluginId}/...` and appear for users with the page's
   capability. The title and notices come from core; `titleAction` adds the "Add New" button.
-  Build the body from `@cms/admin-ui` (`ListTable`, `Views`, `TableNav`, `FormTable`,
+  Build the body from `@otw/admin-ui` (`ListTable`, `Views`, `TableNav`, `FormTable`,
   `FormField`, `SubmitButton`, `Postbox`, `EditColumns`, `Notice`, `Button`, `FormButton`), or
   write WordPress's markup by hand: the admin styles its class names (`wrap`, `button-primary`,
   `notice-warning`, `form-table`, `wp-list-table`, `postbox`, `subsubsub`, `row-actions`).

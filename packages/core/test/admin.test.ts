@@ -1,8 +1,8 @@
-import { ActionError, ForbiddenError, type PluginContext, type PluginDefinition } from '@cms/sdk'
+import { ActionError, ForbiddenError, type PluginContext, type PluginDefinition } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, formPost, ORIGIN, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@cms/sdk' {
+declare module '@otw/sdk' {
   interface Capabilities {
     'shop.manage': true
     'shop.undeclared': true

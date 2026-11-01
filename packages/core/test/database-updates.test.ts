@@ -1,4 +1,4 @@
-import type { Database, Migration, PluginDefinition } from '@cms/sdk'
+import type { Database, Migration, PluginDefinition } from '@otw/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type KernelOptions } from '../src/kernel'

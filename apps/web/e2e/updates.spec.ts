@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { ADMIN, MANAGER, SUPERVISOR, mainMenu, notice, signIn, submenu } from './helpers'
 
-// The site reports updates through e2e/fake-supervisor.mjs, standing in for `cms serve`: Next CMS
+// The site reports updates through e2e/fake-supervisor.mjs, standing in for `cms serve`: OTW CMS
 // 0.1.3 and Commerce 0.1.5 are waiting, and Commerce 1.0.0 is held back for Stripe.
 test.describe.configure({ mode: 'serial' })
 
-const COMMERCE = '@cms/plugin-commerce'
+const COMMERCE = '@otw/plugin-commerce'
 
 test('administrators see waiting updates in the menu and on the Plugins screen', async ({
   page,
@@ -26,7 +26,7 @@ test('the Updates screen lists core and plugin updates, and why one waits', asyn
   await mainMenu(page).getByRole('link', { name: 'Dashboard (2 updates)' }).click()
   await submenu(page, 'Dashboard').getByRole('link', { name: 'Updates (2 updates)' }).click()
   await expect(page).toHaveURL('/admin/updates')
-  await expect(page).toHaveTitle('Updates · Admin · Next CMS')
+  await expect(page).toHaveTitle('Updates · Admin · My Site')
 
   await expect(page.getByText('Last checked on 2026-11-01 06:00 UTC.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Update to version 0.1.3' })).toBeVisible()
@@ -34,11 +34,9 @@ test('the Updates screen lists core and plugin updates, and why one waits', asyn
     .getByRole('table', { name: 'Plugins with updates' })
     .getByRole('row', { name: new RegExp(COMMERCE) })
   await expect(row).toContainText('You have version 0.1.0 installed. Update to 0.1.5.')
+  await expect(row).toContainText('Compatibility with OTW CMS 0.1.3: Yes (according to its author)')
   await expect(row).toContainText(
-    'Compatibility with Next CMS 0.1.3: Yes (according to its author)',
-  )
-  await expect(row).toContainText(
-    '1.0.0 is out, but @cms/plugin-commerce-stripe 0.1.0 needs @cms/plugin-commerce ^0.1.0.',
+    '1.0.0 is out, but @otw/plugin-commerce-stripe 0.1.0 needs @otw/plugin-commerce ^0.1.0.',
   )
 
   await page.getByRole('button', { name: 'Check again' }).click()

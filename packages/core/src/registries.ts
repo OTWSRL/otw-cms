@@ -1,4 +1,4 @@
-import type { Registry, RegistryItem } from '@cms/sdk'
+import type { Registry, RegistryItem } from '@otw/sdk'
 
 interface Stored {
   ownerId: string

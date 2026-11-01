@@ -6,8 +6,8 @@ import { generate, MARKER, managedFiles, parseConfig } from '../src/generate.ts'
 
 describe('parseConfig', () => {
   it('accepts scoped and unscoped package names', () => {
-    expect(parseConfig({ plugins: ['@cms/plugin-commerce', 'cms-plugin-lms'] })).toEqual({
-      plugins: ['@cms/plugin-commerce', 'cms-plugin-lms'],
+    expect(parseConfig({ plugins: ['@otw/plugin-commerce', 'cms-plugin-lms'] })).toEqual({
+      plugins: ['@otw/plugin-commerce', 'cms-plugin-lms'],
     })
   })
 
@@ -23,28 +23,66 @@ describe('parseConfig', () => {
   ])('rejects %j', (raw, message) => {
     expect(() => parseConfig(raw)).toThrow(message)
   })
+
+  it('takes a brand, for selling the CMS under another name', () => {
+    const brand = { name: 'Acme Sites', url: 'https://acme.example', logo: '/brand/logo.svg' }
+    expect(parseConfig({ plugins: [], brand: { ...brand, name: '  Acme Sites ' } })).toEqual({
+      plugins: [],
+      brand,
+    })
+    const hosted = { name: 'Acme', logo: 'https://cdn.acme.example/logo.png' }
+    expect(parseConfig({ plugins: [], brand: hosted }).brand).toEqual(hosted)
+  })
+
+  it.each([
+    ['Acme', '"brand" must be an object'],
+    [null, '"brand" must be an object'],
+    [['Acme'], '"brand" must be an object'],
+    [{}, '"brand.name" must be text of 1 to 60 characters'],
+    [{ name: '   ' }, '"brand.name"'],
+    [{ name: 'x'.repeat(61) }, '"brand.name"'],
+    [{ name: 'Acme\nSites' }, '"brand.name"'],
+    [{ name: 'Acme', link: 'https://acme.example' }, '"brand" has no field "link"'],
+    [{ name: 'Acme', url: 'javascript:alert(1)' }, '"brand.url" must be an http or https URL'],
+    [{ name: 'Acme', url: 'acme.example' }, '"brand.url"'],
+    [{ name: 'Acme', logo: 'http://acme.example/logo.png' }, '"brand.logo" must be a path'],
+    [{ name: 'Acme', logo: '//elsewhere.example/logo.png' }, '"brand.logo"'],
+    [{ name: 'Acme', logo: '/\\elsewhere.example/logo.png' }, '"brand.logo"'],
+    [{ name: 'Acme', logo: 'data:image/svg+xml,<svg onload=alert(1)>' }, '"brand.logo"'],
+    [{ name: 'Acme', logo: 'logo.svg' }, '"brand.logo"'],
+  ])('rejects the brand %j', (brand, message) => {
+    expect(() => parseConfig({ plugins: [], brand })).toThrow(message)
+  })
 })
 
 describe('managedFiles', () => {
-  const config = { plugins: ['@cms/plugin-commerce', '@cms/plugin-commerce-stripe'] }
+  const config = { plugins: ['@otw/plugin-commerce', '@otw/plugin-commerce-stripe'] }
 
   it('registers the installed plugins in config order', () => {
     const [site] = managedFiles(config, { srcDir: 'src' })
     expect(site).toEqual({
       path: 'src/cms/site.generated.ts',
       content: `${MARKER}
-import { defineSite } from '@cms/next'
-import plugin0 from "@cms/plugin-commerce"
-import plugin1 from "@cms/plugin-commerce-stripe"
+import { defineSite } from '@otw/next'
+import plugin0 from "@otw/plugin-commerce"
+import plugin1 from "@otw/plugin-commerce-stripe"
 
 export const site = defineSite({
   plugins: [plugin0, plugin1],
-  packages: ["@cms/plugin-commerce", "@cms/plugin-commerce-stripe"],
+  packages: ["@otw/plugin-commerce", "@otw/plugin-commerce-stripe"],
 })
 `,
     })
     expect(managedFiles({ plugins: [] }, { srcDir: 'src' })[0]!.content).toContain(
       '  plugins: [],\n  packages: [],',
+    )
+  })
+
+  it('gives the site its brand, when it has one', () => {
+    const brand = { name: 'Acme "Sites"', url: 'https://acme.example' }
+    const [site] = managedFiles({ plugins: [], brand }, { srcDir: 'src' })
+    expect(site!.content).toContain(
+      '  packages: [],\n  brand: {"name":"Acme \\"Sites\\"","url":"https://acme.example"},\n})',
     )
   })
 
@@ -63,7 +101,7 @@ export const site = defineSite({
     const admin = files.find((managed) => managed.path.endsWith('[[...segments]]/page.tsx'))!
     expect(admin.content).toBe(`${MARKER}
 import '../../../../cms/site.generated'
-export { AdminPage as default, generateAdminMetadata as generateMetadata } from '@cms/next/admin'
+export { AdminPage as default, generateAdminMetadata as generateMetadata } from '@otw/next/admin'
 export const dynamic = 'force-dynamic'
 `)
     for (const managed of files) expect(managed.content.startsWith(`${MARKER}\n`)).toBe(true)
@@ -135,7 +173,7 @@ describe('generate', () => {
   it('removes the optional catch-all earlier versions wrote, which claimed the home page too', async () => {
     const old = join(root, 'src/app/(site)/[[...slug]]/page.tsx')
     await mkdir(join(old, '..'), { recursive: true })
-    await writeFile(old, `${MARKER}\nexport { SitePage as default } from '@cms/next/site'\n`)
+    await writeFile(old, `${MARKER}\nexport { SitePage as default } from '@otw/next/site'\n`)
 
     const result = await statuses()
     expect(result['src/app/(site)/[[...slug]]/page.tsx']).toBe('removed')

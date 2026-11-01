@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { access } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import { join, resolve } from 'node:path'
-import type { UpdateRequest } from '@cms/core'
+import type { UpdateRequest } from '@otw/core'
 import { loadEnv } from '../site.ts'
 import { detectPackageManager, planSite } from '../update.ts'
 import { ControlError, createControlServer } from './control.ts'
@@ -50,7 +50,7 @@ async function standaloneSite(root: string): Promise<void> {
       return
   }
   throw new Error(
-    'cms serve runs a site with its own lockfile (as create-next-cms makes them). Run it in the site’s directory, after installing.',
+    'cms serve runs a site with its own lockfile (as create-otw-cms makes them). Run it in the site’s directory, after installing.',
   )
 }
 
@@ -94,7 +94,7 @@ export async function serve(options: ServeOptions): Promise<void> {
         step(
           process.execPath,
           [
-            join(release.dir, 'node_modules', '@cms', 'cli', 'bin', 'cms.js'),
+            join(release.dir, 'node_modules', '@otw', 'cli', 'bin', 'cms.js'),
             'migrate',
             '--root',
             release.dir,

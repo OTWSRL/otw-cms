@@ -35,7 +35,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cms/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @otw/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4

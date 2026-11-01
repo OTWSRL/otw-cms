@@ -1,7 +1,7 @@
 'use client'
 
-import { AdminIcon, cx } from '@cms/admin-ui'
-import type { AdminMenuSection } from '@cms/core'
+import { AdminIcon, cx } from '@otw/admin-ui'
+import type { AdminMenuSection } from '@otw/core'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {

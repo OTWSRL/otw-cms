@@ -1,4 +1,4 @@
-import type { Env } from '@cms/core'
+import type { Env } from '@otw/core'
 
 /**
  * `CMS_ACTIVE_PLUGINS` pins the active plugins and turns off activation in the admin. Unset,

@@ -1,11 +1,11 @@
-import type { PluginContext } from '@cms/sdk'
+import type { PluginContext } from '@otw/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginBootError } from '../src/errors'
 import { createKernel, type KernelOptions } from '../src/kernel'
 import { createDb, memoryLogger, plugin } from './helpers'
 
-declare module '@cms/sdk' {
+declare module '@otw/sdk' {
   interface Slots {
     'shop.receipt': { orderId: string }
   }
@@ -312,5 +312,13 @@ describe('pages and slots', () => {
     await expect(boot({ plugins: [shop, clash] })).rejects.toThrow(
       'Route "shop.product" (/product/:slug) conflicts with "clash.item"',
     )
+  })
+})
+
+describe('brand', () => {
+  it('goes by the CMS’s own name unless the site gives it another', async () => {
+    expect((await boot({ plugins: [] })).brand).toEqual({ name: 'OTW CMS' })
+    const acme = { name: 'Acme Sites', url: 'https://acme.example' }
+    expect((await boot({ plugins: [], brand: acme })).brand).toEqual(acme)
   })
 })

@@ -1,5 +1,5 @@
-import type { PluginDefinition } from '@cms/sdk'
-import { isAdminIcon } from '@cms/sdk'
+import type { PluginDefinition } from '@otw/sdk'
+import { isAdminIcon } from '@otw/sdk'
 import semver from 'semver'
 import { validateSettingDefinitions } from './settings'
 

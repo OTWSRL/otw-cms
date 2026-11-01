@@ -4,8 +4,8 @@ import type {
   SettingsFields,
   SettingsPage,
   SettingsSection,
-} from '@cms/sdk'
-import { ActionError } from '@cms/sdk'
+} from '@otw/sdk'
+import { ActionError } from '@otw/sdk'
 import {
   isLocked,
   parseFormValue,

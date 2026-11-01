@@ -8,9 +8,9 @@ import {
   SubmitButton,
   TableNav,
   Views,
-} from '@cms/admin-ui'
-import type { PluginContext, SearchParams } from '@cms/sdk'
-import { ActionError } from '@cms/sdk'
+} from '@otw/admin-ui'
+import type { PluginContext, SearchParams } from '@otw/sdk'
+import { ActionError } from '@otw/sdk'
 import type { ReactNode } from 'react'
 import { CommerceError } from './errors'
 import { currencyDigits, toMoneyInput } from './totals'

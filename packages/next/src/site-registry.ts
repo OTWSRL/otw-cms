@@ -1,4 +1,5 @@
-import type { PluginDefinition } from '@cms/sdk'
+import type { Brand } from '@otw/core'
+import type { PluginDefinition } from '@otw/sdk'
 
 /** What a site gives the CMS. `cms generate` writes it to `src/cms/site.generated.ts`. */
 export interface Site {
@@ -6,6 +7,8 @@ export interface Site {
   plugins: readonly PluginDefinition[]
   /** Each plugin's npm package, in the same order, for matching update checks to plugins. */
   packages?: readonly string[]
+  /** The name the admin shows for the CMS, from `cms.config.json`. */
+  brand?: Brand
 }
 
 // Module-scoped, not global: Next compiles server components and route handlers separately, and

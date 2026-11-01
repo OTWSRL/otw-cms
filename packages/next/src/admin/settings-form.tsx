@@ -1,5 +1,5 @@
-import { FormField, FormTable, SubmitButton } from '@cms/admin-ui'
-import type { SettingField, SettingsPageView } from '@cms/core'
+import { FormField, FormTable, SubmitButton } from '@otw/admin-ui'
+import type { SettingField, SettingsPageView } from '@otw/core'
 
 /**
  * One form per page, as in WordPress: the kernel saves only the fields placed on it, so the page

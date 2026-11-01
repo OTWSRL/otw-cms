@@ -6,12 +6,12 @@ import {
   type Kernel,
   type KernelOptions,
   type MemoryLogger,
-} from '@cms/core'
-import type { Database, User } from '@cms/sdk'
+} from '@otw/core'
+import type { Database, User } from '@otw/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 
-export { createMemoryLogger, type LogEntry, type MemoryLogger } from '@cms/core'
+export { createMemoryLogger, type LogEntry, type MemoryLogger } from '@otw/core'
 
 export interface TestKernel {
   /** The current kernel; replaced by `reboot()`. */

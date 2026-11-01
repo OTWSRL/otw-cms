@@ -1,5 +1,5 @@
-import { AdminIcon } from '@cms/admin-ui'
-import type { User } from '@cms/sdk'
+import { AdminIcon } from '@otw/admin-ui'
+import type { User } from '@otw/sdk'
 import Link from 'next/link'
 import { AccountMenu, MenuToggle } from './admin-frame'
 

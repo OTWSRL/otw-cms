@@ -1,6 +1,6 @@
 import 'server-only'
-import { SESSION_COOKIE_NAMES, type Kernel } from '@cms/core'
-import type { CapabilityName, User } from '@cms/sdk'
+import { SESSION_COOKIE_NAMES, type Kernel } from '@otw/core'
+import type { CapabilityName, User } from '@otw/sdk'
 import { cookies } from 'next/headers'
 import { forbidden, redirect } from 'next/navigation'
 import { cache } from 'react'

@@ -7,8 +7,8 @@ import type {
   CapabilityName,
   Logger,
   User,
-} from '@cms/sdk'
-import { ActionError, ForbiddenError } from '@cms/sdk'
+} from '@otw/sdk'
+import { ActionError, ForbiddenError } from '@otw/sdk'
 import { apiPath } from './api'
 import { isSiteOrigin, publicOrigin, type OriginPolicy } from './origins'
 import { withFlash, type Flash, type FlashCodec } from './flash'

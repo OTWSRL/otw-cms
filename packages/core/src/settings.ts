@@ -1,4 +1,4 @@
-import type { Database, SettingDefinition, SettingDefinitions } from '@cms/sdk'
+import type { Database, SettingDefinition, SettingDefinitions } from '@otw/sdk'
 import { inArray, sql } from 'drizzle-orm'
 import { storedSettings } from './core-schema'
 

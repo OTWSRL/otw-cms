@@ -17,7 +17,7 @@ describe('withCms', () => {
     await write({ plugins: ['@acme/cms-lms'] })
     const config = withCms(
       {
-        transpilePackages: ['@acme/ui', '@cms/core'],
+        transpilePackages: ['@acme/ui', '@otw/core'],
         serverExternalPackages: ['sharp'],
         experimental: { typedRoutes: true },
         poweredByHeader: false,
@@ -26,8 +26,8 @@ describe('withCms', () => {
     )
     expect(config.transpilePackages).toEqual([
       '@acme/ui',
-      '@cms/core',
-      ...CORE_PACKAGES.filter((name) => name !== '@cms/core'),
+      '@otw/core',
+      ...CORE_PACKAGES.filter((name) => name !== '@otw/core'),
       '@acme/cms-lms',
     ])
     expect(config.serverExternalPackages).toEqual(['sharp', '@electric-sql/pglite'])

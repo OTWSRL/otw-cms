@@ -1,4 +1,4 @@
-import { AdminIcon, Notice, Postbox } from '@cms/admin-ui'
+import { AdminIcon, Notice, Postbox } from '@otw/admin-ui'
 import Link from 'next/link'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
@@ -42,7 +42,7 @@ export async function DashboardScreen({ kernel, user, searchParams: params }: Sc
             </li>
             <li>
               <AdminIcon icon="dashboard" />
-              Next CMS {kernel.coreVersion}
+              {kernel.brand.name} {kernel.coreVersion}
             </li>
           </ul>
           <p>Signed in as {user.name || user.email}.</p>

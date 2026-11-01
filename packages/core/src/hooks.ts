@@ -1,4 +1,4 @@
-import type { Logger } from '@cms/sdk'
+import type { Logger } from '@otw/sdk'
 import { HookError } from './errors'
 
 type Handler = (...args: never[]) => unknown

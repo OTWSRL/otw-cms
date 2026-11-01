@@ -1,7 +1,7 @@
-# Updates Next CMS and its plugins in a pull request. Run it from the admin (Dashboard › Updates,
+# Updates the CMS and its plugins in a pull request. Run it from the admin (Dashboard › Updates,
 # with CMS_GITHUB_REPO and CMS_GITHUB_TOKEN set on the site), from the Actions tab, or on the
 # schedule below. Merging the pull request deploys the update; build:deploy migrates.
-name: Update Next CMS
+name: CMS updates
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
         required: false
         default: ''
       plugins_only:
-        description: Leave Next CMS itself where it is
+        description: Leave the CMS itself where it is
         type: boolean
         default: false
   schedule:
@@ -60,4 +60,4 @@ jobs:
           fi
           git push origin "$branch"
           gh pr create --head "$branch" --title "$(git log -1 --format=%s)" \
-            --body "Opened by the Update Next CMS workflow. Merging deploys it; database changes run in the deploy step (build:deploy)."
+            --body "Opened by the CMS updates workflow. Merging deploys it; database changes run in the deploy step (build:deploy)."

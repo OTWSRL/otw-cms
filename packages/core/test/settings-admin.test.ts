@@ -1,9 +1,9 @@
-import type { PluginDefinition, User } from '@cms/sdk'
+import type { PluginDefinition, User } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type Kernel, type KernelOptions } from '../src/kernel'
 import { createDb, formPost, memoryLogger, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@cms/sdk' {
+declare module '@otw/sdk' {
   interface Settings {
     'shop.currency': string
     'shop.guests': boolean
@@ -285,7 +285,7 @@ describe('saving settings pages', () => {
     expect(response.status).toBe(303)
     const next = await boot()
     expect(next.setting('shop.currency')).toBe('EUR')
-    expect(next.setting('site.title')).toBe('Next CMS')
+    expect(next.setting('site.title')).toBe('My Site')
   })
 
   it('refuses pages the user may not change', async () => {

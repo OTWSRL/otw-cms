@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CapabilityStore } from '../src/capabilities'
 
-declare module '@cms/sdk' {
+declare module '@otw/sdk' {
   interface Capabilities {
     'shop.manage_orders': true
     'shop.refund_orders': true

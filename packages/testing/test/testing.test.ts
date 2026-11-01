@@ -1,4 +1,4 @@
-import { definePlugin, HttpError } from '@cms/sdk'
+import { definePlugin, HttpError } from '@otw/sdk'
 import { sql } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createTestKernel, type TestKernel } from '../src'

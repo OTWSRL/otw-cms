@@ -1,4 +1,4 @@
-import type { RegistryItem, User } from '@cms/sdk'
+import type { RegistryItem, User } from '@otw/sdk'
 
 /** Money is always an integer in the currency's minor unit (cents for USD). */
 export type Money = number
@@ -160,7 +160,7 @@ export interface CommerceService {
   parseMoney(input: string): Money | null
 }
 
-declare module '@cms/sdk' {
+declare module '@otw/sdk' {
   interface Registries {
     'commerce.gateways': PaymentGateway
     'commerce.purchasables': Purchasable

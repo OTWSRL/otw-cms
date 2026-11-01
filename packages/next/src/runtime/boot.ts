@@ -1,5 +1,5 @@
-import { createKernel, type Env, type Kernel } from '@cms/core'
-import type { Database } from '@cms/sdk'
+import { createKernel, type Env, type Kernel } from '@otw/core'
+import type { Database } from '@otw/sdk'
 import type { Site } from '../site-registry'
 import { activePluginsFromEnv, migrationModeFromEnv } from './settings'
 import { updateServiceFromEnv } from './updates'
@@ -24,6 +24,7 @@ export function bootSite(
     secret: env.CMS_SECRET || undefined,
     trustProxy: ['1', 'true'].includes(env.CMS_TRUST_PROXY ?? ''),
     updates: updateServiceFromEnv(env),
+    brand: site.brand,
     onChange,
   })
 }

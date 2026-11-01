@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /** The CMS's own packages ship TypeScript source, so Next compiles them like app code. */
-export const CORE_PACKAGES = ['@cms/sdk', '@cms/core', '@cms/admin-ui', '@cms/next']
+export const CORE_PACKAGES = ['@otw/sdk', '@otw/core', '@otw/admin-ui', '@otw/next']
 
 /**
  * @param {string} file

@@ -1,5 +1,5 @@
-import { safeRedirectPath } from '@cms/core'
-import type { SearchParams } from '@cms/sdk'
+import { safeRedirectPath } from '@otw/core'
+import type { SearchParams } from '@otw/sdk'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getKernel } from '../../runtime/kernel'
@@ -14,14 +14,19 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
   if (!(await kernel.auth.hasUsers())) redirect('/admin/setup')
   const next = safeRedirectPath(firstParam(params.next)) ?? '/admin'
   if (kernel.can(user, 'core.access_admin')) redirect(next)
-  const site = kernel.setting('site.title') ?? 'Next CMS'
+  const site = kernel.setting('site.title') ?? 'My Site'
+  // As wp-login.php's logo says "Powered by WordPress" and links to wordpress.org.
+  const { brand } = kernel
+  const logo = brand.url
+    ? { href: brand.url, label: `Powered by ${brand.name}` }
+    : { href: '/', label: site }
 
   return (
     <>
       <h1>
-        <Link href="/" className="login-logo">
-          <BrandMark />
-          <span className="screen-reader-text">{site}</span>
+        <Link href={logo.href} className="login-logo">
+          <BrandMark brand={brand} />
+          <span className="screen-reader-text">{logo.label}</span>
         </Link>
       </h1>
       <FlashNotice flash={kernel.readFlash(params.flash)} />

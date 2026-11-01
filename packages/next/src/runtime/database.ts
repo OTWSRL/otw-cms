@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import type { Database } from '@cms/sdk'
+import type { Database } from '@otw/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle as drizzlePostgres } from 'drizzle-orm/node-postgres'
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
 import { Pool } from 'pg'
-import type { Env } from '@cms/core'
+import type { Env } from '@otw/core'
 
 export interface DatabaseHandle {
   db: Database

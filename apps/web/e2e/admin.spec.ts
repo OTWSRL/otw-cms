@@ -15,7 +15,9 @@ test('the first visit sets up the administrator', async ({ page }) => {
   await expect(page).toHaveURL(/\/admin\?flash=/)
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   await notice(page, 'Your site is ready.')
-  await expect(page).toHaveTitle('Dashboard · Admin · Next CMS')
+  await expect(page).toHaveTitle('Dashboard · Admin · My Site')
+  // cms.config.json gives no brand, so the admin goes by the CMS's own name.
+  await expect(page.getByRole('contentinfo')).toContainText('Thank you for creating with OTW CMS.')
 
   // Setup is closed now.
   await page.goto('/admin/setup')
@@ -70,7 +72,7 @@ test('products created in the admin go live in the shop', async ({ page }) => {
   await openSection(page, 'Commerce')
   await expect(page).toHaveURL('/admin/commerce/products')
   await page.getByRole('link', { name: 'Add Product' }).click()
-  await expect(page).toHaveTitle('Add Product · Admin · Next CMS')
+  await expect(page).toHaveTitle('Add Product · Admin · My Site')
 
   await page.getByLabel('Title').fill('Linen Apron')
   await page.getByLabel('Slug').fill('linen-apron')
@@ -111,7 +113,7 @@ test('settings saved in the admin change the site', async ({ page }) => {
     'aria-current',
     'page',
   )
-  await expect(page).toHaveTitle('General settings · Admin · Next CMS')
+  await expect(page).toHaveTitle('General settings · Admin · My Site')
 
   const site = page.getByRole('region', { name: 'Site' })
   await site.getByLabel('Site title').fill('Ada’s Shop')
@@ -127,7 +129,7 @@ test('settings saved in the admin change the site', async ({ page }) => {
   await site.getByLabel('Site title').fill('')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await notice(page, 'Settings saved.')
-  await expect(site.getByLabel('Site title')).toHaveValue('Next CMS')
+  await expect(site.getByLabel('Site title')).toHaveValue('My Site')
 })
 
 test('plugins add pages under Settings and sections to each other’s pages', async ({ page }) => {
@@ -137,7 +139,7 @@ test('plugins add pages under Settings and sections to each other’s pages', as
   await expect(settings.getByRole('link')).toHaveText(['General', 'Shop', 'Payments'])
   await settings.getByRole('link', { name: 'Payments' }).click()
   await expect(page).toHaveURL('/admin/commerce/settings/payments')
-  await expect(page).toHaveTitle('Payment settings · Admin · Next CMS')
+  await expect(page).toHaveTitle('Payment settings · Admin · My Site')
   await expect(settings.getByRole('link', { name: 'Payments' })).toHaveAttribute(
     'aria-current',
     'page',

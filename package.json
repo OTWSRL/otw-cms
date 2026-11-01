@@ -1,5 +1,5 @@
 {
-  "name": "nextjs-cms",
+  "name": "otw-cms",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.5.2",
@@ -7,16 +7,16 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "dev": "pnpm --filter @cms/web dev",
-    "build": "pnpm --filter @cms/web build",
-    "seed": "pnpm --filter @cms/web seed",
+    "dev": "pnpm --filter @otw/web dev",
+    "build": "pnpm --filter @otw/web build",
+    "seed": "pnpm --filter @otw/web seed",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run --testTimeout=15000",
     "test:watch": "vitest --testTimeout=15000",
-    "test:e2e": "pnpm --filter @cms/web test:e2e",
+    "test:e2e": "pnpm --filter @otw/web test:e2e",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
   },
   "devDependencies": {

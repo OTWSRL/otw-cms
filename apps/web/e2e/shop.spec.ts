@@ -6,7 +6,7 @@ test('a shopper finds the shop through the plugin slot and places an order', asy
 
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Shop' }).click()
   await expect(page).toHaveURL('/shop')
-  await expect(page).toHaveTitle('Shop · Next CMS')
+  await expect(page).toHaveTitle('Shop · My Site')
   // The admin specs add products too, so check for the seeded ones rather than a count.
   for (const name of ['Canvas Tote', 'Ceramic Mug', 'Field Notebook']) {
     await expect(page.getByRole('link', { name: new RegExp(name) })).toBeVisible()
@@ -14,7 +14,7 @@ test('a shopper finds the shop through the plugin slot and places an order', asy
 
   await page.getByRole('link', { name: /Ceramic Mug/ }).click()
   await expect(page).toHaveURL('/product/ceramic-mug')
-  await expect(page).toHaveTitle('Ceramic Mug · Next CMS')
+  await expect(page).toHaveTitle('Ceramic Mug · My Site')
   await expect(page.getByText('$18.00')).toBeVisible()
 
   await page.getByLabel('Email').fill('ana@example.com')

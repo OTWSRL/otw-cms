@@ -29,8 +29,8 @@ import type {
   SlotComponent,
   SlotName,
   User,
-} from '@cms/sdk'
-import { ActionError, ForbiddenError } from '@cms/sdk'
+} from '@otw/sdk'
+import { ActionError, ForbiddenError } from '@otw/sdk'
 import {
   actionPath,
   adminPath,
@@ -43,6 +43,7 @@ import {
 import { AdminMenu, type AdminMenuSection } from './admin-menu'
 import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
 import { createAuthService, type AuthService } from './auth'
+import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
 import {
   CORE,
@@ -132,6 +133,8 @@ export interface KernelOptions {
   migrations?: 'startup' | 'deploy'
   /** How this site applies updates from the admin (Dashboard › Updates), if it can. */
   updates?: UpdateService
+  /** The name the admin shows for the CMS. Defaults to DEFAULT_BRAND. */
+  brand?: Brand
 }
 
 export interface ResolvedPage {
@@ -157,6 +160,7 @@ export interface PluginStatus {
 
 export interface Kernel {
   readonly coreVersion: string
+  readonly brand: Brand
   /** Loaded plugin ids, in load order. */
   readonly active: readonly string[]
   readonly skipped: readonly SkippedPlugin[]
@@ -817,6 +821,7 @@ function buildKernel(input: {
 
   return {
     coreVersion: input.coreVersion,
+    brand: options.brand ?? DEFAULT_BRAND,
     active,
     skipped: input.skipped,
     databaseUpdates: prepared.databaseUpdates,

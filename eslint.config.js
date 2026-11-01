@@ -34,7 +34,7 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    // The site, and @cms/next, which holds the CMS's Next.js routes and components.
+    // The site, and @otw/next, which holds the CMS's Next.js routes and components.
     files: ['apps/web/**/*.{ts,tsx}', 'packages/next/**/*.{ts,tsx}'],
     plugins: { '@next/next': nextPlugin },
     settings: { next: { rootDir: 'apps/web/' } },

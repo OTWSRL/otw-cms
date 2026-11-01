@@ -1,5 +1,5 @@
-import type { Kernel } from '@cms/core'
-import type { CapabilityName, SearchParams, User } from '@cms/sdk'
+import type { Kernel } from '@otw/core'
+import type { CapabilityName, SearchParams, User } from '@otw/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound } from 'next/navigation'
 import { cache, type ReactNode } from 'react'
@@ -139,7 +139,7 @@ export async function AdminPage(props: AdminRouteProps) {
 /** `Plugins · Admin · My Site`, or `Log In · My Site`; never indexed. */
 export async function generateAdminMetadata(props: AdminRouteProps): Promise<Metadata> {
   const { path, query } = await location(props)
-  const site = (await getKernel()).setting('site.title') ?? 'Next CMS'
+  const site = (await getKernel()).setting('site.title') ?? 'My Site'
   const login = Object.hasOwn(LOGIN_SCREENS, path) ? LOGIN_SCREENS[path] : undefined
   const title = login
     ? `${login.title} · ${site}`
