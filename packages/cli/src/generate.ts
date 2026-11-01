@@ -5,6 +5,8 @@ import type { Brand } from '@otw/core'
 export interface CmsConfig {
   /** npm package names of installed plugins. Installing a plugin adds it here and rebuilds. */
   plugins: string[]
+  /** New paths for plugin pages, by qualified name: `{ "commerce.product": "/p/:slug" }`. */
+  routes?: Record<string, string>
   /** The name the admin shows for the CMS, when it isn't the CMS's own. */
   brand?: Brand
 }
@@ -68,6 +70,33 @@ function parseBrand(raw: unknown): Brand {
   return brand
 }
 
+// `{pluginId}.{page name}`, as plugins name their pages.
+const ROUTE_KEY = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.[a-z][a-z0-9-]*$/
+// The kernel checks the segments and parameters against the plugin's page when the site boots.
+const ROUTE_PATH = /^\/[A-Za-z0-9._~:/-]*$/
+const MAX_ROUTE_PATH = 200
+
+function parseRoutes(raw: unknown): Record<string, string> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error(
+      'cms.config.json: "routes" must be an object, such as { "commerce.product": "/p/:slug" }',
+    )
+  }
+  const routes: Record<string, string> = {}
+  for (const [key, path] of Object.entries(raw)) {
+    if (!ROUTE_KEY.test(key)) {
+      throw new Error(
+        `cms.config.json: routes: "${key}" must name a plugin's page, such as "commerce.product"`,
+      )
+    }
+    if (typeof path !== 'string' || path.length > MAX_ROUTE_PATH || !ROUTE_PATH.test(path)) {
+      throw new Error(`cms.config.json: routes: "${key}" must be a path such as /shop/:slug`)
+    }
+    routes[key] = path
+  }
+  return routes
+}
+
 export function parseConfig(raw: unknown): CmsConfig {
   const plugins = (raw as { plugins?: unknown } | null)?.plugins
   if (!Array.isArray(plugins)) throw new Error('cms.config.json must contain a "plugins" array')
@@ -80,10 +109,12 @@ export function parseConfig(raw: unknown): CmsConfig {
     if (seen.has(name)) throw new Error(`Plugin "${name}" is listed twice`)
     seen.add(name)
   }
-  const brand = (raw as { brand?: unknown }).brand
-  return brand === undefined
-    ? { plugins: [...seen] }
-    : { plugins: [...seen], brand: parseBrand(brand) }
+  const { routes, brand } = raw as { routes?: unknown; brand?: unknown }
+  return {
+    plugins: [...seen],
+    ...(routes === undefined ? {} : { routes: parseRoutes(routes) }),
+    ...(brand === undefined ? {} : { brand: parseBrand(brand) }),
+  }
 }
 
 export async function readConfig(path: string): Promise<CmsConfig> {
@@ -145,6 +176,7 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
       'export const site = defineSite({',
       `  plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}],`,
       `  packages: [${config.plugins.map((name) => JSON.stringify(name)).join(', ')}],`,
+      ...(config.routes ? [`  routes: ${JSON.stringify(config.routes)},`] : []),
       ...(config.brand ? [`  brand: ${JSON.stringify(config.brand)},`] : []),
       '})',
     ]),

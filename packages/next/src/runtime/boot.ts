@@ -29,6 +29,7 @@ export function bootSite(
     secret: env.CMS_SECRET || undefined,
     trustProxy: ['1', 'true'].includes(env.CMS_TRUST_PROXY ?? ''),
     updates: updateServiceFromEnv(env),
+    routes: site.routes,
     brand: site.brand,
     onChange,
   })

@@ -7,6 +7,8 @@ export interface Site {
   plugins: readonly PluginDefinition[]
   /** Each plugin's npm package, in the same order, for matching update checks to plugins. */
   packages?: readonly string[]
+  /** New paths for plugin pages, by qualified name, from `cms.config.json`. */
+  routes?: Readonly<Record<string, string>>
   /** The name the admin shows for the CMS, from `cms.config.json`. */
   brand?: Brand
 }

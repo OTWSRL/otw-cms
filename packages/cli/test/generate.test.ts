@@ -55,6 +55,26 @@ describe('parseConfig', () => {
   })
 })
 
+describe('parseConfig routes', () => {
+  it('takes new paths for plugin pages, by qualified name', () => {
+    const routes = { 'commerce.product': '/p/:slug', 'lms.course': '/learn/:slug' }
+    expect(parseConfig({ plugins: [], routes })).toEqual({ plugins: [], routes })
+  })
+
+  it.each([
+    ['/p/:slug', '"routes" must be an object'],
+    [null, '"routes" must be an object'],
+    [{ product: '/p/:slug' }, 'routes: "product" must name a plugin\'s page'],
+    [{ 'Commerce.product': '/p' }, "must name a plugin's page"],
+    [{ 'commerce.product': 'p/:slug' }, '"commerce.product" must be a path such as /shop/:slug'],
+    [{ 'commerce.product': 42 }, 'must be a path'],
+    [{ 'commerce.product': '/p/<script>' }, 'must be a path'],
+    [{ 'commerce.product': `/${'a'.repeat(200)}` }, 'must be a path'],
+  ])('rejects the routes %j', (routes, message) => {
+    expect(() => parseConfig({ plugins: [], routes })).toThrow(message)
+  })
+})
+
 describe('managedFiles', () => {
   const config = { plugins: ['@otw/plugin-commerce', '@otw/plugin-commerce-stripe'] }
 
@@ -75,6 +95,16 @@ export const site = defineSite({
     })
     expect(managedFiles({ plugins: [] }, { srcDir: 'src' })[0]!.content).toContain(
       '  plugins: [],\n  packages: [],',
+    )
+  })
+
+  it('gives the site its route overrides, when it has any', () => {
+    const [site] = managedFiles(
+      { plugins: [], routes: { 'commerce.product': '/p/:slug' } },
+      { srcDir: 'src' },
+    )
+    expect(site!.content).toContain(
+      '  packages: [],\n  routes: {"commerce.product":"/p/:slug"},\n})',
     )
   })
 

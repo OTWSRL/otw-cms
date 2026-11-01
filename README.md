@@ -52,6 +52,10 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   overwritten. The admin is one route, so new core screens arrive with the package. For its own
   home page a site writes `src/app/(site)/page.tsx`; otherwise plugins can claim `/`. Files a
   version stops managing are removed while they still carry the line.
+- **Plugin page paths.** A site can move a plugin's pages with `routes` in `cms.config.json`:
+  `"routes": { "commerce.product": "/p/:slug" }`. The new path must keep the page's parameters;
+  links built with `cms.routes.url()` follow it. An override for a page no plugin has is a warning
+  on the Dashboard; one with different parameters leaves that plugin off, with the reason.
 - **White label.** The admin calls the CMS "OTW CMS": the footer, the Dashboard, Updates, and
   the logo on the sign-in screens. A `brand` in `cms.config.json` gives it another name:
   `"brand": { "name": "Acme Sites", "url": "https://acme.example", "logo": "/brand/logo.svg" }`.
@@ -139,7 +143,7 @@ export default definePlugin({
   setup(cms) {
     cms.routes.page({
       name: 'course',
-      path: '/courses/:slug', // sites can override: { 'lms.course': '/learn/:slug' }
+      path: '/courses/:slug', // a site can move it: "routes": { "lms.course": "/learn/:slug" }
       load: ({ params }) => findCourse(cms.db, params.slug!), // null → 404
       metadata: ({ data }) => ({ title: data.title }),
       component: ({ data }) => <CoursePage course={data} />,
