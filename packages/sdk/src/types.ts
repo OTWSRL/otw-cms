@@ -24,6 +24,7 @@ import type {
 /** Works with any Drizzle Postgres driver (node-postgres in production, PGlite in dev and tests). */
 export type Database = PgDatabase<PgQueryResultHKT, Record<string, never>>
 
+/** The plugin's logger: each entry carries the plugin's id, and context is logged as data. */
 export interface Logger {
   debug(message: string, context?: Record<string, unknown>): void
   info(message: string, context?: Record<string, unknown>): void
@@ -33,25 +34,35 @@ export interface Logger {
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
+/** How a handler is added to a hook. */
 export interface HookOptions {
   /** Lower runs first. Defaults to 10, as in WordPress. */
   priority?: number
 }
 
+/** Receives the value and the filter's context, and returns the value (changed or not). */
 export type FilterHandler<K extends FilterName> = (
   value: FilterValue<K>,
   context: FilterContext<K>,
 ) => FilterValue<K> | Promise<FilterValue<K>>
 
+/** Receives the action's payload. Its return value is ignored. */
 export type ActionHandler<K extends ActionName> = (payload: Actions[K]) => void | Promise<void>
 
+/** `cms.hooks`: WordPress's actions and filters, typed by the `Actions` and `Filters` interfaces. */
 export interface HooksApi {
+  /** Adds a handler to a filter, like `add_filter()`. */
   addFilter<K extends FilterName>(name: K, handler: FilterHandler<K>, options?: HookOptions): void
+  /**
+   * Passes `value` through every handler in priority order, like `apply_filters()`, and returns
+   * the result. A handler that throws fails the whole call.
+   */
   applyFilters<K extends FilterName>(
     name: K,
     value: FilterValue<K>,
     context: FilterContext<K>,
   ): Promise<FilterValue<K>>
+  /** Adds a handler to an action, like `add_action()`. */
   addAction<K extends ActionName>(name: K, handler: ActionHandler<K>, options?: HookOptions): void
   /**
    * Runs every handler. A failing handler is logged and skipped so one broken plugin can't
@@ -62,11 +73,14 @@ export interface HooksApi {
 
 // ── Registries & services ────────────────────────────────────────────────────
 
+/** What every registry item has: an id, unique within its registry. */
 export interface RegistryItem {
   id: string
 }
 
+/** A list one plugin owns and others add to, such as Commerce's payment gateways. */
 export interface Registry<T extends RegistryItem> {
+  /** Adds an item during setup. An id the registry already has throws. */
   add(item: T): void
   get(id: string): T | undefined
   has(id: string): boolean
@@ -74,20 +88,28 @@ export interface Registry<T extends RegistryItem> {
   list(): T[]
 }
 
+/** The registry declared under a name, typed by its item. */
 export type RegistryOf<K extends RegistryName> = Registry<Extract<Registries[K], RegistryItem>>
 
+/** `cms.registries`: defines a plugin's own registries and reaches other plugins'. */
 export interface RegistriesApi {
   /** Called once by the owning plugin. Other plugins can only add to defined registries. */
   define<K extends RegistryName>(name: K): RegistryOf<K>
+  /** A registry another plugin defined. Throws if it isn't defined: require its owner, or use `when()`. */
   get<K extends RegistryName>(name: K): RegistryOf<K>
 }
 
+/** `cms.services`: APIs plugins offer one another, typed by the `Services` interface. */
 export interface ServicesApi {
+  /** Offers this plugin's service under its name. One plugin provides each; a second throws. */
   provide<K extends ServiceName>(name: K, service: Services[K]): void
+  /** Another plugin's service. Throws if no active plugin provides it: require it, or use `when()`. */
   get<K extends ServiceName>(name: K): Services[K]
 }
 
+/** `cms.settings`: reads any setting, already resolved from code, environment, database and default. */
 export interface SettingsApi {
+  /** The setting's value, or `undefined` when it has none and no default. */
   get<K extends SettingName>(key: K): Settings[K] | undefined
 }
 
@@ -103,6 +125,7 @@ interface SettingFieldBase {
   env?: string
 }
 
+/** A line of text, trimmed when saved. */
 export interface TextSetting extends SettingFieldBase {
   type: 'text'
   default?: string
@@ -112,11 +135,13 @@ export interface TextSetting extends SettingFieldBase {
   validate?: (value: string) => string | null
 }
 
+/** A checkbox. */
 export interface BooleanSetting extends SettingFieldBase {
   type: 'boolean'
   default?: boolean
 }
 
+/** A choice from a fixed list. */
 export interface SelectSetting extends SettingFieldBase {
   type: 'select'
   options: readonly { value: string; label: string }[]
@@ -129,8 +154,10 @@ export interface SecretSetting extends SettingFieldBase {
   env: string
 }
 
+/** One field in a plugin's `settings`. */
 export type SettingDefinition = TextSetting | BooleanSetting | SelectSetting | SecretSetting
 
+/** The fields that can hold a value of type `V`: a checkbox for booleans, the rest for strings. */
 export type SettingDefinitionFor<V> = [V] extends [boolean]
   ? BooleanSetting
   : [V] extends [string]
@@ -144,6 +171,7 @@ export type SettingDefinitions = {
 
 // ── Users & capabilities ─────────────────────────────────────────────────────
 
+/** A signed-in person, as admin pages, actions and capability checks receive them. */
 export interface User {
   id: string
   email: string
@@ -151,11 +179,13 @@ export interface User {
   role: string
 }
 
+/** A role's label and the capabilities it starts with. */
 export interface RoleDefinition {
   label: string
   capabilities?: readonly CapabilityName[]
 }
 
+/** How a capability shows in the admin, and which roles start with it. */
 export interface CapabilityDefinition {
   label: string
   /** Existing roles that get this capability. Administrators have every capability. */
@@ -168,6 +198,7 @@ export interface CapabilityDefinition {
  */
 export type RequiredCapabilities = readonly [CapabilityName, ...CapabilityName[]] | false
 
+/** A meta capability's label and how it maps an object to the capabilities it needs. */
 export interface MetaCapabilityDefinition<K extends MetaCapabilityName> {
   label: string
   /**
@@ -184,6 +215,7 @@ export type CapabilityExtension<K extends MetaCapabilityName> = (
   ...args: MetaCapabilities[K]
 ) => RequiredCapabilities
 
+/** `cms.auth`: roles, capabilities and checks, as in WordPress. */
 export interface AuthApi {
   /** Adds a role, like WordPress's `add_role()`. */
   role(id: string, definition: RoleDefinition): void
@@ -203,6 +235,10 @@ export interface AuthApi {
   ): void
   /** Runs after the owner's `map` (and earlier extensions), in load order. */
   extendCapability<K extends MetaCapabilityName>(name: K, extension: CapabilityExtension<K>): void
+  /**
+   * Whether `user` may do something, like `current_user_can()`. A meta capability takes the object
+   * it's checked against. `null` (signed out) has no capabilities.
+   */
   can<C extends CapabilityName | MetaCapabilityName>(
     user: User | null,
     capability: C,
@@ -215,6 +251,7 @@ export interface AuthApi {
 /** A core menu section, or a plugin id to join that plugin's section (`add_submenu_page`). */
 export type AdminMenuParent = 'dashboard' | 'plugins' | 'users' | 'settings' | (string & {})
 
+/** Where an admin page shows in the menu. */
 export interface AdminMenuPlacement {
   label: string
   /** Lower comes first. Defaults to 10. */
@@ -226,12 +263,14 @@ export interface AdminMenuPlacement {
   parent?: AdminMenuParent
 }
 
+/** What an admin page's `load` receives. */
 export interface AdminPageContext {
   params: Record<string, string>
   searchParams: SearchParams
   user: User
 }
 
+/** What an admin page's `component`, `title` and `titleAction` receive: the context and what `load` returned. */
 export interface AdminPageProps<TData> extends AdminPageContext {
   data: TData
 }
@@ -256,16 +295,19 @@ export interface AdminPage<TData = undefined> {
   component: (props: AdminPageProps<TData>) => ReactNode | Promise<ReactNode>
 }
 
+/** The button beside an admin page's title. */
 export interface AdminTitleAction {
   label: string
   url: string
 }
 
+/** What an admin action's handler receives: who posted the form, and what it sent. */
 export interface AdminActionContext {
   user: User
   form: FormData
 }
 
+/** Where an admin action sends the user next, and what it tells them. */
 export interface AdminActionResult {
   /** Same-site path to go to next. Defaults to the page that posted the form. */
   redirect?: string
@@ -323,8 +365,11 @@ export interface SettingsFields {
   fields: readonly SettingName[]
 }
 
+/** `cms.admin`: this plugin's admin pages, form actions and settings screens. */
 export interface AdminApi {
+  /** Adds an admin page, like `add_menu_page()` or `add_submenu_page()`. */
   page<TData = undefined>(page: AdminPage<TData>): void
+  /** Adds a form action, posted to `actionUrl(name)`. */
   action(action: AdminAction): void
   /**
    * Settings stay declared on the plugin definition; these say where they show. Fields this
@@ -341,22 +386,30 @@ export interface AdminApi {
 
 // ── Routes & slots ───────────────────────────────────────────────────────────
 
+/** A URL's query string, as Next.js passes it: repeated keys become arrays. */
 export type SearchParams = Record<string, string | string[] | undefined>
 
+/** What a page route's `load` receives: the path's parameters and the query string. */
 export interface PageContext {
   params: Record<string, string>
   searchParams: SearchParams
 }
 
+/** What a page route's `component` and `metadata` receive: the context and what `load` returned. */
 export interface PageProps<TData> extends PageContext {
   data: TData
 }
 
+/** The page's `<title>` and meta description. */
 export interface PageMetadata {
   title?: string
   description?: string
 }
 
+/**
+ * A page on the site, served by the site's catch-all route. TypeScript infers `TData` from `load`:
+ * write `load` before `metadata` and `component`.
+ */
 export interface PageRoute<TData = undefined> {
   /** Unique within the plugin. Addressed globally as `${pluginId}.${name}`. */
   name: string
@@ -368,14 +421,18 @@ export interface PageRoute<TData = undefined> {
   component: (props: PageProps<TData>) => ReactNode | Promise<ReactNode>
 }
 
+/** The methods an API route can answer. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
+/** What an API route's handler receives besides the request: the path's parameters. */
 export interface ApiContext {
   params: Record<string, string>
 }
 
+/** Answers an API request with a standard `Response`. */
 export type ApiHandler = (request: Request, context: ApiContext) => Response | Promise<Response>
 
+/** An HTTP endpoint for the site's pages, other servers, or scripts. */
 export interface ApiRoute {
   method: HttpMethod
   /** Mounted under `/api/p/{pluginId}`. */
@@ -383,8 +440,11 @@ export interface ApiRoute {
   handler: ApiHandler
 }
 
+/** `cms.routes`: this plugin's pages on the site and its API endpoints. */
 export interface RoutesApi {
+  /** Adds a page to the site. */
   page<TData = undefined>(route: PageRoute<TData>): void
+  /** Adds an API endpoint under `/api/p/{pluginId}`. */
   api(route: ApiRoute): void
   /** Builds the public URL of any page route by its qualified name, honouring site overrides. */
   url(name: string, params?: Record<string, string>): string
@@ -392,11 +452,14 @@ export interface RoutesApi {
   apiUrl(path: string): string
 }
 
+/** A component that fills a slot: it receives the slot's props. */
 export type SlotComponent<K extends SlotName = SlotName> = (
   props: Slots[K],
 ) => ReactNode | Promise<ReactNode>
 
+/** `cms.slots`: renders components in other plugins' slots, and reads the fills of this plugin's own. */
 export interface SlotsApi {
+  /** Renders `component` wherever the slot is shown. Lower `priority` comes first; defaults to 10. */
   fill<K extends SlotName>(name: K, fill: { component: SlotComponent<K>; priority?: number }): void
   /**
    * The fills for a slot, in priority order, for plugins that offer a slot on their own screens.
@@ -407,12 +470,14 @@ export interface SlotsApi {
 
 // ── Plugins ──────────────────────────────────────────────────────────────────
 
+/** A change to the database, run once and recorded so it never runs twice. */
 export interface Migration {
   /** Unique within the plugin. Applied in array order, once. */
   id: string
   up: (db: Database) => Promise<unknown>
 }
 
+/** What a plugin's `setup(cms)` receives: every API it registers with. */
 export interface PluginContext {
   readonly plugin: { readonly id: string; readonly version: string }
   readonly hooks: HooksApi
@@ -438,6 +503,7 @@ export interface PluginContext {
   isActive(pluginId: string): boolean
 }
 
+/** A plugin: what it is, what it needs, and what it sets up. Pass it to `definePlugin()`. */
 export interface PluginDefinition {
   /** Lowercase kebab-case, unique across the site. */
   id: string
@@ -455,5 +521,9 @@ export interface PluginDefinition {
   settings?: SettingDefinitions
   /** Beside the plugin's section in the admin menu. Defaults to `admin`, a gear. */
   icon?: AdminIcon
+  /**
+   * Registers everything the plugin adds: hooks, routes, admin pages, slots. Runs on every boot,
+   * after the plugins it depends on, and after its migrations.
+   */
   setup?: (cms: PluginContext) => void | Promise<void>
 }

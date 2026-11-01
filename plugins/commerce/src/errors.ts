@@ -1,3 +1,4 @@
+/** Why a commerce call failed, for code that handles some failures differently. */
 export type CommerceErrorCode =
   | 'invalid_input'
   | 'unknown_gateway'
@@ -9,6 +10,7 @@ export type CommerceErrorCode =
   | 'payment_mismatch'
   | 'invalid_state'
 
+/** Thrown by the commerce service with a `code`; its message is safe to show the buyer. */
 export class CommerceError extends Error {
   readonly code: CommerceErrorCode
 

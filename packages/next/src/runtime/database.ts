@@ -7,13 +7,16 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
 import { Pool } from 'pg'
 import type { Env } from '@otw/core'
 
+/** An open database and how to close it. */
 export interface DatabaseHandle {
   db: Database
   close(): Promise<void>
 }
 
+/** Where the embedded database lives when `CMS_DATA_DIR` isn't set, relative to the site. */
 export const DEFAULT_DATA_DIR = '.data/pglite'
 
+/** The embedded database's directory: `CMS_DATA_DIR`, or `DEFAULT_DATA_DIR`, made absolute. */
 export function dataDir(env: Env = process.env): string {
   // Runtime data, not a build input: keep the bundler from tracing the whole project.
   return resolve(/* turbopackIgnore: true */ env.CMS_DATA_DIR || DEFAULT_DATA_DIR)

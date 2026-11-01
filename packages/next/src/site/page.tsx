@@ -9,6 +9,7 @@ import {
   serializeSearchParams,
 } from '../runtime/search-params'
 
+/** What Next.js passes the storefront's routes: the path's segments and the query string. */
 export interface SiteRouteProps {
   params: Promise<{ slug?: string[] }>
   searchParams: Promise<SearchParams>
@@ -28,6 +29,7 @@ async function pageFor({ params, searchParams }: SiteRouteProps) {
   }
 }
 
+/** The storefront route's metadata: the title and description of the plugin page at this path. */
 export async function generateSiteMetadata(props: SiteRouteProps): Promise<Metadata> {
   const { page } = await pageFor(props)
   return page ? page.metadata() : {}

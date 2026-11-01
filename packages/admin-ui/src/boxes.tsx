@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { cx } from './button'
 import { DismissButton } from './dismiss-button'
 
+/** A notice's colour: blue, green, yellow or red, as WordPress's `notice-*` classes. */
 export type NoticeType = 'info' | 'success' | 'warning' | 'error'
 
 /**

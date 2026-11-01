@@ -13,6 +13,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 
 export { createMemoryLogger, type LogEntry, type MemoryLogger } from '@otw/core'
 
+/** A booted kernel on its own database, with helpers to sign in and send requests. */
 export interface TestKernel {
   /** The current kernel; replaced by `reboot()`. */
   kernel: Kernel
@@ -27,6 +28,7 @@ export interface TestKernel {
   close(): Promise<void>
 }
 
+/** A request's body, headers and cookie. `json` and `form` set the content type. */
 export interface TestRequestInit {
   json?: unknown
   form?: Record<string, string>
@@ -36,7 +38,9 @@ export interface TestRequestInit {
   cookie?: string
 }
 
+/** The site's origin in tests. Requests are sent to it, and unsafe ones carry it as `Origin`. */
 export const TEST_ORIGIN = 'http://cms.test'
+/** The password `signIn()` gives the users it creates, for tests that sign in through the form. */
 export const TEST_PASSWORD = 'correct horse battery staple'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])

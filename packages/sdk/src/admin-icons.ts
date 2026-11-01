@@ -18,6 +18,7 @@ export const ADMIN_ICON_NAMES = [
   'calendar',
 ] as const
 
+/** One of the admin's built-in menu icons. */
 export type AdminIconName = (typeof ADMIN_ICON_NAMES)[number]
 
 /**

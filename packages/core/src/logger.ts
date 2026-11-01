@@ -16,12 +16,14 @@ export function withContext(logger: Logger, extra: Record<string, unknown>): Log
   }
 }
 
+/** One logged message, as a memory logger keeps it. */
 export interface LogEntry {
   level: keyof Logger
   message: string
   context: Record<string, unknown> | undefined
 }
 
+/** A logger that keeps what it's given in `entries`, so tests can assert on warnings. */
 export type MemoryLogger = Logger & { entries: LogEntry[] }
 
 /** Collects log entries in memory, for tests and diagnostics. */

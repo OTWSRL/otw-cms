@@ -24,6 +24,7 @@ import { UsersScreen } from './screens/users'
 import { SettingsForm } from './settings-form'
 import { AdminShell } from './shell'
 
+/** What Next.js passes the admin's catch-all route. */
 export interface AdminRouteProps {
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<SearchParams>

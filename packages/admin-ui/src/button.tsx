@@ -3,10 +3,12 @@ import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'reac
 /** WordPress's button styles: `button-primary`, `button` and the link-styled `button-link`. */
 export type ButtonVariant = 'primary' | 'secondary' | 'link' | 'delete'
 
+/** Joins class names, skipping the falsy ones: `cx('button', small && 'button-small')`. */
 export function cx(...names: (string | false | null | undefined)[]): string {
   return names.filter(Boolean).join(' ')
 }
 
+/** The class names for a button variant, for links and buttons styled by hand. */
 export function buttonClass(variant: ButtonVariant = 'secondary', small = false): string {
   return cx(
     variant === 'primary' && 'button button-primary',
@@ -22,6 +24,7 @@ interface Styled {
   small?: boolean
 }
 
+/** A `<button>` in WordPress's styles. Defaults to `type="button"`, so it never submits by accident. */
 export function Button({
   variant,
   small,
@@ -32,6 +35,7 @@ export function Button({
   return <button type={type} className={cx(buttonClass(variant, small), className)} {...rest} />
 }
 
+/** A link that looks like a button, such as "Add New". */
 export function ButtonLink({
   variant,
   small,

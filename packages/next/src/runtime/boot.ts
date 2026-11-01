@@ -4,12 +4,17 @@ import type { Site } from '../site-registry'
 import { activePluginsFromEnv, migrationModeFromEnv } from './settings'
 import { updateServiceFromEnv } from './updates'
 
+/** How `bootSite()` reads the environment, and what it tells the app. */
 export interface BootOptions {
   env?: Env
   /** Called after an admin changes activation or settings. */
   onChange?: () => void
 }
 
+/**
+ * Boots the site's kernel on a database, configured from the environment as the app is. For
+ * scripts that run outside Next.js, such as seeding.
+ */
 export function bootSite(
   site: Site,
   db: Database,

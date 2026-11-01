@@ -3,6 +3,7 @@ import { cx } from './button'
 import { RowToggle } from './row-toggle'
 import { SelectAll } from './select-all'
 
+/** A column of a `ListTable`: its header, and how a row renders in it. */
 export interface Column<T> {
   key: string
   /** The header, and the label before the value when a phone expands the row. */
@@ -114,6 +115,7 @@ export function ListTable<T>({
   )
 }
 
+/** Links under a row's primary column, separated by bars: Edit | View | Trash. */
 export function RowActions({ actions }: { actions: readonly ReactNode[] }) {
   return (
     <div className="row-actions">
@@ -127,6 +129,7 @@ export function RowActions({ actions }: { actions: readonly ReactNode[] }) {
   )
 }
 
+/** One of the filter links above a list, with its count. */
 export interface View {
   label: string
   href: string

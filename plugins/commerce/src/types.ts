@@ -3,8 +3,10 @@ import type { RegistryItem, User } from '@otw/sdk'
 /** Money is always an integer in the currency's minor unit (cents for USD). */
 export type Money = number
 
+/** `pending` until paid or cancelled; paid and cancelled orders don't change again. */
 export type OrderStatus = 'pending' | 'paid' | 'cancelled'
 
+/** A product in the shop, sold at `/product/{slug}`. */
 export interface Product {
   id: string
   slug: string
@@ -14,6 +16,7 @@ export interface Product {
   createdAt: Date
 }
 
+/** What creating or updating a product takes. Slugs are lowercased and must be unique. */
 export interface NewProduct {
   slug: string
   title: string
@@ -24,6 +27,7 @@ export interface NewProduct {
 /** An order without its lines, for listings. */
 export type OrderSummary = Omit<Order, 'lines' | 'adjustments'>
 
+/** Which orders `listOrders()` returns: a status, and a page of them. */
 export interface OrderListOptions {
   status?: OrderStatus
   /** Defaults to 25, at most 100. */
@@ -42,17 +46,20 @@ export interface Purchasable extends RegistryItem {
   resolveMany(ids: readonly string[]): Promise<Map<string, PurchasableItem>>
 }
 
+/** What a purchasable says about one item: its name on the order, and its price now. */
 export interface PurchasableItem {
   title: string
   unitPrice: Money
 }
 
+/** A line in a cart: which item (a purchasable `type` and its `id`) and how many. */
 export interface CartLineInput {
   type: string
   id: string
   quantity: number
 }
 
+/** A cart line with the title and price its purchasable gave it. */
 export interface QuotedLine extends CartLineInput {
   title: string
   unitPrice: Money
@@ -66,18 +73,21 @@ export interface Adjustment {
   amount: Money
 }
 
+/** A cart's subtotal, the adjustments filters added, and what's due. */
 export interface CartTotals {
   subtotal: Money
   adjustments: Adjustment[]
   total: Money
 }
 
+/** A priced cart, before any order exists: what `quote()` returns and checkout charges. */
 export interface Quote {
   currency: string
   lines: QuotedLine[]
   totals: CartTotals
 }
 
+/** A line on an order, kept as it was sold: later price changes don't touch it. */
 export interface OrderLine {
   itemType: string
   itemId: string
@@ -86,6 +96,7 @@ export interface OrderLine {
   quantity: number
 }
 
+/** An order with its lines and adjustments. `number` is the sequential one shown to people. */
 export interface Order {
   id: string
   number: number
@@ -102,13 +113,16 @@ export interface Order {
   lines: OrderLine[]
 }
 
+/** How a gateway starts payment: nothing to do now (pay later), or send the buyer to a URL. */
 export type PaymentInit = { type: 'none' } | { type: 'redirect'; url: string }
 
+/** Where a gateway sends the buyer back to: the order-received page, or the shop. */
 export interface PaymentUrls {
   success: string
   cancel: string
 }
 
+/** A way to pay, added to the `commerce.gateways` registry and offered at checkout. */
 export interface PaymentGateway extends RegistryItem {
   id: string
   label: string
@@ -116,12 +130,14 @@ export interface PaymentGateway extends RegistryItem {
   createPayment(order: Order, urls: PaymentUrls): Promise<PaymentInit>
 }
 
+/** What checkout takes: the buyer's email, the gateway's id, and the cart. */
 export interface CheckoutInput {
   email: string
   gateway: string
   lines: CartLineInput[]
 }
 
+/** A gateway's proof of payment, which `markPaid()` checks against the order. */
 export interface PaymentConfirmation {
   gateway: string
   reference: string
@@ -129,6 +145,7 @@ export interface PaymentConfirmation {
   currency: string
 }
 
+/** The `commerce` service: products, quotes, checkout and orders, for other plugins. */
 export interface CommerceService {
   readonly currency: string
   listProducts(): Promise<Product[]>
@@ -162,7 +179,9 @@ export interface CommerceService {
 
 declare module '@otw/sdk' {
   interface Registries {
+    /** Payment methods offered at checkout. Commerce adds "Pay later" unless it's switched off. */
     'commerce.gateways': PaymentGateway
+    /** Kinds of things that can be sold. Commerce adds `product`; an LMS would add `course`. */
     'commerce.purchasables': Purchasable
   }
   interface Filters {
@@ -170,11 +189,21 @@ declare module '@otw/sdk' {
     'commerce.cart.totals': [CartTotals, { lines: QuotedLine[]; currency: string }]
   }
   interface Actions {
+    /**
+     * A pending order was created at checkout, before the gateway starts payment. Runs inside the
+     * order's transaction, so handlers' writes commit or roll back with it.
+     */
     'commerce.order.created': { order: Order }
+    /**
+     * An order was paid: by a gateway's webhook, or marked paid by hand. Fires once per order,
+     * inside the transaction that marks it paid, so fulfilment (enrolling, shipping) can rely on it.
+     */
     'commerce.order.paid': { order: Order }
+    /** A pending order was cancelled, inside the transaction that cancels it. */
     'commerce.order.cancelled': { order: Order }
   }
   interface Services {
+    /** Commerce's API: products, quotes, checkout and orders. */
     commerce: CommerceService
   }
   interface Settings {
@@ -184,8 +213,11 @@ declare module '@otw/sdk' {
     'commerce.manualGateway': boolean
   }
   interface Capabilities {
+    /** Add and edit products. Shop managers have it. */
     'commerce.manage_products': true
+    /** See orders, and mark them paid or cancel them where the meta capabilities allow. Shop managers have it. */
     'commerce.manage_orders': true
+    /** Change Settings › Shop and Settings › Payments. Shop managers have it. */
     'commerce.manage_settings': true
   }
   interface MetaCapabilities {
@@ -194,6 +226,7 @@ declare module '@otw/sdk' {
      * plugin with offline payments (bank transfer, cheques) extends it for its own orders.
      */
     'commerce.mark_order_paid': [order: Order]
+    /** Cancel an order. Needs `commerce.manage_orders`, and only while the order is pending. */
     'commerce.cancel_order': [order: Order]
   }
   interface Slots {

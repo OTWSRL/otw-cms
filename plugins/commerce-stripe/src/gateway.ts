@@ -1,6 +1,7 @@
 import type { PaymentGateway } from '@otw/plugin-commerce'
 import type Stripe from 'stripe'
 
+/** The gateway's id in `commerce.gateways`, and on the orders it takes. */
 export const GATEWAY_ID = 'stripe'
 
 /** The slice of the Stripe SDK this plugin uses; tests inject a fake. */

@@ -15,6 +15,7 @@ export function AdminForbidden() {
   )
 }
 
+/** The admin's 404, for paths no core screen or active plugin serves. */
 export function AdminNotFound() {
   return (
     <main className="cms-login">

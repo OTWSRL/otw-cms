@@ -33,6 +33,11 @@ function holderFor(site: Site): KernelHolder {
   return holder
 }
 
+/**
+ * The site's kernel, for server components, route handlers and server actions: settings,
+ * capability checks, slots, plugin services. Booted once, and replaced after an admin changes
+ * plugins or settings.
+ */
 export function getKernel(): Promise<Kernel> {
   return holderFor(currentSite()).get()
 }

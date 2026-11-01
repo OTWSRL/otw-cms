@@ -22,6 +22,11 @@ Next: 7, Content.
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
 
+Every milestone ships with its documentation. The docs site, a project of its own beside this one
+(`../hello-world`), gets handbook pages for what changed, and every new public API gets a doc
+comment, which its Code Reference reads from the source. Its `pnpm check` fails on an
+undocumented export or extension point, a sample that no longer compiles, or a broken link.
+
 ## 3. Admin extensibility (done)
 
 What a plugin needs to extend the admin, and other plugins' admin, as in WordPress.

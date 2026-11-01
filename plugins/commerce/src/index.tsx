@@ -11,6 +11,7 @@ export { CommerceError, type CommerceErrorCode } from './errors'
 
 const CURRENCY = /^[A-Z]{3}$/
 
+/** "Pay later": bank transfer or cash on delivery. Orders stay pending until marked paid by hand. */
 export const manualGateway: PaymentGateway = {
   id: 'manual',
   label: 'Pay later',

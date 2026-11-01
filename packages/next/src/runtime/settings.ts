@@ -14,6 +14,7 @@ export function activePluginsFromEnv(env: Env): string[] | undefined {
 }
 
 const MIGRATION_MODES = ['startup', 'deploy'] as const
+/** When migrations run: `startup` or `deploy`, from `CMS_MIGRATIONS`. */
 export type MigrationMode = (typeof MIGRATION_MODES)[number]
 
 /**
