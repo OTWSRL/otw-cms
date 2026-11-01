@@ -17,6 +17,10 @@ extensibility and drop the flaw.
 5. **Packaging and updates.** Below.
 6. **Updates from the admin.** Below.
 
+Between 6 and 7: **request tracing**, with OpenTelemetry in core, and the **performance plugin**,
+WordPress's Query Monitor plus the browser's timings and Web Vitals (README, Tracing). The plugin
+is the first in a repository of its own, `../otw-plugin-performance`, as third-party plugins are.
+
 Next: 7, Content.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can

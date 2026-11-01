@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
 import type { DatabaseContext } from './database'
 import { PluginBootError } from './errors'
+import { traced } from './tracing'
 
 export const cmsMigrations = pgTable(
   'cms_migrations',
@@ -45,23 +46,30 @@ export async function runMigrations(
       const key = `${plugin.id}/${migration.id}`
       if (applied.has(key)) continue
       try {
-        const didRun = await db.transaction(async (tx) => {
-          await tx.execute(lock)
-          // Another process may have applied it while we waited for the lock.
-          const done = await tx
-            .select()
-            .from(cmsMigrations)
-            .where(
-              and(
-                eq(cmsMigrations.pluginId, plugin.id),
-                eq(cmsMigrations.migrationId, migration.id),
-              ),
-            )
-          if (done.length > 0) return false
-          await migration.up(tx)
-          await tx.insert(cmsMigrations).values({ pluginId: plugin.id, migrationId: migration.id })
-          return true
-        })
+        const didRun = await traced(
+          `migrate ${key}`,
+          { 'otw.kind': 'migration', 'otw.plugin': plugin.id },
+          () =>
+            db.transaction(async (tx) => {
+              await tx.execute(lock)
+              // Another process may have applied it while we waited for the lock.
+              const done = await tx
+                .select()
+                .from(cmsMigrations)
+                .where(
+                  and(
+                    eq(cmsMigrations.pluginId, plugin.id),
+                    eq(cmsMigrations.migrationId, migration.id),
+                  ),
+                )
+              if (done.length > 0) return false
+              await migration.up(tx)
+              await tx
+                .insert(cmsMigrations)
+                .values({ pluginId: plugin.id, migrationId: migration.id })
+              return true
+            }),
+        )
         if (didRun) {
           ran.push(key)
           logger.info(`Applied migration ${key}`)

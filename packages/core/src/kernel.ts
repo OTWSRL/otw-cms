@@ -90,6 +90,7 @@ import {
   type ResolvedSettingsPage,
 } from './settings-pages'
 import { SlotStore } from './slots'
+import { currentTraceId, traced, type TraceCollector } from './tracing'
 import { CORE_VERSION } from './version'
 
 export interface KernelOptions {
@@ -135,6 +136,11 @@ export interface KernelOptions {
   updates?: UpdateService
   /** The name the admin shows for the CMS. Defaults to DEFAULT_BRAND. */
   brand?: Brand
+  /**
+   * Collects request traces, when the site loads the CMS's instrumentation. A plugin that calls
+   * `cms.traces.enable()` turns recording on.
+   */
+  traces?: TraceCollector
 }
 
 export interface ResolvedPage {
@@ -246,8 +252,8 @@ const PINNED = 'Plugins are switched on in the site configuration, so they canno
  * Boots the plugins. If one fails to migrate or set up, the kernel boots again without it (and
  * without anything that requires it), like WordPress recovery mode, unless `strict` is set.
  */
-export function createKernel(options: KernelOptions): Promise<Kernel> {
-  return startKernel(options, {})
+export async function createKernel(options: KernelOptions): Promise<Kernel> {
+  return traced('kernel boot', { 'otw.kind': 'boot' }, () => startKernel(options, {}))
 }
 
 async function startKernel(options: KernelOptions, start: StartOptions): Promise<Kernel> {
@@ -368,6 +374,7 @@ async function boot(
   // Who read each setting while setting up: only they can fail to start on a new value.
   const startupReaders = new Map<string, Set<string>>()
   let settingUp: string | undefined
+  let tracingRequested = false
   const requiredCapabilities: { what: string; capability: string }[] = []
   const auth = createAuthService(db, {
     roleExists: (role) => stores.capabilities.hasRole(role),
@@ -475,6 +482,8 @@ async function boot(
     ...options,
     strict: false,
     onChange: undefined,
+    // Only the kernel that serves requests decides whether they're recorded.
+    traces: undefined,
     logger: {
       debug: () => {},
       info: () => {},
@@ -678,6 +687,18 @@ async function boot(
         url: (name, params) => stores.adminPages.url(name, params),
         actionUrl: (name) => actionPath(plugin.id, name),
       },
+      traces: {
+        enable: () => {
+          tracingRequested = true
+        },
+        get available() {
+          return Boolean(options.traces?.enabled)
+        },
+        currentId: currentTraceId,
+        keep: (id) => options.traces?.keep(id),
+        get: (id) => options.traces?.get(id),
+        list: () => options.traces?.list() ?? [],
+      },
       logger: withContext(logger, { plugin: plugin.id }),
       get db() {
         return db.current
@@ -699,12 +720,15 @@ async function boot(
     // Setups run one at a time, so a read through another plugin's service counts as this one's.
     settingUp = plugin.id
     try {
-      await plugin.setup?.(contextFor(plugin))
+      await traced(`setup ${plugin.id}`, { 'otw.kind': 'setup', 'otw.plugin': plugin.id }, () =>
+        plugin.setup?.(contextFor(plugin)),
+      )
     } catch (error) {
       throw new PluginBootError(plugin.id, 'setup', error)
     }
   }
   settingUp = undefined
+  options.traces?.setEnabled(tracingRequested)
   sealed = true
   stores.capabilities.seal()
   const label = (pluginId: string) => displayName(installed.get(pluginId), pluginId)
@@ -846,15 +870,20 @@ function buildKernel(input: {
       if (!match) return null
       const { pluginId, route } = match.route.value
       const context = { params: match.params, searchParams }
-      const data = route.load ? await route.load(context) : undefined
+      const key = match.route.key
+      const span = { 'otw.kind': 'page', 'otw.plugin': pluginId, 'otw.route': key }
+      const data = route.load
+        ? await traced(`load ${key}`, span, () => route.load!(context))
+        : undefined
       if (data === null) return null
       const props: PageProps<unknown> = { ...context, data }
       return {
-        key: match.route.key,
+        key,
         pluginId,
         props,
         Component: route.component,
-        metadata: async () => (route.metadata ? route.metadata(props) : {}),
+        metadata: async () =>
+          route.metadata ? traced(`metadata ${key}`, span, () => route.metadata!(props)) : {},
       }
     },
     slot: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
@@ -908,7 +937,17 @@ function buildKernel(input: {
       const context = { params: match.params, searchParams, user }
       let data: unknown
       try {
-        data = page.load ? await page.load(context) : undefined
+        data = page.load
+          ? await traced(
+              `load ${pluginId}.${page.name}`,
+              {
+                'otw.kind': 'admin',
+                'otw.plugin': pluginId,
+                'otw.route': `${pluginId}.${page.name}`,
+              },
+              () => page.load!(context),
+            )
+          : undefined
       } catch (error) {
         if (error instanceof ForbiddenError) return { kind: 'forbidden' }
         throw error

@@ -125,6 +125,7 @@ export const site = defineSite({
       'src/app/(cms)/admin/forbidden.tsx',
       'src/app/(cms)/admin/not-found.tsx',
       'src/app/(cms)/api/p/[...path]/route.ts',
+      'src/instrumentation.ts',
       'src/app/(site)/page.tsx',
       'src/app/(site)/[...slug]/page.tsx',
     ])
@@ -162,12 +163,12 @@ describe('generate', () => {
     Object.fromEntries((await generate({ root })).files.map((f) => [f.path, f.status]))
 
   it('writes every file, then leaves them alone until something changes', async () => {
-    expect(Object.values(await statuses())).toEqual(Array(8).fill('written'))
+    expect(Object.values(await statuses())).toEqual(Array(9).fill('written'))
     const site = join(root, 'src/cms/site.generated.ts')
     expect(await readFile(site, 'utf8')).toContain('import plugin0 from "@acme/lms"')
     const written = (await stat(site)).mtimeMs
 
-    expect(Object.values(await statuses())).toEqual(Array(8).fill('unchanged'))
+    expect(Object.values(await statuses())).toEqual(Array(9).fill('unchanged'))
     expect((await stat(site)).mtimeMs).toBe(written)
 
     await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: [] }))
@@ -186,6 +187,20 @@ describe('generate', () => {
     expect(await readFile(layout, 'utf8')).toContain('AdminRootLayout as default')
     expect(result['src/app/(site)/[...slug]/page.tsx']).toBe('kept')
     expect(await readFile(page, 'utf8')).toContain('"mine"')
+  })
+
+  it('loads the CMS’s instrumentation, unless the site has its own', async () => {
+    const [instrumentation] = managedFiles({ plugins: [] }, { srcDir: 'src' }).filter((managed) =>
+      managed.path.endsWith('instrumentation.ts'),
+    )
+    expect(instrumentation).toEqual({
+      path: 'src/instrumentation.ts',
+      content: `${MARKER}\nexport { register } from '@otw/next/instrumentation'\n`,
+      replaceable: true,
+    })
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(join(root, 'src/instrumentation.ts'), 'export function register() {}\n')
+    expect((await statuses())['src/instrumentation.ts']).toBe('own')
   })
 
   it('lets the site have its own home page, as it has its other pages', async () => {

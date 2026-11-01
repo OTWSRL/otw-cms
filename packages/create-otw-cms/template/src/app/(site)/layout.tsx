@@ -31,6 +31,7 @@ export default async function SiteLayout({ children }: { children: ReactNode }) 
           </nav>
         </header>
         <main className="site-main">{children}</main>
+        <Slot name="site.footer" props={{ user }} />
       </body>
     </html>
   )

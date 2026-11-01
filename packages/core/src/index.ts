@@ -34,6 +34,13 @@ export type { Env, SettingSource, SettingValue } from './settings'
 export type { SettingField, SettingsPageView, SettingsSectionView } from './settings-pages'
 export { CORE_VERSION } from './version'
 export {
+  currentTraceId,
+  registerTracerProvider,
+  traceQueries,
+  traced,
+  TraceCollector,
+} from './tracing'
+export {
   DatabaseUpdateRequiredError,
   migrateSite,
   type MigrateSiteOptions,

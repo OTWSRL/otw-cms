@@ -13,18 +13,19 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.13",
     "@otw/admin-ui": "workspace:*",
     "@otw/next": "workspace:*",
     "@otw/plugin-commerce": "workspace:*",
     "@otw/plugin-commerce-stripe": "workspace:*",
     "@otw/sdk": "workspace:*",
-    "@electric-sql/pglite": "^0.5.13",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@opentelemetry/api": "~1.9.0",
     "@otw/cli": "workspace:*",
     "@playwright/test": "^1.64.1",
     "@types/react": "^19.3.0",

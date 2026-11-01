@@ -82,6 +82,13 @@ export interface Slots {
   'admin.notices': { user: User }
   /** Widgets on the admin dashboard. */
   'admin.dashboard': { user: User }
+  /** The end of every admin screen, after the footer, like WordPress's `admin_footer`. */
+  'admin.footer': { user: User }
+  /**
+   * The end of every page on the site, like WordPress's `wp_footer`, where the site's layout
+   * renders it with `<Slot name="site.footer" props={{ user }} />`.
+   */
+  'site.footer': { user: User | null }
 }
 
 /** Any declared registry's name. */

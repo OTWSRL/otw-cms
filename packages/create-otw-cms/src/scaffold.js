@@ -16,6 +16,9 @@ const CORE_DEV = ['@otw/cli']
 /** Versions of what a site needs besides the CMS, tested with this release. */
 const THIRD_PARTY = {
   '@electric-sql/pglite': '^0.5.13',
+  // The CMS records requests with it. Listed here too so pnpm gives the site and the CMS one
+  // drizzle-orm: drizzle has an optional peer dependency on it.
+  '@opentelemetry/api': '~1.9.0',
   'drizzle-orm': '^0.45.4',
   next: '^16.4.3',
   react: '^19.3.1',

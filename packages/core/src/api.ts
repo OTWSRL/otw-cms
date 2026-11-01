@@ -3,6 +3,7 @@ import type { ApiContext, ApiHandler, HttpMethod, Logger, User } from '@otw/sdk'
 import { ForbiddenError, HttpError } from '@otw/sdk'
 import type { Router } from './router'
 import { sessionTokenFromHeader } from './session-cookie'
+import { traced } from './tracing'
 
 export const API_PREFIX = '/api/p'
 
@@ -64,7 +65,11 @@ export async function dispatchApi(
 
   const { pluginId } = match.route.value
   try {
-    const response = await match.route.value.handler(request, context)
+    const response = await traced(
+      `${method} ${url.pathname}`,
+      { 'otw.kind': 'api', 'otw.plugin': pluginId, 'otw.route': match.route.key },
+      () => match.route.value.handler(request, context),
+    )
     if (!(response instanceof Response)) throw new TypeError('API handlers must return a Response')
     return response
   } catch (error) {

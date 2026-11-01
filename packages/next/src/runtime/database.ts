@@ -4,8 +4,8 @@ import type { Database } from '@otw/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle as drizzlePostgres } from 'drizzle-orm/node-postgres'
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
-import { Pool } from 'pg'
-import type { Env } from '@otw/core'
+import { Pool, type PoolClient } from 'pg'
+import { traceQueries, type Env } from '@otw/core'
 
 /** An open database and how to close it. */
 export interface DatabaseHandle {
@@ -32,7 +32,7 @@ export function openDatabase(
   { create = true }: { create?: boolean } = {},
 ): DatabaseHandle {
   if (env.DATABASE_URL) {
-    const pool = new Pool({ connectionString: env.DATABASE_URL })
+    const pool = tracedPool(new Pool({ connectionString: env.DATABASE_URL }))
     return { db: drizzlePostgres(pool), close: () => pool.end() }
   }
   const dir = dataDir(env)
@@ -43,7 +43,7 @@ export function openDatabase(
   const release = claimEmbeddedDatabase(dir)
   // PGlite creates the data directory itself but not its parents (.data/ on a fresh clone).
   mkdirSync(dir, { recursive: true })
-  const client = new PGlite(dir)
+  const client = tracedPglite(new PGlite(dir))
   return {
     db: drizzlePglite(client),
     close: async () => {
@@ -51,6 +51,38 @@ export function openDatabase(
       release()
     },
   }
+}
+
+// Queries are recorded in the current request's trace when it's being traced; see traceQueries.
+
+/** PGlite runs a transaction's queries through the object it hands the callback. */
+export function tracedPglite(client: PGlite): PGlite {
+  traceQueries(client)
+  const transaction = client.transaction.bind(client)
+  client.transaction = ((fn: Parameters<PGlite['transaction']>[0]) =>
+    transaction((tx) => fn(traceQueries(tx)))) as PGlite['transaction']
+  return client
+}
+
+const TRACED = Symbol('otw.traced')
+
+/** pg runs transactions on a client checked out of the pool, and reuses those clients. */
+function tracedPool(pool: Pool): Pool {
+  traceQueries(pool)
+  const connect = pool.connect.bind(pool) as (...args: unknown[]) => Promise<PoolClient>
+  pool.connect = ((...args: unknown[]) => {
+    // pg's callback form: left untraced.
+    if (args.length > 0) return connect(...args)
+    return connect().then((client) => {
+      const marked = client as PoolClient & { [TRACED]?: true }
+      if (!marked[TRACED]) {
+        traceQueries(marked)
+        marked[TRACED] = true
+      }
+      return client
+    })
+  }) as Pool['connect']
+  return pool
 }
 
 function lockHolder(file: string): number | undefined {

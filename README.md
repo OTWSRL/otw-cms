@@ -23,6 +23,9 @@ plugins/commerce       products, orders, checkout; defines the extension points 
 plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
 ```
 
+Plugins that aren't part of the CMS live in repositories of their own, next to this one, and link
+to its packages until they're on npm: `../otw-plugin-performance` is the first.
+
 ## Commands
 
 ```sh
@@ -47,11 +50,23 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   layout and styles (`src/app/(site)/layout.tsx`, `globals.css`), `.env` and its own routes.
 - **The CMS owns** the files `cms generate` writes before every `dev` and `build`: the site
   module (`src/cms/site.generated.ts`, the installed plugins), the admin's root layout and its one
-  catch-all page with 403 and 404 pages, the API route, and the storefront's home page and
-  catch-all. Each starts with an `@generated` line; delete it and the file is the site's, never
+  catch-all page with 403 and 404 pages, the API route, the storefront's home page and
+  catch-all, and `instrumentation.ts`, which Next.js loads to record requests. Each starts with an `@generated` line; delete it and the file is the site's, never
   overwritten. The admin is one route, so new core screens arrive with the package. For its own
   home page a site writes `src/app/(site)/page.tsx`; otherwise plugins can claim `/`. Files a
   version stops managing are removed while they still carry the line.
+- **Tracing.** Every request can be recorded as an OpenTelemetry trace: Next.js's own spans
+  (routing, rendering, metadata) and the CMS's (kernel boot, each plugin's setup and migrations,
+  hook handlers, page and admin loads, API routes, and every query, with its statement but never
+  its values), each attributed to the plugin it ran for. Nothing is recorded until an active
+  plugin calls `cms.traces.enable()`; then requests are recorded and dropped when they end unless
+  a plugin keeps them (`cms.traces.keep()`), up to 100 for 10 minutes. The performance plugin
+  (`../otw-plugin-performance`) shows them in a bar at the bottom of every page (the
+  `site.footer` and `admin.footer` slots) for people with `performance.view`, with the browser's
+  timings and Web Vitals. Measured on `/shop`: 0.08 ms per request with nothing recording,
+  0.15 ms recording a visitor's request. A site that sets up OpenTelemetry itself adds
+  `cmsTracing()`'s span processor, from `@otw/next/tracing`, to its provider, in a file only the
+  Node.js runtime loads: Next.js builds `instrumentation.ts` for the Edge runtime too.
 - **Plugin page paths.** A site can move a plugin's pages with `routes` in `cms.config.json`:
   `"routes": { "commerce.product": "/p/:slug" }`. The new path must keep the page's parameters;
   links built with `cms.routes.url()` follow it. An override for a page no plugin has is a warning
@@ -280,7 +295,9 @@ Rules the kernel enforces or relies on:
   `FormField`, `SubmitButton`, `Postbox`, `EditColumns`, `Notice`, `Button`, `FormButton`), or
   write WordPress's markup by hand: the admin styles its class names (`wrap`, `button-primary`,
   `notice-warning`, `form-table`, `wp-list-table`, `postbox`, `subsubsub`, `row-actions`).
-- **Slots.** `admin.notices` shows on every screen and `admin.dashboard` on the dashboard.
+- **Slots.** `admin.notices` shows on every screen, `admin.dashboard` on the dashboard, and
+  `admin.footer` after every screen; `site.footer` ends every page of the site, where the site's
+  layout renders it.
   Commerce offers `commerce.admin.order`, which Stripe fills with the Checkout session. Fills
   decide what to show from the `user` prop.
 - **Actions.** Admin forms post to `cms.admin.actionUrl(name)`. Before the handler runs, the kernel

@@ -198,6 +198,9 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
       "export { DELETE, GET, PATCH, POST, PUT } from '@otw/next/api'",
       dynamic,
     ]),
+    // Next.js loads it when the server starts. A site with its own (Sentry, say) keeps it and
+    // calls this register() from its own.
+    file(at('instrumentation.ts'), ["export { register } from '@otw/next/instrumentation'"], true),
     // The home page has a file of its own so the site can write its own home page; an optional
     // catch-all would claim / as well, and Next.js allows only one.
     route('app/(site)/page.tsx', storefront, true),

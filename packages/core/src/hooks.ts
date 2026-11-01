@@ -1,5 +1,6 @@
 import type { Logger } from '@otw/sdk'
 import { HookError } from './errors'
+import { traced } from './tracing'
 
 type Handler = (...args: never[]) => unknown
 
@@ -44,7 +45,17 @@ export class HookBus {
     let current = value
     for (const entry of this.#filters.get(name) ?? []) {
       try {
-        current = (await (entry.handler as (v: V, c: C) => V | Promise<V>)(current, context)) as V
+        const value = current
+        current = (await traced(
+          `filter ${name}`,
+          {
+            'otw.kind': 'hook',
+            'otw.hook': name,
+            'otw.hook.type': 'filter',
+            'otw.plugin': entry.pluginId,
+          },
+          () => (entry.handler as (v: V, c: C) => V | Promise<V>)(value, context),
+        )) as V
       } catch (error) {
         throw new HookError(name, entry.pluginId, error)
       }
@@ -55,9 +66,19 @@ export class HookBus {
   async doAction<P>(name: string, payload: P): Promise<void> {
     for (const entry of this.#actions.get(name) ?? []) {
       try {
-        await this.#options.isolate(async () => {
-          await (entry.handler as (p: P) => unknown)(payload)
-        })
+        await traced(
+          `action ${name}`,
+          {
+            'otw.kind': 'hook',
+            'otw.hook': name,
+            'otw.hook.type': 'action',
+            'otw.plugin': entry.pluginId,
+          },
+          () =>
+            this.#options.isolate(async () => {
+              await (entry.handler as (p: P) => unknown)(payload)
+            }),
+        )
       } catch (error) {
         this.#options.logger.error(`Action "${name}" failed in plugin "${entry.pluginId}"`, {
           hook: name,

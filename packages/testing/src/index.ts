@@ -2,13 +2,17 @@ import {
   ADMINISTRATOR,
   createKernel,
   createMemoryLogger,
+  registerTracerProvider,
   SESSION_COOKIE,
+  traceQueries,
+  TraceCollector,
   type Kernel,
   type KernelOptions,
   type MemoryLogger,
 } from '@otw/core'
 import type { Database, User } from '@otw/sdk'
 import { PGlite } from '@electric-sql/pglite'
+import { trace } from '@opentelemetry/api'
 import { drizzle } from 'drizzle-orm/pglite'
 
 export { createMemoryLogger, type LogEntry, type MemoryLogger } from '@otw/core'
@@ -25,6 +29,13 @@ export interface TestKernel {
   signIn(role?: string): Promise<{ user: User; cookie: string }>
   /** Boots a fresh kernel on the same database, as the app does after an admin change. */
   reboot(): Promise<Kernel>
+  /**
+   * With `tracing: true`, the collector that records requests: `request()` and `inRequest()`
+   * run inside a request span, as Next.js runs requests.
+   */
+  traces: TraceCollector | undefined
+  /** Runs `fn` as one request (traced, with `tracing: true`) and returns the trace id, if any. */
+  inRequest(path: string, fn: () => Promise<unknown>): Promise<string | undefined>
   close(): Promise<void>
 }
 
@@ -64,12 +75,45 @@ function emptyCluster(): Promise<File | Blob> {
  * a broken plugin fails the test instead of being skipped, and with fast password hashing.
  */
 export async function createTestKernel(
-  options: Omit<KernelOptions, 'db' | 'logger'>,
+  options: Omit<KernelOptions, 'db' | 'logger' | 'traces'> & {
+    /** Record every request, as a site does while a plugin has enabled tracing. */
+    tracing?: boolean
+  },
 ): Promise<TestKernel> {
+  const { tracing = false, ...kernelOptions } = options
   const client = new PGlite({ loadDataDir: await emptyCluster() })
-  const db = drizzle(client)
+  const traces = tracing ? testCollector() : undefined
+  const db = drizzle(traces ? tracePglite(client) : client)
   const logger = createMemoryLogger()
-  const boot = () => createKernel({ strict: true, passwordHashing: 'fast', ...options, db, logger })
+  const boot = async () => {
+    const kernel = await createKernel({
+      strict: true,
+      passwordHashing: 'fast',
+      ...kernelOptions,
+      db,
+      logger,
+      traces,
+    })
+    // Tests of a plugin's own spans record whether or not a plugin under test enables tracing.
+    traces?.setEnabled(true)
+    return kernel
+  }
+  const inRequest = async <T>(path: string, method: string, fn: () => Promise<T>) =>
+    !traces
+      ? { result: await fn(), id: undefined }
+      : tracer().startActiveSpan(
+          `${method} ${path}`,
+          { attributes: { 'http.method': method, 'http.target': path } },
+          async (root) => {
+            try {
+              const result = await fn()
+              if (result instanceof Response) root.setAttribute('http.status_code', result.status)
+              return { result, id: root.spanContext().traceId }
+            } finally {
+              root.end()
+            }
+          },
+        )
   let users = 0
 
   try {
@@ -77,8 +121,14 @@ export async function createTestKernel(
       kernel: await boot(),
       db,
       logger,
-      request: (method, path, init = {}) =>
-        harness.kernel.handleApi(buildRequest(method, path, init)),
+      request: async (method, path, init = {}) =>
+        (
+          await inRequest(path, method, () =>
+            harness.kernel.handleApi(buildRequest(method, path, init)),
+          )
+        ).result,
+      traces,
+      inRequest: async (path, fn) => (await inRequest(path, 'GET', fn)).id,
       async signIn(role = ADMINISTRATOR) {
         const user = await harness.kernel.auth.createUser({
           email: `${role}-${++users}@cms.test`,
@@ -100,6 +150,26 @@ export async function createTestKernel(
     await client.close()
     throw error
   }
+}
+
+const tracer = () => trace.getTracer('otw-testing')
+let collector: TraceCollector | undefined
+
+/** One provider per test process, as one per server process; registered on first use. */
+function testCollector(): TraceCollector {
+  if (!collector) {
+    collector = new TraceCollector()
+    registerTracerProvider(collector)
+  }
+  return collector
+}
+
+function tracePglite(client: PGlite): PGlite {
+  traceQueries(client)
+  const transaction = client.transaction.bind(client)
+  client.transaction = ((fn: Parameters<PGlite['transaction']>[0]) =>
+    transaction((tx) => fn(traceQueries(tx)))) as PGlite['transaction']
+  return client
 }
 
 /**

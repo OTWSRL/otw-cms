@@ -12,16 +12,20 @@
       "default": "./config.js"
     },
     "./server": "./src/server.ts",
-    "./site": "./src/site/index.ts"
+    "./site": "./src/site/index.ts",
+    "./tracing": "./src/tracing.ts",
+    "./instrumentation": "./src/instrumentation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "@opentelemetry/api": "~1.9.0",
+    "@opentelemetry/sdk-trace": "^2.12.0",
     "@otw/admin-ui": "workspace:*",
     "@otw/core": "workspace:*",
     "@otw/sdk": "workspace:*",
-    "@electric-sql/pglite": "^0.5.13",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1",
     "server-only": "^0.0.1"

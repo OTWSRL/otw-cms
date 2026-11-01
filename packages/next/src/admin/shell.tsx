@@ -6,6 +6,7 @@ import { AdminBar } from './admin-bar'
 import { AdminFrame, AdminMenu } from './admin-frame'
 import { BrandName } from './brand-mark'
 import { MENU_COOKIE, menuPreference } from './admin-menu-preference'
+import { Slot } from '../site/slot'
 import { updateOverview } from './update-overview'
 
 /** WordPress's admin frame: bar on top, menu on the left, the screen, and the footer. */
@@ -47,6 +48,7 @@ export async function AdminShell({
         </p>
         <p id="footer-upgrade">Version {CORE_VERSION}</p>
       </footer>
+      <Slot name="admin.footer" props={{ user }} />
     </AdminFrame>
   )
 }

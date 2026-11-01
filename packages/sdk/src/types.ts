@@ -475,6 +475,85 @@ export interface SlotsApi {
   get<K extends SlotName>(name: K): SlotComponent<K>[]
 }
 
+// ── Tracing ──────────────────────────────────────────────────────────────────
+
+/** What a span in a request's trace timed. */
+export type TraceSpanKind =
+  | 'request'
+  | 'render'
+  | 'query'
+  | 'hook'
+  | 'page'
+  | 'admin'
+  | 'api'
+  | 'boot'
+  | 'setup'
+  | 'migration'
+  | 'other'
+
+/** One timed piece of a request: Next.js's own work, or the CMS's and its plugins'. */
+export interface TraceSpan {
+  id: string
+  /** The span it ran inside; `null` for the request itself. */
+  parentId: string | null
+  name: string
+  kind: TraceSpanKind
+  /** Milliseconds after the request started. */
+  start: number
+  /** Milliseconds. */
+  duration: number
+  /** The plugin it ran for: its own, or that of the nearest span around it that has one. */
+  plugin: string | null
+  /** OpenTelemetry attributes, such as `db.statement` on a query. Query values are never recorded. */
+  attributes: Readonly<Record<string, string | number | boolean>>
+  /** The error it ended with, if it failed. */
+  error?: string
+}
+
+/** Everything one request did on the server, from when it arrived to when its response ended. */
+export interface RequestTrace {
+  /** The OpenTelemetry trace id. */
+  id: string
+  method: string
+  /** The route that answered, such as `/[...slug]`, when Next.js says. */
+  route: string | null
+  path: string | null
+  status: number | null
+  /** When the request arrived, in milliseconds since the epoch. */
+  startedAt: number
+  /** Milliseconds from arrival to the end of the response; `null` while it's still running. */
+  duration: number | null
+  /** The server process's memory when the response ended, in bytes. */
+  memory: { heapUsed: number; rss: number } | null
+  /** In the order they started. */
+  spans: readonly TraceSpan[]
+  /** Spans left out because the request had more than the limit. */
+  droppedSpans: number
+}
+
+/**
+ * `cms.traces`: what each request did on the server, as OpenTelemetry traces. Nothing is
+ * recorded until an active plugin calls `enable()`, and the site must load the CMS's
+ * instrumentation (`cms generate` writes `instrumentation.ts`).
+ */
+export interface TracesApi {
+  /** Records every request while this plugin is active. Call it in `setup()`. */
+  enable(): void
+  /** Whether requests are being recorded: enabled, and the site's instrumentation loaded. */
+  readonly available: boolean
+  /** The current request's trace id, while it's being recorded. */
+  currentId(): string | undefined
+  /**
+   * Keeps this request's trace for `get()` once the response ends. Traces nobody keeps are dropped
+   * when their request ends; kept ones are held in memory for a while (the last 100, 10 minutes).
+   */
+  keep(id: string): void
+  /** A kept trace, finished or still running. */
+  get(id: string): RequestTrace | undefined
+  /** Every kept trace, newest first. */
+  list(): RequestTrace[]
+}
+
 // ── Plugins ──────────────────────────────────────────────────────────────────
 
 /** A change to the database, run once and recorded so it never runs twice. */
@@ -495,6 +574,7 @@ export interface PluginContext {
   readonly settings: SettingsApi
   readonly auth: AuthApi
   readonly admin: AdminApi
+  readonly traces: TracesApi
   readonly logger: Logger
   /**
    * The current transaction when called inside `transaction()`, otherwise the root connection.
