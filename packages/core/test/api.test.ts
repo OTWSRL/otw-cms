@@ -1,7 +1,7 @@
-import { HttpError } from '@otw/sdk'
+import { HttpError, type ApiContext } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel } from '../src/kernel'
-import { createDb, memoryLogger, plugin } from './helpers'
+import { bootKernel, createDb, memoryLogger, ORIGIN, plugin, signIn } from './helpers'
 
 const BASE = 'https://shop.test'
 
@@ -102,5 +102,45 @@ describe('kernel.handleApi', () => {
     expect((await kernel.handleApi(request('GET', '/api/p/orders/not-a-response'))).status).toBe(
       500,
     )
+  })
+})
+
+describe('the signed-in user in API routes', () => {
+  const me = (_request: Request, context: ApiContext) =>
+    context.user().then((user) => Response.json({ email: user?.email ?? null }))
+
+  const boot = () =>
+    bootKernel({
+      plugins: [
+        plugin('profile', {
+          setup(cms) {
+            cms.routes.api({ method: 'GET', path: '/me', handler: me })
+            cms.routes.api({ method: 'POST', path: '/me', handler: me })
+          },
+        }),
+      ],
+    })
+
+  const call = (kernel: Awaited<ReturnType<typeof boot>>, method: string, headers = {}) =>
+    kernel.handleApi(new Request(`${ORIGIN}/api/p/profile/me`, { method, headers }))
+
+  it('is the user whose session the request carries, or null', async () => {
+    const kernel = await boot()
+    const { user, cookie } = await signIn(kernel)
+    expect(await (await call(kernel, 'GET', { cookie })).json()).toEqual({ email: user.email })
+    expect(await (await call(kernel, 'GET')).json()).toEqual({ email: null })
+    expect(await (await call(kernel, 'GET', { cookie: 'cms_session=forged' })).json()).toEqual({
+      email: null,
+    })
+  })
+
+  it('signs in unsafe requests only when the browser says they come from this site', async () => {
+    const kernel = await boot()
+    const { user, cookie } = await signIn(kernel)
+    const fromSite = await call(kernel, 'POST', { cookie, origin: ORIGIN })
+    expect(await fromSite.json()).toEqual({ email: user.email })
+    // No Origin: another server, or a request a browser didn't vouch for. It stays anonymous.
+    const noOrigin = await call(kernel, 'POST', { cookie })
+    expect(await noOrigin.json()).toEqual({ email: null })
   })
 })

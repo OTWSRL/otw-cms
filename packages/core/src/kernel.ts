@@ -858,7 +858,12 @@ function buildKernel(input: {
       }
     },
     slot: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
-    handleApi: (request) => dispatchApi(stores.apis, request, logger, origins),
+    handleApi: (request) =>
+      dispatchApi(stores.apis, request, {
+        logger,
+        origins,
+        userForSession: (token) => input.auth.userForSession(token),
+      }),
 
     auth: input.auth,
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),

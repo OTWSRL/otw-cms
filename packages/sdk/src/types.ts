@@ -424,9 +424,16 @@ export interface PageRoute<TData = undefined> {
 /** The methods an API route can answer. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** What an API route's handler receives besides the request: the path's parameters. */
+/** What an API route's handler receives besides the request. */
 export interface ApiContext {
+  /** The path's parameters, such as `id` for `/orders/:id`. */
   params: Record<string, string>
+  /**
+   * The user signed in with the request's session cookie, or `null`, looked up on the first call.
+   * Unsafe requests (POST, PUT, PATCH, DELETE) count as signed in only when they carry this site's
+   * `Origin`, which browsers send, so another site can't act as the user.
+   */
+  user(): Promise<User | null>
 }
 
 /** Answers an API request with a standard `Response`. */

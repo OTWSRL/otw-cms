@@ -317,6 +317,9 @@ methods. Payment webhooks verify their signatures and are idempotent.
 - **Sign-in** is throttled to 5 failures per email per 15 minutes. Unknown emails cost the same
   hash as wrong passwords, so timing doesn't reveal accounts. Throttling per IP belongs at the
   edge (WAF or proxy), where the client address is trustworthy.
+- **Plugin API routes** are public, and ask for the signed-in user with `context.user()`. An unsafe
+  request (POST, PUT, PATCH, DELETE) counts as signed in only when it carries this site's `Origin`,
+  so a cookie on a request no browser vouched for can't act as its owner.
 - **Admin actions** require an `Origin` header matching the site (stricter than public routes),
   on top of `SameSite=Lax`. The site is the request's own origin, the site address setting, or,
   with `CMS_TRUST_PROXY`, the forwarded host and protocol; forwarded headers are ignored

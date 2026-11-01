@@ -1,7 +1,8 @@
 import { isSiteOrigin, type OriginPolicy } from './origins'
-import type { ApiHandler, HttpMethod, Logger } from '@otw/sdk'
+import type { ApiContext, ApiHandler, HttpMethod, Logger, User } from '@otw/sdk'
 import { ForbiddenError, HttpError } from '@otw/sdk'
 import type { Router } from './router'
+import { sessionTokenFromHeader } from './session-cookie'
 
 export const API_PREFIX = '/api/p'
 
@@ -19,11 +20,16 @@ export function apiPath(pluginId: string, path: string): string {
   return `${API_PREFIX}/${pluginId}${path === '/' ? '' : path}`
 }
 
+export interface ApiDependencies {
+  logger: Logger
+  origins: OriginPolicy
+  userForSession(token: string | null): Promise<User | null>
+}
+
 export async function dispatchApi(
   router: Router<ApiEntry>,
   request: Request,
-  logger: Logger,
-  origins: OriginPolicy,
+  { logger, origins, userForSession }: ApiDependencies,
 ): Promise<Response> {
   const url = new URL(request.url)
   const method = request.method.toUpperCase()
@@ -38,16 +44,27 @@ export async function dispatchApi(
 
   // Browsers send Origin on cross-site form posts and fetches; server-to-server calls
   // (payment webhooks) send none.
-  if (!SAFE_METHODS.has(method)) {
-    const origin = request.headers.get('origin')
-    if (origin && !isSiteOrigin(origin, request, origins)) {
-      return errorResponse(403, 'Cross-origin request blocked')
-    }
+  const safe = SAFE_METHODS.has(method)
+  const origin = request.headers.get('origin')
+  if (!safe && origin && !isSiteOrigin(origin, request, origins)) {
+    return errorResponse(403, 'Cross-origin request blocked')
+  }
+
+  // Unsafe requests act as the user only with this site's Origin, as admin actions do: a cookie
+  // on a request no browser vouched for stays anonymous. Looked up only if the handler asks.
+  let user: Promise<User | null> | undefined
+  const context: ApiContext = {
+    params: match.params,
+    user: () =>
+      (user ??=
+        safe || origin
+          ? userForSession(sessionTokenFromHeader(request.headers.get('cookie')))
+          : Promise.resolve(null)),
   }
 
   const { pluginId } = match.route.value
   try {
-    const response = await match.route.value.handler(request, { params: match.params })
+    const response = await match.route.value.handler(request, context)
     if (!(response instanceof Response)) throw new TypeError('API handlers must return a Response')
     return response
   } catch (error) {
