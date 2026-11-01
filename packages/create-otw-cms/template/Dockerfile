@@ -3,15 +3,14 @@
 # per release before the new containers start.
 FROM node:24-slim AS build
 WORKDIR /site
-RUN corepack enable
 COPY . .
-RUN pnpm install --frozen-lockfile && pnpm run build
+RUN {{ci_install}} && {{run}} build
 
 FROM node:24-slim
 WORKDIR /site
-RUN corepack enable
+{{docker_runtime}}
 ENV NODE_ENV=production CMS_DATA_DIR=/data/pglite
 COPY --from=build /site /site
 VOLUME /data
 EXPOSE 3000
-CMD ["pnpm", "start"]
+CMD {{docker_start}}

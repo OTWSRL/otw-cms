@@ -81,6 +81,42 @@ describe('scaffold', () => {
     expect(workflow).toContain('npx cms update $PACKAGES $PLUGINS_ONLY --commit')
   })
 
+  it.each([
+    [
+      'pnpm',
+      'RUN corepack enable && pnpm install --frozen-lockfile && pnpm build',
+      'RUN corepack enable',
+      'CMD ["pnpm", "start"]',
+    ],
+    ['npm', 'RUN npm ci && npm run build', undefined, 'CMD ["npm", "start"]'],
+    [
+      'yarn',
+      'RUN corepack enable && yarn install --immutable && yarn build',
+      'RUN corepack enable',
+      'CMD ["yarn", "start"]',
+    ],
+    [
+      'bun',
+      'RUN npm install --global bun && bun install --frozen-lockfile && bun run build',
+      'RUN npm install --global bun',
+      'CMD ["bun", "run", "start"]',
+    ],
+  ] as const)(
+    'writes a Dockerfile that builds with %s',
+    async (packageManager, build, runtime, start) => {
+      const target = join(parent, `site-${packageManager}`)
+      await scaffold({ target, version: '0.1.0', packageManager })
+      const dockerfile = await read(target, 'Dockerfile')
+      const [buildStage, runtimeStage] = dockerfile.split(/^FROM .* AS build$|^FROM /m).slice(1)
+      expect(buildStage).toContain(build)
+      if (runtime) expect(runtimeStage).toContain(runtime)
+      else expect(runtimeStage).not.toContain('RUN ')
+      expect(dockerfile).toContain(start)
+      expect(dockerfile).not.toContain('{{')
+      if (packageManager !== 'pnpm') expect(dockerfile).not.toContain('pnpm')
+    },
+  )
+
   it('links a checkout of the CMS instead of the registry', async () => {
     const repo = resolve(import.meta.dirname, '../../..')
     const target = join(parent, 'linked')
