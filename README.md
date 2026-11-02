@@ -397,6 +397,15 @@ post types in LearnDash, LifterLMS and Tutor.
   and the editor keeps what was typed in the browser to restore. Plugins add columns (loaded
   once per page, not per row), meta boxes saved in the entry's transaction, row actions and bulk
   actions from their admin entry.
+- **Taxonomies.** `cms.content.taxonomy('topic', { types, hierarchical, defaultTerm, … })`, like
+  `register_taxonomy()`, with WordPress's four capabilities (`lms.manage_topics`, `edit_`,
+  `delete_`, `assign_`) and three meta ones; the default term can't be deleted. Core registers
+  Categories (with Uncategorized) and Tags on posts, under WordPress's capability names. Terms
+  live in `cms_terms` and `cms_entry_terms`: slugs unique per taxonomy, names per parent, both in
+  the database. Counts of published entries are computed per page of terms, never stored.
+  Deleting a term moves its children up and gives lonely entries the default. Screens: the
+  taxonomy's (add form beside the list) and a term's, a checklist or tags field on the edit
+  screen, a column and a category filter on the list; `list({ terms })` includes child terms.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
   links included, and `Blocks` from `@otw/next/site` renders them on the site with no

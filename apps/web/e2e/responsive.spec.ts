@@ -25,6 +25,8 @@ const SCREENS = [
   '/admin/posts/new',
   '/admin/pages',
   '/admin/pages/new',
+  '/admin/posts/categories',
+  '/admin/posts/tags',
 ]
 
 async function sidewaysScroll(page: Page): Promise<number> {

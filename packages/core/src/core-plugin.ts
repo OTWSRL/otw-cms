@@ -1,4 +1,10 @@
-import type { ContentTypeDefinition, PluginDefinition, SettingDefinitions, User } from '@otw/sdk'
+import type {
+  ContentTypeDefinition,
+  PluginDefinition,
+  SettingDefinitions,
+  TaxonomyDefinition,
+  User,
+} from '@otw/sdk'
 import { ActionError } from '@otw/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
 import { AuthError, type AuthService } from './auth'
@@ -85,6 +91,7 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
 /** WordPress's posts and pages. Authors and contributors write posts; pages are editors'. */
 export function registerCoreContent(types: {
   register(pluginId: string, name: string, definition: ContentTypeDefinition): unknown
+  taxonomy?(pluginId: string, name: string, definition: TaxonomyDefinition): unknown
 }): void {
   types.register(CORE, 'post', {
     labels: { singular: 'Post', plural: 'Posts' },
@@ -97,6 +104,20 @@ export function registerCoreContent(types: {
     hierarchical: true,
     supports: ['title', 'body', 'author', 'position'],
     roles: { editor: 'editor' },
+  })
+  // WordPress's categories and tags, with its capability names: core.manage_categories…
+  types.taxonomy?.(CORE, 'category', {
+    labels: { singular: 'Category', plural: 'Categories' },
+    plural: 'categories',
+    types: ['core.post'],
+    hierarchical: true,
+    showAdminColumn: true,
+    defaultTerm: { name: 'Uncategorized' },
+  })
+  types.taxonomy?.(CORE, 'tag', {
+    labels: { singular: 'Tag', plural: 'Tags' },
+    types: ['core.post'],
+    showAdminColumn: true,
   })
 }
 

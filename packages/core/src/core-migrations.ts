@@ -98,4 +98,39 @@ export const coreMigrations: Migration[] = [
       await db.execute(sql`CREATE INDEX cms_entries_parent_id_idx ON cms_entries (parent_id)`)
     },
   },
+  {
+    id: '0003_terms',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_terms (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          taxonomy text NOT NULL,
+          name text NOT NULL CHECK (name <> ''),
+          slug text NOT NULL CHECK (slug <> ''),
+          description text NOT NULL DEFAULT '',
+          parent_id uuid REFERENCES cms_terms (id) ON DELETE SET NULL,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          CONSTRAINT cms_terms_slug_key UNIQUE (taxonomy, slug),
+          CHECK (parent_id <> id)
+        )
+      `)
+      // WordPress refuses a second term of the same name beside another.
+      await db.execute(sql`
+        CREATE UNIQUE INDEX cms_terms_name_key ON cms_terms
+          (taxonomy, coalesce(parent_id, '00000000-0000-0000-0000-000000000000'), lower(name))
+      `)
+      await db.execute(sql`CREATE INDEX cms_terms_parent_id_idx ON cms_terms (parent_id)`)
+      await db.execute(sql`
+        CREATE TABLE cms_entry_terms (
+          entry_id uuid NOT NULL REFERENCES cms_entries (id) ON DELETE CASCADE,
+          term_id uuid NOT NULL REFERENCES cms_terms (id) ON DELETE CASCADE,
+          PRIMARY KEY (entry_id, term_id)
+        )
+      `)
+      await db.execute(
+        sql`CREATE INDEX cms_entry_terms_term_id_idx ON cms_entry_terms (term_id, entry_id)`,
+      )
+    },
+  },
 ]

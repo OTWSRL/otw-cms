@@ -1,6 +1,6 @@
 import { Button, EditColumns, FormButton, Notice, Postbox } from '@otw/admin-ui'
 import { inSentence, type Kernel } from '@otw/core'
-import type { ContentType, Entry, SearchParams, User } from '@otw/sdk'
+import type { ContentType, Entry, SearchParams, Taxonomy, Term, User } from '@otw/sdk'
 import { EditorLoader } from '../editor/editor-loader'
 import { AdminScreen } from '../screen'
 import { formatDate } from './content-dates'
@@ -99,6 +99,30 @@ export async function ContentEditScreen({
     canChooseAuthor ? authorChoices(kernel, type, entry) : [],
     type.hierarchical ? parentChoices(kernel, type, entry) : [],
   ])
+  // The category checklist and tags boxes, for those who may give entries the taxonomy's terms.
+  const taxonomies = kernel.content
+    .taxonomies(type.name)
+    .filter((taxonomy) => taxonomy.showUi && kernel.can(user, taxonomy.capabilities.assign))
+  const [assigned, checklists] = await Promise.all([
+    entry ? kernel.content.entryTerms([entry.id]) : new Map<string, Term[]>(),
+    Promise.all(
+      taxonomies.map((taxonomy) =>
+        taxonomy.hierarchical
+          ? kernel.content.listTerms({ taxonomy: taxonomy.name, orderBy: 'tree', limit: 1000 })
+          : null,
+      ),
+    ),
+  ])
+  const current = entry ? (assigned.get(entry.id) ?? []) : []
+  const taxonomyBoxes = taxonomies.map((taxonomy, i) => (
+    <TaxonomyBox
+      key={taxonomy.name}
+      taxonomy={taxonomy}
+      current={current.filter((term) => term.taxonomy === taxonomy.name)}
+      choices={checklists[i] ?? null}
+      canManage={kernel.can(user, taxonomy.capabilities.manage)}
+    />
+  ))
   const boxes = (context: 'normal' | 'side') =>
     extensions.metaBoxes
       .filter((box) => (box.context ?? 'normal') === context)
@@ -283,6 +307,7 @@ export async function ContentEditScreen({
   const side = (
     <>
       {publishBox}
+      {taxonomyBoxes}
       {(type.hierarchical || supports('position')) && (
         <Postbox id="pageparentdiv" title={`${singular} Attributes`}>
           {type.hierarchical && (
@@ -333,5 +358,72 @@ export async function ContentEditScreen({
         <EditColumns main={main} side={side} />
       </form>
     </AdminScreen>
+  )
+}
+
+/**
+ * A taxonomy's box: a checklist of every term, indented as a tree, for hierarchical taxonomies
+ * (WordPress's Categories box); a comma-separated field for flat ones (its Tags box), where a
+ * name no tag has adds one. `taxonomies` tells the save which boxes the form had.
+ */
+function TaxonomyBox({
+  taxonomy,
+  current,
+  choices,
+  canManage,
+}: {
+  taxonomy: Taxonomy
+  current: readonly Term[]
+  choices: { terms: Term[]; depths?: number[] } | null
+  canManage: boolean
+}) {
+  const id = `taxonomy-${taxonomy.name.replace('.', '-')}`
+  const plural = inSentence(taxonomy.labels.plural)
+  const checked = new Set(current.map((term) => term.id))
+  return (
+    <Postbox id={id} title={taxonomy.labels.plural}>
+      <input type="hidden" name="taxonomies" value={taxonomy.name} />
+      {choices ? (
+        choices.terms.length > 0 ? (
+          <ul className="categorychecklist" aria-label={taxonomy.labels.plural}>
+            {choices.terms.map((term, i) => (
+              <li
+                key={term.id}
+                style={{ marginInlineStart: `${(choices.depths?.[i] ?? 0) * 18}px` }}
+              >
+                <label>
+                  <input
+                    type="checkbox"
+                    name={`terms.${taxonomy.name}`}
+                    value={term.id}
+                    defaultChecked={checked.has(term.id)}
+                  />{' '}
+                  {term.name}
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="description">
+            No {plural} yet.{' '}
+            {canManage && taxonomy.adminPath && <a href={taxonomy.adminPath}>Add some</a>}
+          </p>
+        )
+      ) : (
+        <>
+          <label className="screen-reader-text" htmlFor={`${id}-names`}>
+            {taxonomy.labels.plural}
+          </label>
+          <input
+            type="text"
+            id={`${id}-names`}
+            name={`tags.${taxonomy.name}`}
+            defaultValue={current.map((term) => term.name).join(', ')}
+            autoComplete="off"
+          />
+          <p className="howto description">Separate {plural} with commas</p>
+        </>
+      )}
+    </Postbox>
   )
 }

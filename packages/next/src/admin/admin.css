@@ -2312,6 +2312,60 @@ body:has(> .cms-login) {
   background: #f6f7f7;
 }
 
+/* edit-tags.php: the add form beside the list, as WordPress's #col-left and #col-right. */
+.cms-admin .col-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 35fr) minmax(0, 65fr);
+  gap: 0 20px;
+  align-items: start;
+}
+
+.cms-admin .col-wrap > .col-right:only-child {
+  grid-column: 1 / -1;
+}
+
+.cms-admin .col-left h2 {
+  margin: 0 0 8px;
+  font-size: 1.3em;
+}
+
+.cms-admin .form-field {
+  margin: 0 0 16px;
+}
+
+.cms-admin .form-field label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.cms-admin .form-field :is(input[type='text'], textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.cms-admin .form-field .description {
+  margin-top: 4px;
+}
+
+.cms-admin .categorychecklist {
+  max-height: 200px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.cms-admin .categorychecklist li {
+  margin: 0 0 6px;
+  line-height: 1.7;
+}
+
+@media (max-width: 850px) {
+  .cms-admin .col-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 782px) {
   .cms-admin p.search-box {
     float: none;

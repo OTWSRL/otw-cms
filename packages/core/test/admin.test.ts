@@ -146,6 +146,12 @@ describe('admin pages', () => {
         items: [
           { key: 'core.post.list', label: 'All Posts', url: '/admin/posts' },
           { key: 'core.post.new', label: 'Add New Post', url: '/admin/posts/new' },
+          {
+            key: 'core.category.terms',
+            label: 'Categories',
+            url: '/admin/posts/categories',
+          },
+          { key: 'core.tag.terms', label: 'Tags', url: '/admin/posts/tags' },
         ],
       },
       {

@@ -8,6 +8,7 @@ import type {
   CapabilityName,
   ContentTypeDefinition,
   Database,
+  TaxonomyDefinition,
   FilterContext,
   FilterName,
   FilterValue,
@@ -53,6 +54,8 @@ import { createContentService, type ContentService } from './content'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
 import { ContentTypeStore } from './content-types'
+import { TaxonomyStore } from './taxonomies'
+import { createTermService } from './terms'
 import {
   CORE,
   coreActions,
@@ -423,7 +426,13 @@ async function boot(
     hashCost: options.passwordHashing,
   })
   const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
-  const content = createContentService({ db, types: contentTypes, hooks: stores.hooks })
+  const taxonomies = new TaxonomyStore(assertOpen, stores.capabilities)
+  const content = createContentService({
+    db,
+    types: contentTypes,
+    hooks: stores.hooks,
+    terms: createTermService({ db, taxonomies, hooks: stores.hooks }),
+  })
   const contentScreens = new ContentScreenStore(assertOpen)
   const typesInMenu = new Map<string, number>()
 
@@ -433,6 +442,9 @@ async function boot(
     name: string,
     definition: ContentTypeDefinition,
   ) => {
+    if (taxonomies.has(`${pluginId}.${name}`)) {
+      throw new Error(`Content type "${pluginId}.${name}" has a taxonomy's name; they share names`)
+    }
     const type = contentTypes.register(pluginId, name, definition)
     const base = type.adminPath
     if (!base) return
@@ -584,7 +596,44 @@ async function boot(
   }
 
   registerCoreCapabilities(stores.capabilities)
-  registerCoreContent({ register: registerContentType })
+  /** Registers the taxonomy, and its screen and menu item under its first type with screens. */
+  const registerTaxonomy = (pluginId: string, name: string, definition: TaxonomyDefinition) => {
+    if (contentTypes.get(`${pluginId}.${name}`)) {
+      throw new Error(`Taxonomy "${pluginId}.${name}" has a content type's name; they share names`)
+    }
+    const taxonomy = taxonomies.register(
+      pluginId,
+      name,
+      definition,
+      (type) => contentTypes.get(type)?.adminPath,
+    )
+    const base = taxonomy.adminPath
+    if (!base) return
+    const screen = (kind: 'terms' | 'term', path: string) =>
+      stores.adminPages.add(`${taxonomy.name}.${kind}`, path, {
+        pluginId,
+        taxonomy: { name: taxonomy.name, screen: kind },
+      })
+    screen('terms', base)
+    screen('term', `${base}/:id`)
+    const type = taxonomy.types.map((name) => contentTypes.get(name)).find((t) => t?.adminPath)!
+    if (!type.showInMenu) return
+    const index = typesInMenu.get(`${type.pluginId}:taxonomies`) ?? 0
+    typesInMenu.set(`${type.pluginId}:taxonomies`, index + 1)
+    stores.menu.add({
+      key: `${taxonomy.name}.terms`,
+      pluginId,
+      label: taxonomy.labels.plural,
+      url: base,
+      // After the type's All and Add New, in the type's section: Posts › Categories.
+      order: type.pluginId === CORE ? 2 + index : -50 + index,
+      capability: taxonomy.capabilities.manage,
+      parent:
+        type.pluginId === CORE ? type.adminPath!.slice(ADMIN_PREFIX.length + 1) : type.pluginId,
+    })
+  }
+
+  registerCoreContent({ register: registerContentType, taxonomy: registerTaxonomy })
   const actions = coreActions({
     auth,
     async activate(id) {
@@ -810,6 +859,14 @@ async function boot(
             )
           }
           registerContentType(plugin.id, name, definition)
+        },
+        taxonomy: (name, definition) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Register taxonomy "${plugin.id}.${name}" in setup(), so every part of the site knows it: the admin entry is loaded only where the admin is`,
+            )
+          }
+          registerTaxonomy(plugin.id, name, definition)
         },
       },
       admin: {
@@ -1060,6 +1117,26 @@ function buildKernel(input: {
    * A content type's screens need the type's `edit` capability, as edit.php and post-new.php need
    * `edit_posts`; an entry's edit screen needs the meta capability on that entry too.
    */
+  /** A taxonomy's screen needs `manage_`, as edit-tags.php does; a term's, `edit_` on it too. */
+  const taxonomyScreen = async (
+    screen: { name: string; screen: 'terms' | 'term' },
+    params: Record<string, string>,
+    user: User,
+  ): Promise<AdminResolution> => {
+    const taxonomy = input.content.getTaxonomy(screen.name)!
+    if (
+      !capabilities.can(user, 'core.access_admin') ||
+      !capabilities.can(user, taxonomy.capabilities.manage)
+    ) {
+      return { kind: 'forbidden' }
+    }
+    if (screen.screen === 'terms') return { kind: 'taxonomy-terms', taxonomy }
+    const term = await input.content.getTerm(params.id ?? '')
+    if (term?.taxonomy !== taxonomy.name) return { kind: 'not-found' }
+    if (!capabilities.can(user, taxonomy.capabilities.editTerm, term)) return { kind: 'forbidden' }
+    return { kind: 'taxonomy-term', taxonomy, term }
+  }
+
   const contentScreen = async (
     screen: { type: string; screen: ContentScreen },
     params: Record<string, string>,
@@ -1166,6 +1243,7 @@ function buildKernel(input: {
       const entry = match.route.value
       if ('settingsPage' in entry) return settingsPage(entry.settingsPage, user)
       if ('content' in entry) return contentScreen(entry.content, match.params, user)
+      if ('taxonomy' in entry) return taxonomyScreen(entry.taxonomy, match.params, user)
       const { pluginId, page } = entry
       if (
         !capabilities.can(user, 'core.access_admin') ||

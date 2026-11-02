@@ -7,6 +7,8 @@ import type {
   CapabilityName,
   ContentType,
   Entry,
+  Taxonomy,
+  Term,
   Logger,
   User,
 } from '@otw/sdk'
@@ -31,6 +33,7 @@ export type AdminPageEntry =
   | { pluginId: string; page: AdminPage<unknown> }
   | { pluginId: string; settingsPage: string }
   | { pluginId: string; content: { type: string; screen: ContentScreen } }
+  | { pluginId: string; taxonomy: { name: string; screen: 'terms' | 'term' } }
 
 export type SettingsResolution =
   | { kind: 'not-found' }
@@ -42,6 +45,9 @@ export type AdminResolution =
   | { kind: 'content-list'; type: ContentType }
   /** `entry` is `null` on Add New. An entry in the trash is shown, to be restored. */
   | { kind: 'content-edit'; type: ContentType; entry: Entry | null }
+  /** A taxonomy's screen (edit-tags.php), and a term's (term.php). */
+  | { kind: 'taxonomy-terms'; taxonomy: Taxonomy }
+  | { kind: 'taxonomy-term'; taxonomy: Taxonomy; term: Term }
   | {
       kind: 'page'
       key: string

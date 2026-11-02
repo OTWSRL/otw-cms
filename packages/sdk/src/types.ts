@@ -7,6 +7,7 @@ import type {
   CapabilityArgs,
   CapabilityName,
   ContentTypeName,
+  TaxonomyName,
   FilterContext,
   FilterName,
   FilterValue,
@@ -574,6 +575,11 @@ export interface EntryQuery {
   parentId?: string | null
   /** Only these entries, like WordPress's `post__in`. */
   ids?: readonly string[]
+  /**
+   * Entries with any of these terms in each taxonomy named, like a `tax_query`. Hierarchical
+   * taxonomies include the terms' descendants, as WordPress's category queries do.
+   */
+  terms?: Partial<Record<TaxonomyName, readonly string[]>>
   /** Words in the title, excerpt or body, like WordPress's `s`. Letters' case doesn't matter. */
   search?: string
   /** Dated (as `orderBy: 'date'` dates them) at or after this. */
@@ -599,6 +605,62 @@ export interface EntryList {
   entries: Entry[]
   total: number
   /** With `orderBy: 'tree'`: each entry's number of ancestors, in the same order. */
+  depths?: number[]
+}
+
+/** A term of a taxonomy: a category, a tag, a course topic. WordPress's `WP_Term`. */
+export interface Term {
+  id: string
+  /** Its taxonomy's qualified name, such as `core.category`. */
+  taxonomy: string
+  name: string
+  /** Unique in its taxonomy. */
+  slug: string
+  description: string
+  /** Another term of the same taxonomy, for hierarchical taxonomies. */
+  parentId: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** A new term: a name, and optionally the rest. The slug is made from the name if not given. */
+export interface NewTerm {
+  name: string
+  slug?: string
+  description?: string
+  parentId?: string | null
+}
+
+/** Which terms `listTerms()` returns. */
+export interface TermQuery {
+  taxonomy: TaxonomyName
+  /** `null` for top-level terms only. */
+  parentId?: string | null
+  ids?: readonly string[]
+  /** Words in the name, slug or description. */
+  search?: string
+  /** Only terms with published entries. */
+  hideEmpty?: boolean
+  /**
+   * `name` (the default), or `count` of published entries. `tree`, for hierarchical taxonomies,
+   * lists parents before their children, as the Categories screen does; `depths` then says how
+   * deep each term is.
+   */
+  orderBy?: 'name' | 'count' | 'tree'
+  /** Defaults to A to Z for names, most first for counts. */
+  order?: 'asc' | 'desc'
+  /** 1 to 1000. Defaults to 100. */
+  limit?: number
+  offset?: number
+}
+
+/** A page of terms, each with its count of published entries, as WordPress counts them. */
+export interface TermList {
+  terms: Term[]
+  /** Published entries with each term, in the same order. */
+  counts: number[]
+  total: number
+  /** With `orderBy: 'tree'`: each term's number of ancestors. */
   depths?: number[]
 }
 
@@ -679,6 +741,75 @@ export interface ContentTypeCapabilities {
   deleteEntry: MetaCapabilityName
   /** WordPress's `publish_post`. */
   publishEntry: MetaCapabilityName
+}
+
+/** A taxonomy, as `cms.content.taxonomy()` takes it: WordPress's `register_taxonomy()` arguments. */
+export interface TaxonomyDefinition {
+  labels: {
+    /** Such as `Topic`. */
+    singular: string
+    /** Such as `Topics`. */
+    plural: string
+  }
+  /** The plural in its capability names; as for content types. Defaults to the name and an `s`. */
+  plural?: string
+  /** The content types it classifies. Those no active plugin registers are left out. */
+  types: readonly ContentTypeName[]
+  description?: string
+  /** Terms have parents, as categories do; otherwise they're flat, as tags are. */
+  hierarchical?: boolean
+  /** Its terms have pages on the site. Defaults to `true`, as in WordPress. */
+  public?: boolean
+  /** It has a screen in the admin, and boxes on its types' edit screens. Defaults to `public`. */
+  showUi?: boolean
+  /** A column for it on its types' list screens. Defaults to `false`, as in WordPress. */
+  showAdminColumn?: boolean
+  /**
+   * The term an entry gets when it has none of this taxonomy's, such as "Uncategorized". It's
+   * created when first needed and can't be deleted.
+   */
+  defaultTerm?: { name: string; slug?: string; description?: string }
+  /**
+   * Which roles get its capabilities: `editor` gets all four; `author` and `contributor` may
+   * assign terms. Defaults to `{ editor: 'editor', author: 'author', contributor: 'contributor' }`.
+   */
+  roles?: Readonly<Record<string, ContentRoleLevel>>
+}
+
+/** The capabilities a taxonomy declares, like WordPress's `$taxonomy->cap`. */
+export interface TaxonomyCapabilities {
+  /** Open its screen. WordPress's `manage_terms`. */
+  manage: CapabilityName
+  /** Add and change terms. */
+  edit: CapabilityName
+  delete: CapabilityName
+  /** Give entries its terms, and add flat taxonomies' terms by name while doing so. */
+  assign: CapabilityName
+  /** `can(user, caps.editTerm, term)`: WordPress's `edit_term`. */
+  editTerm: MetaCapabilityName
+  /** WordPress's `delete_term`; the default term can't be deleted. */
+  deleteTerm: MetaCapabilityName
+  /** WordPress's `assign_term`. */
+  assignTerm: MetaCapabilityName
+}
+
+/** A registered taxonomy. */
+export interface Taxonomy {
+  /** Qualified, such as `core.category`. */
+  name: TaxonomyName
+  pluginId: string
+  labels: TaxonomyDefinition['labels']
+  description: string
+  types: readonly ContentTypeName[]
+  hierarchical: boolean
+  public: boolean
+  showUi: boolean
+  showAdminColumn: boolean
+  /** The default term's name and slug. */
+  defaultTerm: { name: string; slug: string; description: string } | null
+  /** Its screen, such as `/admin/posts/categories`, under its first type with screens. */
+  adminPath: string | null
+  capabilities: TaxonomyCapabilities
 }
 
 /** A registered content type. */
@@ -826,6 +957,40 @@ export interface ContentApi {
   restore(id: string): Promise<Entry>
   /** Deletes an entry for good. Its children move up to its parent, as in WordPress. */
   delete(id: string): Promise<void>
+  /**
+   * Registers a taxonomy, like `register_taxonomy()`, under this plugin's id: `topic` in the
+   * `lms` plugin is `lms.topic`. Names are shared with content types.
+   */
+  taxonomy(name: string, definition: TaxonomyDefinition): void
+  /** The registered taxonomies; with `type`, those classifying it. */
+  taxonomies(type?: string): Taxonomy[]
+  getTaxonomy(name: string): Taxonomy | undefined
+  /** Adds a term, like `wp_insert_term()`. Names are unique among a term's siblings. */
+  createTerm(taxonomy: TaxonomyName, term: NewTerm): Promise<Term>
+  /** Changes a term, like `wp_update_term()`. The default term keeps its slug. */
+  updateTerm(id: string, changes: Partial<NewTerm>): Promise<Term>
+  /**
+   * Deletes a term, like `wp_delete_term()`: its children move up to its parent, and entries it
+   * leaves without a term of the taxonomy get the default term, if there is one.
+   */
+  deleteTerm(id: string): Promise<void>
+  getTerm(id: string): Promise<Term | null>
+  getTermBySlug(taxonomy: TaxonomyName, slug: string): Promise<Term | null>
+  listTerms(query: TermQuery): Promise<TermList>
+  /**
+   * The terms of several entries at once, by entry id, so a list shows them with one query.
+   * With `taxonomy`, only its terms.
+   */
+  entryTerms(entryIds: readonly string[], taxonomy?: TaxonomyName): Promise<Map<string, Term[]>>
+  /**
+   * Replaces an entry's terms in a taxonomy, like `wp_set_object_terms()`. `names` that no term
+   * has are added; with neither, the entry gets the default term, if there is one.
+   */
+  setEntryTerms(
+    entryId: string,
+    taxonomy: TaxonomyName,
+    terms: { ids?: readonly string[]; names?: readonly string[] },
+  ): Promise<Term[]>
 }
 
 // ── Tracing ──────────────────────────────────────────────────────────────────

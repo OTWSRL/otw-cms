@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -84,3 +85,32 @@ export const entries = pgTable('cms_entries', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/** Every taxonomy's terms, like WordPress's `wp_terms` and `wp_term_taxonomy` in one. */
+export const terms = pgTable('cms_terms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taxonomy: text('taxonomy').notNull(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull(),
+  description: text('description').notNull().default(''),
+  parentId: uuid('parent_id').references((): AnyPgColumn => terms.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Which entries have which terms, like WordPress's `wp_term_relationships`. */
+export const entryTerms = pgTable(
+  'cms_entry_terms',
+  {
+    entryId: uuid('entry_id')
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    termId: uuid('term_id')
+      .notNull()
+      .references(() => terms.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.entryId, table.termId] }),
+    index('cms_entry_terms_term_id_idx').on(table.termId, table.entryId),
+  ],
+)

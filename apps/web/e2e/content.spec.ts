@@ -6,6 +6,7 @@ test.describe.configure({ mode: 'serial' })
 
 const CONTRIBUTOR = { email: 'cora@example.com', password: 'contributor e2e password' }
 const EDITOR = { email: 'ed@example.com', password: 'editor e2e password' }
+const AUTHOR = { email: 'ava@example.com', password: 'author e2e password' }
 
 function editor(page: Page) {
   return page.getByRole('textbox', { name: /content$/ })
@@ -34,6 +35,7 @@ test('an administrator writes, formats and publishes a post, and finds it in the
   await signInAsAdmin(page)
   await addUser(page, CONTRIBUTOR, 'Contributor')
   await addUser(page, EDITOR, 'Editor')
+  await addUser(page, AUTHOR, 'Author')
 
   await page.goto('/admin/posts')
   await page.getByRole('link', { name: 'Add New Post' }).first().click()
@@ -189,4 +191,60 @@ test('pages nest under their parents, and the list shows the tree', async ({ pag
   await page.goto('/admin/pages')
   const titles = await page.locator('tbody .column-title strong').allTextContents()
   expect(titles).toEqual(['About us', '— Our team', 'Contact'])
+})
+
+test('categories and tags are added, given to posts, and filter the list', async ({ page }) => {
+  await signInAsAdmin(page)
+  await page.goto('/admin/posts/categories')
+  for (const [name, parent] of [
+    ['Events', null],
+    ['Concerts', 'Events'],
+  ] as const) {
+    await page.getByLabel('Name', { exact: true }).fill(name)
+    if (parent) await page.getByLabel('Parent Category').selectOption({ label: parent })
+    await page.getByRole('button', { name: 'Add New Category' }).click()
+    await notice(page, 'Category added.')
+  }
+  const titles = await page.locator('tbody .column-name strong').allTextContents()
+  expect(titles).toEqual(['Events', '— Concerts', 'Uncategorized'])
+
+  await page.goto('/admin/posts/new')
+  await page.getByLabel('Add title').fill('Summer concert')
+  await page.getByRole('checkbox', { name: 'Concerts' }).check()
+  await page.getByRole('textbox', { name: 'Tags' }).fill('music, Outdoors')
+  await page.getByRole('button', { name: 'Publish', exact: true }).click()
+  await notice(page, 'Post published.')
+  await expect(page.getByRole('checkbox', { name: 'Concerts' })).toBeChecked()
+  await expect(page.getByRole('textbox', { name: 'Tags' })).toHaveValue('music, Outdoors')
+
+  await page.goto('/admin/posts')
+  const row = page.getByRole('row', { name: /Summer concert/ })
+  await expect(row.locator('.column-taxonomy-core-category')).toHaveText('Concerts')
+  await expect(row.locator('.column-taxonomy-core-tag')).toHaveText('music, Outdoors')
+  // A parent category takes in its children's posts, as WordPress's category filter does.
+  await page.getByLabel('Filter by category').selectOption({ label: 'Events' })
+  await page.getByRole('button', { name: 'Filter' }).click()
+  await expect(page.getByRole('row', { name: /Summer concert/ })).toBeVisible()
+  await expect(page.locator('tbody tr')).toHaveCount(1)
+  await page.getByRole('link', { name: 'Outdoors' }).click()
+  await expect(page).toHaveURL(/term=/)
+  await expect(page.locator('tbody tr')).toHaveCount(1)
+
+  await page.goto('/admin/posts/tags')
+  const music = page.getByRole('row', { name: /music/ })
+  await expect(music.locator('.column-posts')).toHaveText('1')
+})
+
+test('authors add tags as they write, but not categories, which default to Uncategorized', async ({
+  browser,
+}) => {
+  const author = await as(browser, AUTHOR)
+  await expect(author.getByRole('link', { name: 'Categories' })).toHaveCount(0)
+  await author.goto('/admin/posts/new')
+  await author.getByLabel('Add title').fill('An author’s post')
+  await author.getByRole('textbox', { name: 'Tags' }).fill('fresh-tag')
+  await author.getByRole('button', { name: 'Publish', exact: true }).click()
+  await notice(author, 'Post published.')
+  await expect(author.getByRole('checkbox', { name: 'Uncategorized' })).toBeChecked()
+  expect((await author.goto('/admin/posts/tags'))?.status()).toBe(403)
 })

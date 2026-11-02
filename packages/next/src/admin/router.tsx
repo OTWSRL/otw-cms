@@ -14,6 +14,8 @@ import { LoginShell } from './login-shell'
 import { AdminScreen, adminTitle } from './screen'
 import { ContentEditScreen } from './screens/content-edit'
 import { ContentListScreen } from './screens/content-list'
+import { ContentTermScreen } from './screens/content-term'
+import { ContentTermsScreen } from './screens/content-terms'
 import type { ScreenContext } from './screens/context'
 import { DashboardScreen } from './screens/dashboard'
 import { LoginScreen } from './screens/login'
@@ -131,6 +133,31 @@ const resolveScreen = cache(async (path: string, query: string): Promise<Resolve
     )
     const title = `${entry ? 'Edit' : 'Add New'} ${type.labels.singular}`
     return { kernel, user, title, body }
+  }
+  if (resolution.kind === 'taxonomy-terms') {
+    const { taxonomy } = resolution
+    const body = (
+      <ContentTermsScreen
+        kernel={kernel}
+        user={user}
+        taxonomy={taxonomy}
+        searchParams={searchParams}
+      />
+    )
+    return { kernel, user, title: taxonomy.labels.plural, body }
+  }
+  if (resolution.kind === 'taxonomy-term') {
+    const { taxonomy, term } = resolution
+    const body = (
+      <ContentTermScreen
+        kernel={kernel}
+        user={user}
+        taxonomy={taxonomy}
+        term={term}
+        searchParams={searchParams}
+      />
+    )
+    return { kernel, user, title: `Edit ${taxonomy.labels.singular}`, body }
   }
   const { Component } = resolution
   const body = (

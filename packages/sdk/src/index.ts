@@ -1,6 +1,7 @@
 import type {
   AdminDefinition,
   Entry,
+  Term,
   EntryFields,
   EntryStatus,
   PluginContext,
@@ -83,6 +84,17 @@ export interface Actions {
   'content.restored': { entry: Entry }
   /** An entry was deleted for good: `deleted_post`. Runs in the delete's transaction. */
   'content.deleted': { entry: Entry }
+  /** A term was added or changed: WordPress's `created_term` and `edited_term`. */
+  'content.term.saved': { term: Term; previous: Term | null }
+  /** A term was deleted, after its entries and children were moved: `delete_term`. */
+  'content.term.deleted': { term: Term }
+  /** An entry's terms in a taxonomy were set: `set_object_terms`. */
+  'content.entry.terms': {
+    entryId: string
+    taxonomy: string
+    terms: Term[]
+    previous: Term[]
+  }
 }
 
 /** Service name -> the API the providing plugin exposes to others. */
@@ -137,6 +149,17 @@ export interface ContentTypes {
   'core.page': true
 }
 
+/**
+ * Taxonomy name -> `true`, or `{ plural }` when its plural isn't the name and an `s`. Declaring a
+ * taxonomy here types its capability names, such as `lms.manage_topics` and `lms.edit_topic`.
+ */
+export interface Taxonomies {
+  /** Categories for posts, as in WordPress: hierarchical, with "Uncategorized" by default. */
+  'core.category': { plural: 'categories' }
+  /** Tags for posts, as in WordPress. */
+  'core.tag': true
+}
+
 /** Slot name -> the props each fill receives. */
 export interface Slots {
   /** Links in the site's main navigation, which the site's layout renders with `<Slot name="header.nav" />`. */
@@ -166,14 +189,23 @@ export type ServiceName = keyof Services & string
 export type SettingName = keyof Settings & string
 /** Any declared content type's name. */
 export type ContentTypeName = keyof ContentTypes & string
-/** Any declared capability's name, content types' included. */
-export type CapabilityName = (keyof Capabilities & string) | ContentCapabilityName
-/** Any declared meta capability's name, content types' included. */
-export type MetaCapabilityName = (keyof MetaCapabilities & string) | ContentMetaCapabilityName
+/** Any declared taxonomy's name. */
+export type TaxonomyName = keyof Taxonomies & string
+/** Any declared capability's name, content types' and taxonomies' included. */
+export type CapabilityName =
+  (keyof Capabilities & string) | ContentCapabilityName | TaxonomyCapabilityName
+/** Any declared meta capability's name, content types' and taxonomies' included. */
+export type MetaCapabilityName =
+  (keyof MetaCapabilities & string) | ContentMetaCapabilityName | TaxonomyMetaCapabilityName
 
 type PluginOf<K extends string> = K extends `${infer P}.${string}` ? P : never
 type SingularOf<K extends string> = K extends `${string}.${infer N}` ? N : never
 type PluralOf<K extends ContentTypeName> = ContentTypes[K] extends {
+  plural: infer P extends string
+}
+  ? P
+  : `${SingularOf<K>}s`
+type TaxonomyPluralOf<K extends TaxonomyName> = Taxonomies[K] extends {
   plural: infer P extends string
 }
   ? P
@@ -203,6 +235,18 @@ export type ContentMetaCapabilityName = {
     K in ContentTypeName
   ]: `${PluginOf<K>}.${'edit' | 'read' | 'delete' | 'publish'}_${SingularOf<K>}`
 }[ContentTypeName]
+/** The primitive capabilities of declared taxonomies, such as `core.manage_categories`. */
+export type TaxonomyCapabilityName = {
+  [
+    K in TaxonomyName
+  ]: `${PluginOf<K>}.${'manage' | 'edit' | 'delete' | 'assign'}_${TaxonomyPluralOf<K>}`
+}[TaxonomyName]
+
+/** The meta capabilities of declared taxonomies, such as `core.edit_category`: each takes a term. */
+export type TaxonomyMetaCapabilityName = {
+  [K in TaxonomyName]: `${PluginOf<K>}.${'edit' | 'delete' | 'assign'}_${SingularOf<K>}`
+}[TaxonomyName]
+
 /** Any declared slot's name. */
 export type SlotName = keyof Slots & string
 
@@ -211,7 +255,9 @@ export type CapabilityArgs<C extends string> = C extends keyof MetaCapabilities
   ? MetaCapabilities[C]
   : C extends ContentMetaCapabilityName
     ? [entry: Entry]
-    : []
+    : C extends TaxonomyMetaCapabilityName
+      ? [term: Term]
+      : []
 
 /** The value a filter passes through its handlers: the first of its `[value, context]`. */
 export type FilterValue<K extends FilterName> = Filters[K] extends [infer V, unknown] ? V : never

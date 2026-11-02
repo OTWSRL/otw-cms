@@ -1,6 +1,15 @@
 import { Button, ListTable, TableNav, Views, type Column, type View } from '@otw/admin-ui'
 import { inSentence, type Kernel } from '@otw/core'
-import type { ContentType, Entry, EntryQuery, EntryStatus, SearchParams, User } from '@otw/sdk'
+import type {
+  ContentType,
+  Entry,
+  EntryQuery,
+  EntryStatus,
+  SearchParams,
+  Taxonomy,
+  Term,
+  User,
+} from '@otw/sdk'
 import type { ReactNode } from 'react'
 import { firstParam } from '../../runtime/search-params'
 import { AdminScreen } from '../screen'
@@ -20,6 +29,7 @@ const STATES: Partial<Record<EntryStatus, string>> = {
   private: 'Private',
 }
 const MONTH = /^(\d{4})(\d{2})$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** What the list shows, from its query string: WordPress's post_status, author, s, m, orderby. */
 interface ListState {
@@ -31,6 +41,8 @@ interface ListState {
   orderby: 'title' | 'date' | null
   order: 'asc' | 'desc' | null
   page: number
+  /** Term ids, from a taxonomy column's link or dropdown: entries with each of them. */
+  terms: string[]
 }
 
 function readState(params: SearchParams): ListState {
@@ -47,6 +59,7 @@ function readState(params: SearchParams): ListState {
     orderby: orderby === 'title' || orderby === 'date' ? orderby : null,
     order: order === 'asc' || order === 'desc' ? order : null,
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+    terms: [params.term].flat().filter((id): id is string => !!id && UUID.test(id)),
   }
 }
 
@@ -60,6 +73,7 @@ function listUrl(type: ContentType, state: ListState, changes: Partial<ListState
   if (next.month) query.set('m', next.month)
   if (next.orderby) query.set('orderby', next.orderby)
   if (next.order) query.set('order', next.order)
+  for (const term of next.terms) query.append('term', term)
   if (next.page > 1) query.set('paged', String(next.page))
   const search = query.toString()
   return search ? `${type.adminPath}?${search}` : type.adminPath!
@@ -105,7 +119,13 @@ export async function ContentListScreen({
   const plural = inSentence(type.labels.plural)
   const trashView = state.status === 'trash'
 
-  const tree = type.hierarchical && !state.orderby && !state.search && !state.month
+  const filterTerms = (
+    await Promise.all(state.terms.map((id) => kernel.content.getTerm(id)))
+  ).filter((term): term is Term => term !== null)
+  const byTaxonomy: Record<string, string[]> = {}
+  for (const term of filterTerms) (byTaxonomy[term.taxonomy] ??= []).push(term.id)
+  const tree =
+    type.hierarchical && !state.orderby && !state.search && !state.month && !state.terms.length
   const query: EntryQuery = {
     type: type.name,
     status: state.status ?? undefined,
@@ -116,6 +136,7 @@ export async function ContentListScreen({
     order: state.order ?? undefined,
     limit: PER_PAGE,
     offset: (state.page - 1) * PER_PAGE,
+    terms: filterTerms.length > 0 ? byTaxonomy : undefined,
   }
   const [list, counts, mine, months] = await Promise.all([
     kernel.content.list(query),
@@ -125,6 +146,21 @@ export async function ContentListScreen({
   ])
   const authorIds = list.entries.map((entry) => entry.authorId).filter((id) => id !== null)
   const authors = new Map((await kernel.auth.getUsers(authorIds)).map((u) => [u.id, u]))
+  // Taxonomy columns: every entry's terms on the page in one query, as for the authors.
+  const columnTaxonomies = kernel.content
+    .taxonomies(type.name)
+    .filter((taxonomy) => taxonomy.showAdminColumn && taxonomy.showUi)
+  const filterTaxonomies = columnTaxonomies.filter((taxonomy) => taxonomy.hierarchical)
+  const [assigned, dropdowns] = await Promise.all([
+    columnTaxonomies.length > 0
+      ? kernel.content.entryTerms(list.entries.map((entry) => entry.id))
+      : new Map<string, Term[]>(),
+    Promise.all(
+      filterTaxonomies.map((taxonomy) =>
+        kernel.content.listTerms({ taxonomy: taxonomy.name, orderBy: 'tree', limit: 1000 }),
+      ),
+    ),
+  ])
   const columnData = new Map(
     await Promise.all(
       extensions.columns.map(
@@ -232,6 +268,22 @@ export async function ContentListScreen({
       render: (entry) => entryDate(entry, kernel.setting('site.locale')),
     },
   ]
+  const taxonomyColumn = (taxonomy: Taxonomy): Column<Entry> => ({
+    key: `taxonomy-${taxonomy.name.replace('.', '-')}`,
+    label: taxonomy.labels.plural,
+    render: (entry) => {
+      const terms = (assigned.get(entry.id) ?? []).filter((t) => t.taxonomy === taxonomy.name)
+      if (terms.length === 0) return '—'
+      return terms.map((term, i) => (
+        <span key={term.id}>
+          {i > 0 && ', '}
+          <a href={listUrl(type, state, { terms: [term.id] })}>{term.name}</a>
+        </span>
+      ))
+    },
+  })
+  const date = base.findIndex((column) => column.key === 'date')
+  base.splice(date, 0, ...columnTaxonomies.map(taxonomyColumn))
   const columns = placeColumns(
     base,
     extensions.columns.map((column) => ({
@@ -322,6 +374,11 @@ export async function ContentListScreen({
       <form method="get" action={type.adminPath!} id="entries-filter" className="search-form">
         {state.status && <input type="hidden" name="status" value={state.status} />}
         {state.author && <input type="hidden" name="author" value={state.author} />}
+        {filterTerms
+          .filter((term) => !filterTaxonomies.some((taxonomy) => taxonomy.name === term.taxonomy))
+          .map((term) => (
+            <input key={term.id} type="hidden" name="term" value={term.id} />
+          ))}
         <p className="search-box">
           <label className="screen-reader-text" htmlFor="entry-search">
             Search {plural}
@@ -351,6 +408,27 @@ export async function ContentListScreen({
             ))}
           </select>
           <Button type="submit">Apply</Button>
+          {filterTaxonomies.map((taxonomy, i) => (
+            <span key={taxonomy.name}>
+              <label className="screen-reader-text" htmlFor={`filter-by-${taxonomy.name}`}>
+                Filter by {inSentence(taxonomy.labels.singular)}
+              </label>
+              <select
+                id={`filter-by-${taxonomy.name}`}
+                name="term"
+                form="entries-filter"
+                defaultValue={filterTerms.find((term) => term.taxonomy === taxonomy.name)?.id ?? ''}
+              >
+                <option value="">All {taxonomy.labels.plural}</option>
+                {dropdowns[i]!.terms.map((term, j) => (
+                  <option key={term.id} value={term.id}>
+                    {'\u00a0\u00a0\u00a0'.repeat(dropdowns[i]!.depths?.[j] ?? 0)}
+                    {term.name}
+                  </option>
+                ))}
+              </select>
+            </span>
+          ))}
           {months.length > 0 && (
             <>
               <label className="screen-reader-text" htmlFor="filter-by-date">
@@ -372,10 +450,12 @@ export async function ContentListScreen({
                   </option>
                 ))}
               </select>
-              <Button type="submit" form="entries-filter">
-                Filter
-              </Button>
             </>
+          )}
+          {(months.length > 0 || filterTaxonomies.length > 0) && (
+            <Button type="submit" form="entries-filter">
+              Filter
+            </Button>
           )}
           {trashView && counts.trash > 0 && kernel.can(user, caps.delete) && (
             <Button type="submit" name="bulk" value="empty-trash">

@@ -1,6 +1,8 @@
 import type {
   CapabilityName,
   ContentType,
+  Taxonomy,
+  TaxonomyName,
   Entry,
   EntryChanges,
   EntryFields,
@@ -13,6 +15,7 @@ import { safeRedirectPath, type InternalAction } from './admin'
 import type { ContentService } from './content'
 import type { ContentScreenStore } from './content-screens'
 import { inSentence, type ContentTypeStore } from './content-types'
+import { firstSpellings } from './terms'
 
 export interface ContentActionDependencies {
   content: ContentService
@@ -200,6 +203,7 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
         const entry = await asActionError(() =>
           previous ? content.update(previous.id, changes) : content.create(type.name, changes),
         )
+        await saveTerms(entry, type, form, user)
         for (const box of deps.screens.for(type.name).metaBoxes) {
           await box.save?.({ entry, form, user })
         }
@@ -210,6 +214,117 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
       })
     },
   }
+
+  /**
+   * The taxonomy boxes' choices: ticked ids for hierarchical taxonomies, comma-separated names for
+   * flat ones, as WordPress's category checklist and tags box send them. Only the boxes the form
+   * had (named in `taxonomies`), each needing the taxonomy's `assign_`.
+   */
+  const saveTerms = async (entry: Entry, type: ContentType, form: FormData, user: User) => {
+    const shown = new Set(form.getAll('taxonomies').filter((name) => typeof name === 'string'))
+    for (const taxonomy of content.taxonomies(type.name)) {
+      if (!shown.has(taxonomy.name) || !taxonomy.showUi) continue
+      if (!can(user, taxonomy.capabilities.assign)) throw new ForbiddenError()
+      const terms = taxonomy.hierarchical
+        ? { ids: form.getAll(`terms.${taxonomy.name}`).filter((id) => typeof id === 'string') }
+        : { names: tagNames(field(form, `tags.${taxonomy.name}`)) }
+      await asActionError(() => content.setEntryTerms(entry.id, taxonomy.name, terms))
+    }
+  }
+
+  /** A taxonomy with a screen, named by the form. */
+  const screenTaxonomy = (name: string): Taxonomy => {
+    const taxonomy = content.getTaxonomy(name)
+    if (!taxonomy?.adminPath) throw new ActionError('That taxonomy is not available.')
+    return taxonomy
+  }
+
+  const termOf = async (id: string) => {
+    const term = await content.getTerm(id)
+    const taxonomy = term ? content.getTaxonomy(term.taxonomy) : undefined
+    if (!term || !taxonomy) throw new ActionError('That term no longer exists.')
+    return { term, taxonomy }
+  }
+
+  const termForms: InternalAction[] = [
+    {
+      name: 'create-term',
+      capability: 'core.access_admin',
+      async handler({ form, user }) {
+        const taxonomy = screenTaxonomy(field(form, 'taxonomy'))
+        const caps = taxonomy.capabilities
+        if (!can(user!, caps.manage) || !can(user!, caps.edit)) throw new ForbiddenError()
+        await asActionError(() =>
+          content.createTerm(taxonomy.name as TaxonomyName, {
+            name: field(form, 'name'),
+            slug: field(form, 'slug'),
+            description: field(form, 'description'),
+            parentId: field(form, 'parent') || null,
+          }),
+        )
+        return { notice: `${taxonomy.labels.singular} added.` }
+      },
+    },
+    {
+      name: 'update-term',
+      capability: 'core.access_admin',
+      async handler({ form, user }) {
+        const { term, taxonomy } = await termOf(field(form, 'id'))
+        if (!can(user!, taxonomy.capabilities.editTerm, term)) throw new ForbiddenError()
+        await asActionError(() =>
+          content.updateTerm(term.id, {
+            name: field(form, 'name'),
+            slug: field(form, 'slug'),
+            description: field(form, 'description'),
+            ...(taxonomy.hierarchical ? { parentId: field(form, 'parent') || null } : {}),
+          }),
+        )
+        return { notice: `${taxonomy.labels.singular} updated.` }
+      },
+    },
+    {
+      name: 'delete-term',
+      capability: 'core.access_admin',
+      async handler({ form, user }) {
+        const { term, taxonomy } = await termOf(field(form, 'id'))
+        if (!can(user!, taxonomy.capabilities.deleteTerm, term)) throw new ForbiddenError()
+        await asActionError(() => content.deleteTerm(term.id))
+        return {
+          redirect: safeRedirectPath(field(form, 'redirect')) ?? undefined,
+          notice: `${taxonomy.labels.singular} deleted.`,
+        }
+      },
+    },
+    {
+      name: 'bulk-terms',
+      capability: 'core.access_admin',
+      async handler({ form, user }) {
+        const taxonomy = screenTaxonomy(field(form, 'taxonomy'))
+        if (!can(user!, taxonomy.capabilities.manage)) throw new ForbiddenError()
+        if (field(form, 'bulk') !== 'delete') throw new ActionError('Choose a bulk action.')
+        const ids = form.getAll('ids').filter((id): id is string => typeof id === 'string')
+        const plural = inSentence(taxonomy.labels.plural)
+        if (ids.length === 0) throw new ActionError(`Select the ${plural} to delete.`)
+        if (ids.length > MAX_BULK) throw new ActionError(`Change at most ${MAX_BULK} at a time.`)
+        const { terms } = await content.listTerms({
+          taxonomy: taxonomy.name as TaxonomyName,
+          ids,
+          limit: MAX_BULK,
+        })
+        let deleted = 0
+        await deps.transaction(async () => {
+          for (const term of terms) {
+            if (!can(user!, taxonomy.capabilities.deleteTerm, term)) continue
+            await asActionError(() => content.deleteTerm(term.id))
+            deleted++
+          }
+        })
+        const skipped = ids.length - deleted
+        const noun = inSentence(deleted === 1 ? taxonomy.labels.singular : taxonomy.labels.plural)
+        return { notice: `${deleted} ${noun} deleted.${skippedNote(skipped)}` }
+      },
+    },
+  ]
 
   const single = (
     name: string,
@@ -307,6 +422,7 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
 
   return [
     save,
+    ...termForms,
     single(
       'trash-entry',
       (entry) => content.trash(entry.id),
@@ -352,6 +468,16 @@ const CORE_BULK: Readonly<
     run: (content, entry) => content.delete(entry.id),
     done: 'permanently deleted',
   },
+}
+
+/** "news, Local Events ,, news" → ["news", "Local Events"]: as WordPress splits a tags field. */
+export function tagNames(value: string): string[] {
+  return firstSpellings(
+    value
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean),
+  )
 }
 
 function skippedNote(skipped: number): string {

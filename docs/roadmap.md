@@ -25,7 +25,7 @@ and the API routes load, so none of it reaches the site's visitors (Plugin Handb
 screens).
 
 Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
-screens, are done.
+screens, are done; 7c has taxonomies, with meta to come.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -354,6 +354,21 @@ source.
   `rowAction` and `bulkAction` from their admin entry, for one type, several or `'*'`.
 - Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
   which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
+
+### 7c. Taxonomies (done) and meta
+
+- **Taxonomies**: `cms.content.taxonomy()` in `setup()`, sharing names with content types.
+  WordPress's capabilities (`manage_`, `edit_`, `delete_`, `assign_`, and `edit_`, `delete_`,
+  `assign_` one term), with editors managing and authors and contributors assigning. Core's
+  Categories (hierarchical, default Uncategorized) and Tags on posts.
+- **Terms** in `cms_terms` (slug unique per taxonomy; name unique among siblings, by index) and
+  `cms_entry_terms`. Counts are computed per page, not stored. Deleting a term moves its children
+  up and gives entries left with none the default; setting by name adds missing terms, as for
+  WordPress's tags. The default term is created when first needed, with an insert that's safe
+  when two saves race. `list({ terms })` includes descendants.
+- **Screens**: `edit-tags.php` with the add form, `term.php`, the edit screen's checklist and
+  tags field (each checked against `assign_`), list columns and an "All Categories" filter.
+- Not yet: term meta, adding a category from the edit screen, term pages on the site (7d).
 
 Not in 7b: Quick Edit and Bulk Edit, preview and View links (7d), plugin-defined blocks and a
 raw-HTML block, autosave to the server, screen options, editing the publish date, a site time

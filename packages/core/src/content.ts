@@ -29,18 +29,20 @@ import {
 } from 'drizzle-orm'
 import { cleanBlocks } from './blocks'
 import { inSentence, type ContentTypeStore } from './content-types'
+import { entryTermsCondition, type createTermService } from './terms'
 import { entries, users } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { HookBus } from './hooks'
 import { firstFreeSlug, slugify, slugStem } from './slugs'
 
-/** `cms.content` without `type()`, which only plugins call, in setup. */
-export type ContentService = Omit<ContentApi, 'type'>
+/** `cms.content` without `type()` and `taxonomy()`, which only plugins call, in setup. */
+export type ContentService = Omit<ContentApi, 'type' | 'taxonomy'>
 
 export interface ContentServiceOptions {
   db: DatabaseContext
   types: ContentTypeStore
   hooks: HookBus
+  terms: ReturnType<typeof createTermService>
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -110,7 +112,12 @@ function notFound(): never {
  * transaction with their hooks, so what a `content.saved` handler writes is kept or rolled back
  * with the entry.
  */
-export function createContentService({ db, types, hooks }: ContentServiceOptions): ContentService {
+export function createContentService({
+  db,
+  types,
+  hooks,
+  terms,
+}: ContentServiceOptions): ContentService {
   const requireType = (name: string): ContentType => {
     const type = types.get(name)
     if (!type) {
@@ -339,6 +346,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
   }
 
   return {
+    ...terms.service,
     types: () => types.list(),
     getType: (name) => types.get(name),
 
@@ -349,6 +357,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
         const fields = await filtered(type, cleanFields(merge(NEW_ENTRY, input)), null)
         await checkRelations(type, id, fields, null)
         const entry = await write(type, id, fields, null)
+        await terms.applyDefaultTerms(entry)
         await announce(entry, null)
         return entry
       }),
@@ -365,6 +374,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
         )
         await checkRelations(type, previous.id, fields, previous)
         const entry = await write(type, previous.id, fields, previous)
+        await terms.applyDefaultTerms(entry)
         await announce(entry, previous)
         return entry
       }),
@@ -657,13 +667,15 @@ function listQuery(query: EntryQuery) {
 
   const { authorId, parentId, search, after, before } = query
   if (query.ids !== undefined && !Array.isArray(query.ids)) invalid('ids must be a list')
+  const byTerms = entryTermsCondition(query.terms)
   const ids = query.ids?.filter((id) => typeof id === 'string' && UUID.test(id))
   // Ids that can't exist match nothing, as a filter by a stale link would.
   const impossible =
     statuses.length === 0 ||
     (authorId !== undefined && !UUID.test(authorId)) ||
     (parentId !== undefined && parentId !== null && !UUID.test(parentId)) ||
-    ids?.length === 0
+    ids?.length === 0 ||
+    byTerms === null
   const where = impossible
     ? null
     : and(
@@ -676,6 +688,7 @@ function listQuery(query: EntryQuery) {
             ? isNull(entries.parentId)
             : eq(entries.parentId, parentId),
         ids === undefined ? undefined : inArray(entries.id, ids),
+        byTerms ?? undefined,
         search === undefined ? undefined : searchCondition(search),
         after === undefined ? undefined : gte(SORTS.date, dateBound(after, 'after')),
         before === undefined ? undefined : lt(SORTS.date, dateBound(before, 'before')),
