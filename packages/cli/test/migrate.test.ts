@@ -40,7 +40,7 @@ describe('cms migrate', () => {
   it('migrates a new site without a backup, since there is nothing to lose', async () => {
     const result = await migrate(options([shop([products])]))
     expect(result).toEqual({
-      applied: ['core/0001_core_tables', 'shop/0001_products'],
+      applied: ['core/0001_core_tables', 'core/0002_entries', 'shop/0001_products'],
       backup: null,
     })
   })

@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  bootKernel,
-  cookiesFrom,
-  formPost,
-  ORIGIN,
-  PASSWORD,
-  plugin,
-  redirectOf,
-  signIn,
-} from './helpers'
+import { bootKernel, cookiesFrom, formPost, ORIGIN, PASSWORD, redirectOf, signIn } from './helpers'
 
 const action = (name: string) => `/api/p/core/actions/${name}`
 
@@ -213,11 +204,8 @@ describe('users', () => {
   })
 
   it('is limited to users who may manage users', async () => {
-    const shop = plugin('shop', {
-      setup: (cms) =>
-        cms.auth.role('editor', { label: 'Editor', capabilities: ['core.access_admin'] }),
-    })
-    const kernel = await bootKernel({ plugins: [shop] })
+    const kernel = await bootKernel({ plugins: [] })
+    // Editors use the admin, but don't manage users.
     const { cookie } = await signIn(kernel, 'editor')
     const response = await kernel.handleApi(
       formPost(

@@ -2,7 +2,8 @@ import type { PluginDefinition, SettingDefinitions, User } from '@otw/sdk'
 import { ActionError } from '@otw/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
 import { AuthError, type AuthService } from './auth'
-import { ADMINISTRATOR, type CapabilityStore } from './capabilities'
+import { ADMINISTRATOR, READ, type CapabilityStore } from './capabilities'
+import type { ContentTypeStore } from './content-types'
 import { coreMigrations } from './core-migrations'
 import type { SettingsLayoutStore } from './settings-pages'
 import type { AutoUpdateMode, UpdateService } from './updates'
@@ -63,13 +64,39 @@ export const coreDefinition: PluginDefinition = {
 
 export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.role(CORE, ADMINISTRATOR, { label: 'Administrator' })
+  // WordPress's content roles. What each may do with posts and pages comes from those types.
+  const content = [
+    ['editor', 'Editor'],
+    ['author', 'Author'],
+    ['contributor', 'Contributor'],
+  ] as const
+  for (const [id, label] of content) {
+    capabilities.role(CORE, id, { label, capabilities: ['core.access_admin'] })
+  }
   capabilities.role(CORE, 'customer', { label: 'Customer' })
+  capabilities.capability(CORE, READ, { label: 'Read published content' })
   capabilities.capability(CORE, 'core.access_admin', { label: 'Use the admin' })
   capabilities.capability(CORE, 'core.manage_plugins', { label: 'Activate and deactivate plugins' })
   capabilities.capability(CORE, 'core.manage_settings', { label: 'Change settings' })
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
   // No role gets it: updating rebuilds the site, so it stays with administrators unless granted.
   capabilities.capability(CORE, 'core.manage_updates', { label: 'Update the CMS and plugins' })
+}
+
+/** WordPress's posts and pages. Authors and contributors write posts; pages are editors'. */
+export function registerCoreContent(types: ContentTypeStore): void {
+  types.register(CORE, 'post', {
+    labels: { singular: 'Post', plural: 'Posts' },
+    public: true,
+    supports: ['title', 'body', 'excerpt', 'author'],
+  })
+  types.register(CORE, 'page', {
+    labels: { singular: 'Page', plural: 'Pages' },
+    public: true,
+    hierarchical: true,
+    supports: ['title', 'body', 'author', 'position'],
+    roles: { editor: 'editor' },
+  })
 }
 
 /** WordPress's Settings › General, which other plugins add sections and fields to. */

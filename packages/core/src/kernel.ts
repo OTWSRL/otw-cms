@@ -46,11 +46,14 @@ import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
 import { createAuthService, type AuthService } from './auth'
 import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
+import { createContentService, type ContentService } from './content'
+import { ContentTypeStore } from './content-types'
 import {
   CORE,
   coreActions,
   coreDefinition,
   registerCoreCapabilities,
+  registerCoreContent,
   registerCoreSettings,
 } from './core-plugin'
 import { DatabaseContext } from './database'
@@ -206,6 +209,8 @@ export interface Kernel {
   handleApi(request: Request): Promise<Response>
 
   readonly auth: AuthService
+  /** Content types and their entries, for the admin's screens and the site's pages. */
+  readonly content: ContentService
   can<C extends CapabilityName | MetaCapabilityName>(
     user: User | null,
     capability: C,
@@ -410,6 +415,8 @@ async function boot(
     roleExists: (role) => stores.capabilities.hasRole(role),
     hashCost: options.passwordHashing,
   })
+  const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
+  const content = createContentService({ db, types: contentTypes, hooks: stores.hooks })
 
   const registerPage = (pluginId: string, route: PageRoute<unknown>) => {
     assertOpen(`page route "${route.name}"`)
@@ -528,6 +535,7 @@ async function boot(
   }
 
   registerCoreCapabilities(stores.capabilities)
+  registerCoreContent(contentTypes)
   const actions = coreActions({
     auth,
     async activate(id) {
@@ -736,6 +744,17 @@ async function boot(
         },
         can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
       },
+      content: {
+        ...content,
+        type: (name, definition) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Register content type "${plugin.id}.${name}" in setup(), so every part of the site knows it: the admin entry is loaded only where the admin is`,
+            )
+          }
+          contentTypes.register(plugin.id, name, definition)
+        },
+      },
       admin: {
         page: (page) => {
           inAdminEntry(`admin page "${plugin.id}.${page.name}"`)
@@ -902,6 +921,7 @@ async function boot(
     settingsPages,
     installed,
     auth,
+    content,
   })
 }
 
@@ -936,6 +956,7 @@ function buildKernel(input: {
   settingsPages: ReadonlyMap<string, ResolvedSettingsPage>
   installed: ReadonlyMap<string, PluginDefinition>
   auth: AuthService
+  content: ContentService
   origins: OriginPolicy
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
@@ -1006,6 +1027,7 @@ function buildKernel(input: {
       }),
 
     auth: input.auth,
+    content: input.content,
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),
     roles: () => capabilities.roles(),
     capabilities: () => capabilities.capabilities(),

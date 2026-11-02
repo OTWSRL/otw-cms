@@ -71,7 +71,6 @@ describe('update actions', () => {
     const { calls, service } = recordingService()
     const staff = plugin('staff', {
       setup(cms) {
-        cms.auth.role('editor', { label: 'Editor', capabilities: ['core.access_admin'] })
         cms.auth.role('maintainer', {
           label: 'Maintainer',
           capabilities: ['core.access_admin', 'core.manage_updates'],

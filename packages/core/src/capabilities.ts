@@ -2,6 +2,9 @@ import type { CapabilityDefinition, RequiredCapabilities, RoleDefinition, User }
 
 export const ADMINISTRATOR = 'administrator'
 
+/** WordPress's `read`: every role starts with it, so a role reads published entries and its own. */
+export const READ = 'core.read'
+
 const ROLE_ID = /^[a-z][a-z0-9_]*$/
 
 type Mapper = (user: User, ...args: unknown[]) => RequiredCapabilities
@@ -78,7 +81,7 @@ export class CapabilityStore {
       id,
       label: definition.label,
       pluginId,
-      capabilities: new Set(definition.capabilities ?? []),
+      capabilities: new Set([READ, ...(definition.capabilities ?? [])]),
     })
   }
 

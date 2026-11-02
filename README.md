@@ -159,10 +159,21 @@ export default definePlugin({
   },
 
   setup(cms) {
+    cms.auth.role('teacher', { label: 'Teacher', capabilities: ['core.access_admin'] })
+    // WordPress's register_post_type(): courses are entries of the type lms.course, with
+    // WordPress's capabilities (lms.edit_courses, lms.edit_others_courses, lms.publish_courses…
+    // and lms.edit_course for one course). Teachers write and publish their own.
+    cms.content.type('course', {
+      labels: { singular: 'Course', plural: 'Courses' },
+      public: true,
+      supports: ['title', 'body', 'excerpt', 'author'],
+      roles: { editor: 'editor', teacher: 'author' },
+    })
+
     cms.routes.page({
       name: 'course',
       path: '/courses/:slug', // a site can move it: "routes": { "lms.course": "/learn/:slug" }
-      load: ({ params }) => findCourse(cms.db, params.slug!), // null → 404
+      load: ({ params }) => cms.content.getBySlug('lms.course', params.slug!), // null → 404
       metadata: ({ data }) => ({ title: data.title }),
       component: ({ data }) => <CoursePage course={data} />,
     })
@@ -172,14 +183,12 @@ export default definePlugin({
       cms.hooks.addAction('commerce.order.paid', ({ order }) => enrollBuyer(cms.db, order))
     })
 
-    cms.auth.role('teacher', { label: 'Teacher', capabilities: ['core.access_admin'] })
-    cms.auth.capability('lms.manage_courses', { label: 'Manage courses', roles: ['teacher'] })
-    cms.auth.grant('shop_manager', ['lms.manage_courses']) // any plugin's role
+    cms.auth.capability('lms.grade', { label: 'Grade students', roles: ['teacher'] })
+    cms.auth.grant('shop_manager', ['lms.edit_courses']) // any plugin's role
     // WordPress's map_meta_cap: the object decides which capabilities are needed.
-    cms.auth.metaCapability('lms.edit_course', {
-      label: 'Edit a course',
-      map: (user, course) =>
-        course.authorId === user.id ? ['lms.manage_courses'] : ['lms.manage_others_courses'],
+    cms.auth.metaCapability('lms.grade_enrollment', {
+      label: 'Grade a student',
+      map: (user, enrollment) => (enrollment.teacherId === user.id ? ['lms.grade'] : false),
     })
   },
 })
@@ -188,7 +197,7 @@ export default definePlugin({
 ```tsx
 // src/admin.tsx: the admin entry, the package's "./admin" export, which only the admin and the
 // API load: Next.js sends every client component a page imports to its visitors.
-import { ActionError, defineAdmin } from '@otw/sdk'
+import { ActionError, defineAdmin, ForbiddenError } from '@otw/sdk'
 import lms from './index'
 
 export default defineAdmin(lms, (cms) => {
@@ -196,15 +205,16 @@ export default defineAdmin(lms, (cms) => {
       name: 'courses',
       path: '/courses', // served at /admin/lms/courses
       title: 'Courses',
-      capability: 'lms.manage_courses',
+      capability: 'lms.edit_courses',
       menu: { label: 'Courses' },
-      load: () => listCourses(cms.db), // write load before title and component, for inference
+      // Write load before title and component, so their data is typed from it.
+      load: () => cms.content.list({ type: 'lms.course', limit: 50 }),
       titleAction: () => ({ label: 'Add Course', url: cms.admin.url('lms.course-new') }),
       component: ({ data, user }) => (
         // From @otw/admin-ui: WP_List_Table's markup, striped, with a phone layout.
         <ListTable
           caption="Courses"
-          rows={data.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
+          rows={data.entries.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
           rowKey={(course) => course.id}
           rowActions={(course) => [
             <a key="edit" href={cms.admin.url('lms.course', { id: course.id })}>
@@ -232,10 +242,13 @@ export default defineAdmin(lms, (cms) => {
     cms.slots.fill('admin.dashboard', { component: ({ user }) => <EnrollmentsWidget user={user} /> })
     cms.admin.action({
       name: 'publish',
-      capability: 'lms.manage_courses',
+      capability: 'lms.edit_courses',
       async handler({ form, user }) {
-        const course = await publishCourse(cms.db, form.get('course'), user)
+        const course = await cms.content.get(String(form.get('course')))
         if (!course) throw new ActionError('That course no longer exists.') // shown on the form
+        // The content API doesn't check capabilities, like wp_insert_post(): its callers do.
+        if (!cms.auth.can(user, 'lms.publish_course', course)) throw new ForbiddenError()
+        await cms.content.update(course.id, { status: 'published' })
         return { notice: `${course.title} is live.` }
       },
     })
@@ -266,8 +279,11 @@ Rules the kernel enforces or relies on:
     interface Actions {
       'lms.course.completed': { userId: string; courseId: string }
     }
+    interface ContentTypes {
+      'lms.course': true // types lms.edit_courses, lms.edit_course and the rest
+    }
     interface MetaCapabilities {
-      'lms.edit_course': [course: Course]
+      'lms.grade_enrollment': [enrollment: Enrollment]
     }
     interface Slots {
       'lms.admin.course': { course: Course; user: User }
@@ -285,8 +301,9 @@ Rules the kernel enforces or relies on:
 ## The admin
 
 - **Users and roles.** A user has one role and a role grants capabilities, as in WordPress.
-  Administrators have every capability. Core defines `administrator` and `customer`; commerce
-  adds `shop_manager`. Plugins add roles, declare capabilities (`lms.manage_courses`), and
+  Administrators have every capability. Core defines `administrator`, WordPress's `editor`,
+  `author` and `contributor`, and `customer`; commerce adds `shop_manager`. Every role starts
+  with `core.read`, WordPress's `read`. Plugins add roles, declare capabilities (`lms.grade`), and
   `grant()` or `revoke()` them on any role. Nothing is stored: roles and grants are rebuilt on
   every boot from the active plugins, so deactivating a plugin removes what it added. Users ›
   All Users filters by role and changes the role of the ticked users at once (all or none, and
@@ -342,6 +359,38 @@ Rules the kernel enforces or relies on:
   depend on); if one can't start, nothing is saved. The rest can't fail on the change and aren't
   booted, so a save costs what it touches, not every plugin.
 
+## Content
+
+Post types and posts, as in WordPress, which every big plugin builds on: courses and lessons are
+post types in LearnDash, LifterLMS and Tutor.
+
+- **Types.** `cms.content.type('course', …)` in `setup()` registers `lms.course`, like
+  `register_post_type()`. Core registers Posts (`core.post`) and Pages (`core.page`,
+  hierarchical). A type declares WordPress's capabilities under its plugin's id: ten primitive
+  ones (`lms.edit_courses`, `lms.edit_others_courses`, `lms.edit_published_courses`,
+  `lms.publish_courses`, `lms.read_private_courses`, the `delete_*` ones…) and four meta ones
+  that take an entry (`lms.edit_course`, `lms.read_course`, `lms.delete_course`,
+  `lms.publish_course`), mapped as `map_meta_cap` maps posts: own, others', published, private,
+  and in the trash by the status the entry had. `roles` grants them at WordPress's levels
+  (`editor`, `author`, `contributor`); by default editors, authors and contributors get a type
+  as they get posts. Pages are editors' only, as in WordPress. Nothing is stored, so the grants
+  go with the plugin.
+- **Entries.** One table, `cms_entries`, for every type, as `wp_posts` is.
+  `cms.content.create/update/get/getBySlug/list/trash/restore/delete` work anywhere and, like
+  `wp_insert_post()`, check no capabilities: screens, actions and API routes do. Statuses are
+  `draft`, `pending`, `published`, `private` and `trash`; a restored entry comes back as a draft,
+  as in WordPress 5.6 and later. The body is a list of blocks stored as JSON and rendered by
+  React components, so stored content can't add markup of its own.
+- **Slugs** come from the title (accents off Latin letters; other scripts kept). Published and
+  private entries own theirs, among their siblings for hierarchical types; a taken slug gets
+  `-2`, `-3`, enforced by a unique index. Drafts own none, so a draft's slug follows its title
+  until it's published.
+- **Hooks.** The `content.entry` filter sees the fields before they're saved, and its result is
+  checked like any input. `content.status`, `content.saved`, `content.trashed`,
+  `content.restored` and `content.deleted` run in the save's transaction.
+- **Cost.** Types and their capabilities are built in memory at boot: 50 types add about
+  0.002 ms each.
+
 ## Security model
 
 Plugins run in-process with full access, the same trust model as WordPress and npm. Declared
@@ -374,5 +423,5 @@ methods. Payment webhooks verify their signatures and are idempotent.
 
 ## Roadmap
 
-See [docs/roadmap.md](docs/roadmap.md): content types and taxonomies next, then accounts and
-email, then the LMS plugin.
+See [docs/roadmap.md](docs/roadmap.md): content continues with its admin screens, taxonomies and
+meta, site pages and revisions, and media; then accounts and email, then the LMS plugin.

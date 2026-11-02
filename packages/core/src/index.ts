@@ -15,6 +15,7 @@ export {
   type NewUser,
 } from './auth'
 export { DEFAULT_BRAND, type Brand } from './brand'
+export type { ContentService } from './content'
 export { ADMINISTRATOR, type CapabilityInfo, type RoleInfo } from './capabilities'
 export { CORE } from './core-plugin'
 export { HookError, PluginBootError } from './errors'

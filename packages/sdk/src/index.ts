@@ -1,9 +1,18 @@
-import type { AdminDefinition, PluginContext, PluginDefinition, User } from './types'
+import type {
+  AdminDefinition,
+  Entry,
+  EntryFields,
+  EntryStatus,
+  PluginContext,
+  PluginDefinition,
+  User,
+} from './types'
 
 export type * from './types'
 export type { AdminIcon, AdminIconName } from './admin-icons'
 export { ADMIN_ICON_NAMES, isAdminIcon } from './admin-icons'
 export { ActionError } from './action-error'
+export { ContentError, type ContentErrorCode } from './content-error'
 export { ForbiddenError } from './forbidden-error'
 export { HttpError } from './http-error'
 
@@ -40,6 +49,7 @@ export function defineAdmin(
  *     interface Capabilities { 'commerce.manage_orders': true }
  *     interface MetaCapabilities { 'commerce.cancel_order': [order: Order] }
  *     interface Slots { 'commerce.admin.order': { order: Order; user: User } }
+ *     interface ContentTypes { 'lms.course': true }
  *   }
  *
  * Names are namespaced with the owning plugin's id to avoid collisions.
@@ -49,10 +59,30 @@ export function defineAdmin(
 export interface Registries {}
 
 /** Filter name -> `[value, context]`. Handlers receive the value and return a replacement. */
-export interface Filters {}
+export interface Filters {
+  /**
+   * The fields an entry is about to be saved with, by `create()` and `update()`, like WordPress's
+   * `wp_insert_post_data`. They're checked again after the filters.
+   */
+  'content.entry': [EntryFields, { type: string; previous: Entry | null }]
+}
 
 /** Action name -> payload. */
-export interface Actions {}
+export interface Actions {
+  /**
+   * An entry was added or changed, trashed and restored included, like `save_post`. Runs in the
+   * save's transaction: what a handler writes is kept or rolled back with the entry.
+   */
+  'content.saved': { entry: Entry; previous: Entry | null }
+  /** An entry's status changed, or a new entry got its first (`from` is `null`): `transition_post_status`. */
+  'content.status': { entry: Entry; from: EntryStatus | null; to: EntryStatus }
+  /** An entry went to the trash, after `content.saved`: `trashed_post`. */
+  'content.trashed': { entry: Entry }
+  /** An entry came out of the trash as a draft, after `content.saved`: `untrashed_post`. */
+  'content.restored': { entry: Entry }
+  /** An entry was deleted for good: `deleted_post`. Runs in the delete's transaction. */
+  'content.deleted': { entry: Entry }
+}
 
 /** Service name -> the API the providing plugin exposes to others. */
 export interface Services {}
@@ -82,6 +112,11 @@ export interface Capabilities {
   'core.manage_users': true
   /** Update the CMS and plugins from Dashboard › Updates. Only administrators have it until a role is granted it. */
   'core.manage_updates': true
+  /**
+   * Read published entries and one's own, like WordPress's `read`. Every role has it unless it's
+   * revoked.
+   */
+  'core.read': true
 }
 
 /**
@@ -89,6 +124,17 @@ export interface Capabilities {
  * it maps an object to the primitive capabilities it requires: `can(user, 'commerce.cancel_order', order)`.
  */
 export interface MetaCapabilities {}
+
+/**
+ * Content type name -> `true`, or `{ plural }` when its plural isn't the name and an `s`. Declaring
+ * a type here types its capability names, such as `lms.edit_courses` and `lms.edit_course`.
+ */
+export interface ContentTypes {
+  /** Posts, as in WordPress: core's blog entries. */
+  'core.post': true
+  /** Pages, as in WordPress: hierarchical, and edited by editors only unless granted. */
+  'core.page': true
+}
 
 /** Slot name -> the props each fill receives. */
 export interface Slots {
@@ -117,17 +163,54 @@ export type ActionName = keyof Actions & string
 export type ServiceName = keyof Services & string
 /** Any declared setting's key. */
 export type SettingName = keyof Settings & string
-/** Any declared capability's name. */
-export type CapabilityName = keyof Capabilities & string
-/** Any declared meta capability's name. */
-export type MetaCapabilityName = keyof MetaCapabilities & string
+/** Any declared content type's name. */
+export type ContentTypeName = keyof ContentTypes & string
+/** Any declared capability's name, content types' included. */
+export type CapabilityName = (keyof Capabilities & string) | ContentCapabilityName
+/** Any declared meta capability's name, content types' included. */
+export type MetaCapabilityName = (keyof MetaCapabilities & string) | ContentMetaCapabilityName
+
+type PluginOf<K extends string> = K extends `${infer P}.${string}` ? P : never
+type SingularOf<K extends string> = K extends `${string}.${infer N}` ? N : never
+type PluralOf<K extends ContentTypeName> = ContentTypes[K] extends {
+  plural: infer P extends string
+}
+  ? P
+  : `${SingularOf<K>}s`
+
+/** The words in a content type's primitive capabilities, as in WordPress's `edit_others_posts`. */
+export type ContentCapabilityVerb =
+  | 'edit'
+  | 'edit_others'
+  | 'edit_published'
+  | 'edit_private'
+  | 'publish'
+  | 'read_private'
+  | 'delete'
+  | 'delete_others'
+  | 'delete_published'
+  | 'delete_private'
+
+/** The primitive capabilities of declared content types, such as `lms.edit_others_courses`. */
+export type ContentCapabilityName = {
+  [K in ContentTypeName]: `${PluginOf<K>}.${ContentCapabilityVerb}_${PluralOf<K>}`
+}[ContentTypeName]
+
+/** The meta capabilities of declared content types, such as `lms.edit_course`: each takes an entry. */
+export type ContentMetaCapabilityName = {
+  [
+    K in ContentTypeName
+  ]: `${PluginOf<K>}.${'edit' | 'read' | 'delete' | 'publish'}_${SingularOf<K>}`
+}[ContentTypeName]
 /** Any declared slot's name. */
 export type SlotName = keyof Slots & string
 
-/** Arguments a capability check takes: none for primitive capabilities. */
-export type CapabilityArgs<C extends string> = C extends MetaCapabilityName
+/** Arguments a capability check takes: an entry for content types' meta capabilities, none for primitive ones. */
+export type CapabilityArgs<C extends string> = C extends keyof MetaCapabilities
   ? MetaCapabilities[C]
-  : []
+  : C extends ContentMetaCapabilityName
+    ? [entry: Entry]
+    : []
 
 /** The value a filter passes through its handlers: the first of its `[value, context]`. */
 export type FilterValue<K extends FilterName> = Filters[K] extends [infer V, unknown] ? V : never

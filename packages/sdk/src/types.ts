@@ -6,10 +6,10 @@ import type {
   Actions,
   CapabilityArgs,
   CapabilityName,
+  ContentTypeName,
   FilterContext,
   FilterName,
   FilterValue,
-  MetaCapabilities,
   MetaCapabilityName,
   Registries,
   RegistryName,
@@ -179,7 +179,7 @@ export interface User {
   role: string
 }
 
-/** A role's label and the capabilities it starts with. */
+/** A role's label and the capabilities it starts with, besides `core.read`, which every role has. */
 export interface RoleDefinition {
   label: string
   capabilities?: readonly CapabilityName[]
@@ -205,14 +205,14 @@ export interface MetaCapabilityDefinition<K extends MetaCapabilityName> {
    * Like `map_meta_cap`. Receives the loaded object, not an id, so checks stay synchronous and a
    * list screen can check every row without a query each.
    */
-  map: (user: User, ...args: MetaCapabilities[K]) => RequiredCapabilities
+  map: (user: User, ...args: CapabilityArgs<K>) => RequiredCapabilities
 }
 
 /** Adjusts another plugin's meta capability, like the `map_meta_cap` filter. */
 export type CapabilityExtension<K extends MetaCapabilityName> = (
   required: RequiredCapabilities,
   user: User,
-  ...args: MetaCapabilities[K]
+  ...args: CapabilityArgs<K>
 ) => RequiredCapabilities
 
 /**
@@ -490,6 +490,214 @@ export interface SlotsApi {
   get<K extends SlotName>(name: K): SlotComponent<K>[]
 }
 
+// ── Content ──────────────────────────────────────────────────────────────────
+
+/**
+ * Where an entry stands, like WordPress's post statuses. Only `published` entries are public;
+ * `private` ones are published for those who may read private entries of their type.
+ */
+export type EntryStatus = 'draft' | 'pending' | 'published' | 'private' | 'trash'
+
+/** A piece of an entry's body, such as a paragraph. The editor's block types come with the editor. */
+export interface Block {
+  type: string
+  [property: string]: unknown
+}
+
+/** An entry of any content type: a post, a page, a course. WordPress's `WP_Post`. */
+export interface Entry {
+  id: string
+  /** Its content type's qualified name, such as `core.post`. */
+  type: string
+  status: EntryStatus
+  /**
+   * Its address among its type's entries. Published and private entries own theirs: no other
+   * published or private entry of the type (with the same parent, for hierarchical types) has it.
+   * Empty on a draft until it's set or the entry is published, when it's made from the title.
+   */
+  slug: string
+  title: string
+  /** Rendered by React components, so stored content can't add markup of its own. */
+  body: Block[]
+  excerpt: string
+  /** `null` once the author's account is gone. */
+  authorId: string | null
+  /** Another entry of the same type, for hierarchical types such as pages. */
+  parentId: string | null
+  /** Sorts entries by hand, like WordPress's `menu_order`. Lower comes first. */
+  position: number
+  /** When it was first published, or published privately. */
+  publishedAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+  /** In the trash: the status it had, which capability checks still go by. */
+  trashedFrom: Exclude<EntryStatus, 'trash'> | null
+  trashedAt: Date | null
+}
+
+/** What an entry is saved with. The `content.entry` filter receives and returns it. */
+export interface EntryFields {
+  /** Entries go to the trash with `trash()`, not through a status. */
+  status: Exclude<EntryStatus, 'trash'>
+  slug: string
+  title: string
+  body: Block[]
+  excerpt: string
+  authorId: string | null
+  parentId: string | null
+  position: number
+  /** Set when the entry is first published; set it to backdate one. Never in the future. */
+  publishedAt: Date | null
+}
+
+/** A new entry's fields. All optional: an entry starts as an untitled draft with no author. */
+export type NewEntry = Partial<EntryFields>
+
+/** The fields to change. Those left out keep their values. */
+export type EntryChanges = Partial<EntryFields>
+
+/** Which entries `list()` returns, and in what order. */
+export interface EntryQuery {
+  type: ContentTypeName | readonly ContentTypeName[]
+  /** Defaults to every status but `trash`. */
+  status?: EntryStatus | readonly EntryStatus[]
+  authorId?: string
+  /** `null` for top-level entries only. */
+  parentId?: string | null
+  /**
+   * `date` (the default) is when the entry was published, or created if it never was, like
+   * WordPress's post date. `updated` is when it last changed.
+   */
+  orderBy?: 'date' | 'updated' | 'title' | 'position'
+  /** Defaults to newest first for dates, A to Z for `title`, lowest first for `position`. */
+  order?: 'asc' | 'desc'
+  /** 1 to 100. Defaults to 20. */
+  limit?: number
+  offset?: number
+}
+
+/** A page of entries, and how many match the query in all. */
+export interface EntryList {
+  entries: Entry[]
+  total: number
+}
+
+/**
+ * The capabilities a role gets over a content type, named after WordPress's roles:
+ * - `editor`: every entry of the type, anyone's;
+ * - `author`: their own entries, publishing included;
+ * - `contributor`: their own drafts, which someone else publishes.
+ */
+export type ContentRoleLevel = 'editor' | 'author' | 'contributor'
+
+/** What a content type's entries use, like WordPress's `supports`; the edit screen shows these. */
+export type ContentFeature = 'title' | 'body' | 'excerpt' | 'author' | 'position'
+
+/** A content type, as `cms.content.type()` takes it: WordPress's `register_post_type()` arguments. */
+export interface ContentTypeDefinition {
+  labels: {
+    /** Such as `Course`. */
+    singular: string
+    /** Such as `Courses`. */
+    plural: string
+  }
+  /**
+   * The plural in its capability names, such as `lms.edit_courses`. Defaults to the name and an
+   * `s`; set it for others (`person` → `people`), with the same `plural` in `ContentTypes`.
+   */
+  plural?: string
+  description?: string
+  /** Its published entries have pages on the site. Defaults to `false`. */
+  public?: boolean
+  /** Entries can have a parent of the same type, as pages do. Defaults to `false`. */
+  hierarchical?: boolean
+  /** Defaults to `['title', 'body']`, as in WordPress. */
+  supports?: readonly ContentFeature[]
+  /**
+   * Which roles get its capabilities, and at what level. Defaults to WordPress's, as for posts:
+   * `{ editor: 'editor', author: 'author', contributor: 'contributor' }`. Administrators have
+   * every capability. Like other grants, nothing is stored: they go when the plugin does.
+   */
+  roles?: Readonly<Record<string, ContentRoleLevel>>
+}
+
+/**
+ * The capabilities a content type declares, like WordPress's `$post_type->cap`. The primitive
+ * ones belong to roles; the meta ones take an entry and say which primitives it needs.
+ */
+export interface ContentTypeCapabilities {
+  /** Write entries, and edit and delete their own drafts. WordPress's `edit_posts`, which `create_posts` maps to. */
+  edit: CapabilityName
+  editOthers: CapabilityName
+  editPublished: CapabilityName
+  editPrivate: CapabilityName
+  publish: CapabilityName
+  readPrivate: CapabilityName
+  delete: CapabilityName
+  deleteOthers: CapabilityName
+  deletePublished: CapabilityName
+  deletePrivate: CapabilityName
+  /** `can(user, cap.editEntry, entry)`: WordPress's `edit_post`. */
+  editEntry: MetaCapabilityName
+  /** WordPress's `read_post`: published entries need only `core.read`, which every role has. */
+  readEntry: MetaCapabilityName
+  /** WordPress's `delete_post`. */
+  deleteEntry: MetaCapabilityName
+  /** WordPress's `publish_post`. */
+  publishEntry: MetaCapabilityName
+}
+
+/** A registered content type. */
+export interface ContentType {
+  /** Qualified, such as `lms.course`. */
+  name: ContentTypeName
+  pluginId: string
+  labels: ContentTypeDefinition['labels']
+  description: string
+  public: boolean
+  hierarchical: boolean
+  supports: readonly ContentFeature[]
+  capabilities: ContentTypeCapabilities
+}
+
+/**
+ * `cms.content`: content types and their entries, WordPress's post types and posts. Register
+ * types in `setup()`, so every part of the site knows them; entries can be read and written
+ * anywhere. Like `wp_insert_post()`, these don't check capabilities: the screens, actions and API
+ * routes that call them do, with the type's meta capabilities.
+ */
+export interface ContentApi {
+  /**
+   * Registers a content type, like `register_post_type()`, under this plugin's id: `course` in
+   * the `lms` plugin is `lms.course`. Declares its capabilities and grants them to `roles`.
+   */
+  type(name: string, definition: ContentTypeDefinition): void
+  /** The registered types, in registration order. */
+  types(): ContentType[]
+  getType(name: string): ContentType | undefined
+  /** Adds an entry, like `wp_insert_post()`. Throws `ContentError` for a type no active plugin registers. */
+  create(type: ContentTypeName, entry?: NewEntry): Promise<Entry>
+  /** Changes an entry, like `wp_update_post()`. An entry in the trash must be restored first. */
+  update(id: string, changes: EntryChanges): Promise<Entry>
+  get(id: string): Promise<Entry | null>
+  /**
+   * The published or private entry with this slug. `parentId` picks the level of a hierarchical
+   * type; it defaults to the top.
+   */
+  getBySlug(
+    type: ContentTypeName,
+    slug: string,
+    options?: { parentId?: string | null },
+  ): Promise<Entry | null>
+  list(query: EntryQuery): Promise<EntryList>
+  /** Moves an entry to the trash, keeping its status for capability checks, like `wp_trash_post()`. */
+  trash(id: string): Promise<Entry>
+  /** Takes an entry out of the trash as a draft, as WordPress has done since 5.6. */
+  restore(id: string): Promise<Entry>
+  /** Deletes an entry for good. Its children move up to its parent, as in WordPress. */
+  delete(id: string): Promise<void>
+}
+
 // ── Tracing ──────────────────────────────────────────────────────────────────
 
 /** What a span in a request's trace timed. */
@@ -589,6 +797,7 @@ export interface PluginContext {
   readonly settings: SettingsApi
   readonly auth: AuthApi
   readonly admin: AdminApi
+  readonly content: ContentApi
   readonly traces: TracesApi
   readonly logger: Logger
   /**
@@ -624,8 +833,8 @@ export interface PluginDefinition {
   /** Beside the plugin's section in the admin menu. Defaults to `admin`, a gear. */
   icon?: AdminIcon
   /**
-   * Registers what every part of the site needs: hooks, services, routes, site slots, roles and
-   * capabilities. Runs on every boot, after the plugins it depends on, and after its migrations.
+   * Registers what every part of the site needs: hooks, services, routes, site slots, roles,
+   * capabilities and content types. Runs on every boot, after the plugins it depends on, and after its migrations.
    * Admin pages, actions, settings screens and admin slots go in the plugin's admin entry.
    */
   setup?: (cms: PluginContext) => void | Promise<void>

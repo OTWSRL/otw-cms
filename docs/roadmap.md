@@ -24,7 +24,7 @@ Then **admin entries**: a plugin's admin code is a second entry, `./admin`, whic
 and the API routes load, so none of it reaches the site's visitors (Plugin Handbook › Admin
 screens).
 
-Next: 7, Content.
+Now: 7, Content, in five parts. 7a, content types and their entries, is done.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -300,14 +300,42 @@ WordPress's Add New does, needs a plugin directory first.
 ## 7. Content
 
 Post types, taxonomies and meta, the core of WordPress that every big plugin builds on: courses
-and lessons are post types in LearnDash, LifterLMS and Tutor.
+and lessons are post types in LearnDash, LifterLMS and Tutor. Each part starts from WordPress's
+source.
 
-- `content.type()` with labels, supports, and generated capabilities mapped through meta
-  capabilities (`edit_post` → own, others', published), generic list and edit screens with
-  columns, filters and panels other plugins extend.
-- Taxonomies and terms; entry meta registered with types and validation.
-- Pages served by the site's catch-all route; revisions; the media library (uploads behind a
-  storage interface).
+| Part | What                                                                         | WordPress's                          |
+| ---- | ---------------------------------------------------------------------------- | ------------------------------------ |
+| 7a   | `content.type()`, entries, and capabilities (own, others', published) (done) | `register_post_type`, `map_meta_cap` |
+| 7b   | Generic list and edit screens: columns, filters, panels other plugins extend | `edit.php`, `post.php`, meta boxes   |
+| 7c   | Taxonomies and terms; typed, validated meta                                  | `register_taxonomy`, `register_meta` |
+| 7d   | Pages served by the site's catch-all route; revisions                        | template hierarchy, revisions        |
+| 7e   | The media library, uploads behind a storage interface                        | `upload.php`, `wp_handle_upload`     |
+
+### 7a. Content types and entries (done)
+
+- **Types.** `cms.content.type(name, definition)` in `setup()`, qualified with the plugin's id
+  (`lms.course`): labels, `public`, `hierarchical`, `supports`, and `roles`. Core registers
+  Posts and Pages, and WordPress's Editor, Author and Contributor roles; every role starts with
+  `core.read`, WordPress's `read`.
+- **Capabilities** as `get_post_type_capabilities()` names them, under the plugin's id: ten
+  primitive and four meta ones (`edit_`, `read_`, `delete_`, `publish_` one entry), mapped as
+  `map_meta_cap` maps posts. `roles` grants them at WordPress's levels; a type that doesn't say
+  gets posts' (editor, author, contributor); pages are editors'. A type's entry in the
+  `ContentTypes` interface types its capability names. Unlike WordPress, a type always has its
+  own capabilities and its grants aren't stored, so nothing outlives the plugin. Someone else's
+  entry in the trash is checked by the status it had, where WordPress asks only
+  `edit_others_posts`.
+- **Entries** in one table, `cms_entries`. Statuses `draft`, `pending`, `published`, `private`
+  and `trash`. The body is JSON blocks, rendered by React (the blocks come with the editor in
+  7b). Slugs are owned by published and private entries, unique per type and parent through a
+  partial unique index, numbered from 2 when taken, and retried when two saves race. The trash
+  keeps the status for checks; restoring gives a draft. Deleting a page moves its children up.
+- **Hooks:** the `content.entry` filter, checked after it runs, and `content.status`, `.saved`,
+  `.trashed`, `.restored`, `.deleted` in the save's transaction.
+
+Not in 7a: scheduled publishing and emptying the trash after 30 days (they need the job queue in
+10), custom statuses (`register_post_status`), edit locks, search in `list()`, and sharing another
+type's capabilities (`capability_type => 'post'`).
 
 ## 8. Accounts and email
 

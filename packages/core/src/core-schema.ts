@@ -1,4 +1,15 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import type { Block, EntryStatus } from '@otw/sdk'
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core'
 
 // Core's own tables. Plugins may reference cms_users from their tables; the rest is internal.
 
@@ -50,4 +61,26 @@ export const storedSettings = pgTable('cms_settings', {
 export const options = pgTable('cms_options', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
+})
+
+/**
+ * Every content type's entries, like WordPress's `wp_posts`. The migration adds what Drizzle
+ * doesn't need to know: the checks, and the indexes on expressions.
+ */
+export const entries = pgTable('cms_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: text('type').notNull(),
+  status: text('status').$type<EntryStatus>().notNull(),
+  slug: text('slug').notNull().default(''),
+  title: text('title').notNull().default(''),
+  body: jsonb('body').$type<Block[]>().notNull().default([]),
+  excerpt: text('excerpt').notNull().default(''),
+  authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+  parentId: uuid('parent_id').references((): AnyPgColumn => entries.id, { onDelete: 'set null' }),
+  position: integer('position').notNull().default(0),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  trashedFrom: text('trashed_from').$type<Exclude<EntryStatus, 'trash'>>(),
+  trashedAt: timestamp('trashed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
