@@ -150,6 +150,9 @@ export async function ContentEditScreen({
   const locale = kernel.setting('site.locale')
   const permalink =
     entry && type.public ? (await kernel.content.permalinks([entry])).get(entry.id) : null
+  // WordPress shows Revisions once there's something to compare: two or more.
+  const revisionCount =
+    entry && type.revisions > 0 ? (await kernel.content.revisions(entry.id, { limit: 1 })).total : 0
 
   const publishBox = (
     <Postbox id="submitdiv" title="Publish">
@@ -214,6 +217,12 @@ export async function ContentEditScreen({
                   Private
                 </label>
               </fieldset>
+            )}
+            {entry && revisionCount >= 2 && (
+              <div className="misc-pub-section">
+                Revisions: <b>{revisionCount}</b>{' '}
+                <a href={`${type.adminPath}/${entry.id}/revisions`}>Browse</a>
+              </div>
             )}
             <div className="misc-pub-section">
               {published && entry.publishedAt ? (

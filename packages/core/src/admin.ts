@@ -23,7 +23,7 @@ export const ADMIN_PREFIX = '/admin'
 export const LOGIN_PATH = '/admin/login'
 
 /** Which of a content type's screens: its list (`edit.php`), Add New, or an entry's edit screen. */
-export type ContentScreen = 'list' | 'new' | 'edit'
+export type ContentScreen = 'list' | 'new' | 'edit' | 'revisions'
 
 /**
  * A plugin's own screen, a settings page that core renders from its sections, or one of a
@@ -45,6 +45,8 @@ export type AdminResolution =
   | { kind: 'content-list'; type: ContentType }
   /** `entry` is `null` on Add New. An entry in the trash is shown, to be restored. */
   | { kind: 'content-edit'; type: ContentType; entry: Entry | null }
+  /** An entry's revisions, to compare and restore (revision.php). */
+  | { kind: 'content-revisions'; type: ContentType; entry: Entry }
   /** A taxonomy's screen (edit-tags.php), and a term's (term.php). */
   | { kind: 'taxonomy-terms'; taxonomy: Taxonomy }
   | { kind: 'taxonomy-term'; taxonomy: Taxonomy; term: Term }

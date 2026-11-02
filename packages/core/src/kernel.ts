@@ -481,6 +481,7 @@ async function boot(
     screen('list', base)
     screen('new', `${base}/new`)
     screen('edit', `${base}/:id`)
+    if (type.revisions > 0) screen('revisions', `${base}/:id/revisions`)
     if (!type.showInMenu) return
     // Core's types have sections of their own (Posts, Pages); a plugin's come first in its section.
     const index = typesInMenu.get(pluginId) ?? 0
@@ -1227,6 +1228,7 @@ function buildKernel(input: {
     const entry = await input.content.get(params.id ?? '')
     if (entry?.type !== type.name) return { kind: 'not-found' }
     if (!capabilities.can(user, type.capabilities.editEntry, entry)) return { kind: 'forbidden' }
+    if (screen.screen === 'revisions') return { kind: 'content-revisions', type, entry }
     return { kind: 'content-edit', type, entry }
   }
 

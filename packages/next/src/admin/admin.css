@@ -2372,6 +2372,77 @@ body:has(> .cms-login) {
   }
 }
 
+/* revision.php: the list beside what the chosen revision changed. */
+.cms-admin .revisions {
+  display: grid;
+  grid-template-columns: minmax(0, 16rem) minmax(0, 1fr);
+  gap: 0 24px;
+  align-items: start;
+}
+
+.cms-admin .revisions-list ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin .revisions-list li {
+  margin: 0 0 8px;
+}
+
+.cms-admin .revisions-list a[aria-current='page'] {
+  color: var(--wp-heading);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cms-admin .revisions-diff h2 {
+  margin-top: 0;
+  font-size: 1.1em;
+}
+
+.cms-admin .revision-field h3 {
+  margin: 20px 0 6px;
+  font-size: 14px;
+}
+
+.cms-admin table.diff {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 13px;
+}
+
+.cms-admin table.diff td {
+  padding: 4px 8px;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin table.diff .diff-marker {
+  width: 1.5em;
+  color: var(--wp-muted);
+}
+
+.cms-admin table.diff .diff-removed {
+  background: #fcf0f1;
+}
+
+.cms-admin table.diff .diff-added {
+  background: #edfaef;
+}
+
+.cms-admin table.diff :is(del, ins) {
+  text-decoration: none;
+}
+
+@media (max-width: 850px) {
+  .cms-admin .revisions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 782px) {
   .cms-admin p.search-box {
     float: none;

@@ -47,7 +47,7 @@ describe('content types', () => {
       labels: { singular: 'Page', plural: 'Pages' },
       public: true,
       hierarchical: true,
-      supports: ['title', 'body', 'author', 'position'],
+      supports: ['title', 'body', 'author', 'position', 'revisions'],
     })
     expect(content.getType('library.book')).toMatchObject({
       pluginId: 'library',

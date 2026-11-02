@@ -15,7 +15,17 @@ import { ADMIN_PREFIX } from './admin'
 import { READ, type CapabilityStore } from './capabilities'
 
 const TYPE_NAME = /^[a-z][a-z0-9_]*$/
-const FEATURES: readonly ContentFeature[] = ['title', 'body', 'excerpt', 'author', 'position']
+const FEATURES: readonly ContentFeature[] = [
+  'title',
+  'body',
+  'excerpt',
+  'author',
+  'position',
+  'revisions',
+]
+/** How many revisions an entry keeps unless its type says. */
+const DEFAULT_REVISIONS = 25
+const MAX_REVISIONS = 1000
 const DEFAULT_SUPPORTS: readonly ContentFeature[] = ['title', 'body']
 const MAX_LABEL = 100
 /** Core's types have sections of their own (`/admin/posts`); plugins' sit under the plugin. */
@@ -238,6 +248,12 @@ function describeType(
       )
     }
   }
+  const revisions = definition.revisions ?? DEFAULT_REVISIONS
+  if (!Number.isSafeInteger(revisions) || revisions < 0 || revisions > MAX_REVISIONS) {
+    throw new Error(
+      `Content type "${qualified}" keeps ${String(revisions)} revisions: use a whole number from 0 to ${MAX_REVISIONS}`,
+    )
+  }
   const isPublic = definition.public ?? false
   const showUi = definition.showUi ?? isPublic
   const base = pluginId === CORE ? ADMIN_PREFIX : `${ADMIN_PREFIX}/${pluginId}`
@@ -253,6 +269,7 @@ function describeType(
     showUi,
     showInMenu: showUi && (definition.showInMenu ?? true),
     hasArchive: isPublic && (definition.hasArchive ?? false),
+    revisions: supports.includes('revisions') ? revisions : 0,
     adminPath: showUi ? `${base}/${plural}` : null,
     capabilities: contentCapabilities(pluginId, name, plural),
   }

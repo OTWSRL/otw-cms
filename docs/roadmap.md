@@ -25,8 +25,8 @@ and the API routes load, so none of it reaches the site's visitors (Plugin Handb
 screens).
 
 Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
-screens, are done, and so are 7c, taxonomies and custom fields, and the site pages of 7d;
-revisions are next.
+screens, are done, and so are 7c, taxonomies and custom fields, and 7d, site pages and
+revisions. Next: 7e, the media library.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -356,7 +356,7 @@ source.
 - Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
   which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
 
-### 7d. Site pages (done) and revisions
+### 7d. Site pages and revisions (done)
 
 - **Routes** after plugins' own, as WordPress orders its rewrite rules: archives, terms, entries
   under a prefix, then pages by path and posts by slug ("Post name"). Plugin types at
@@ -374,6 +374,16 @@ source.
 - **Links**: `permalinks()` builds a page of addresses with one recursive query for pages'
   ancestors; an entry under a draft has none. The admin's list and edit screen show View or
   Preview, and the permalink.
+- **Revisions**, with the `revisions` feature (Posts and Pages): a snapshot of title, body,
+  excerpt and custom fields in `cms_revisions` (migration core/0005_revisions), apart from
+  entries, on every save that changed one, with who saved it (`{ by }`), in the save's
+  transaction. Status-only saves keep none. Each entry keeps its type's `revisions` (25 by
+  default), pruned with one delete per save. `revisions()`, `getRevision()`,
+  `restoreRevision()` (a save with its own revision). The revisions screen compares a revision
+  with the one before, field by field (a line diff of the body's text, block by block), and
+  restores it; the Publish box shows Revisions: N with Browse.
+- Not in 7d: autosave, so previews show the last save; comments, feeds, sitemaps, date
+  archives.
 
 ### 7c. Taxonomies and custom fields (done)
 

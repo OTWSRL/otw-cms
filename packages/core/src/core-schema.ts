@@ -115,3 +115,21 @@ export const entryTerms = pgTable(
     index('cms_entry_terms_term_id_idx').on(table.termId, table.entryId),
   ],
 )
+
+/** What entries were at each save, like WordPress's revisions, which it keeps as posts. */
+export const revisions = pgTable(
+  'cms_revisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    entryId: uuid('entry_id')
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    body: jsonb('body').$type<Block[]>().notNull(),
+    excerpt: text('excerpt').notNull(),
+    meta: jsonb('meta').$type<EntryMetaValues>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('cms_revisions_entry_idx').on(table.entryId, table.createdAt, table.id)],
+)

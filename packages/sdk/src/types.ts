@@ -594,6 +594,28 @@ export type NewEntry = Partial<Omit<EntryFields, 'meta'>> & { meta?: EntryMetaCh
 /** The fields to change. Those left out keep their values; `meta` changes only the keys named. */
 export type EntryChanges = Partial<Omit<EntryFields, 'meta'>> & { meta?: EntryMetaChanges }
 
+/** How a save is recorded. */
+export interface SaveOptions {
+  /** Who made the change: the user its revision names. */
+  by?: string | null
+}
+
+/**
+ * An entry as one save left it, like WordPress's revisions: what the author wrote, not its
+ * status or place. The newest is the entry as it is.
+ */
+export interface Revision {
+  id: string
+  entryId: string
+  /** Who saved it, when known. */
+  authorId: string | null
+  title: string
+  body: Block[]
+  excerpt: string
+  meta: EntryMetaValues
+  createdAt: Date
+}
+
 /** Which entries `list()` returns, and in what order. */
 export interface EntryQuery {
   type: ContentTypeName | readonly ContentTypeName[]
@@ -714,7 +736,7 @@ export interface EntryMonth {
 export type ContentRoleLevel = 'editor' | 'author' | 'contributor'
 
 /** What a content type's entries use, like WordPress's `supports`; the edit screen shows these. */
-export type ContentFeature = 'title' | 'body' | 'excerpt' | 'author' | 'position'
+export type ContentFeature = 'title' | 'body' | 'excerpt' | 'author' | 'position' | 'revisions'
 
 /** A content type, as `cms.content.type()` takes it: WordPress's `register_post_type()` arguments. */
 export interface ContentTypeDefinition {
@@ -748,6 +770,11 @@ export interface ContentTypeDefinition {
    * `has_archive`. Defaults to `false`. Posts are listed on the home page or the posts page.
    */
   hasArchive?: boolean
+  /**
+   * With the `revisions` feature: how many revisions each entry keeps, the oldest going first.
+   * Defaults to 25. WordPress keeps every one unless told otherwise.
+   */
+  revisions?: number
   /**
    * Which roles get its capabilities, and at what level. Defaults to WordPress's, as for posts:
    * `{ editor: 'editor', author: 'author', contributor: 'contributor' }`. Administrators have
@@ -866,6 +893,8 @@ export interface ContentType {
   showUi: boolean
   showInMenu: boolean
   hasArchive: boolean
+  /** How many revisions each entry keeps; 0 without the `revisions` feature. */
+  revisions: number
   /**
    * Its list screen, such as `/admin/posts` or `/admin/lms/courses`, when it has screens. Add New
    * is `${adminPath}/new` and an entry's edit screen `${adminPath}/${id}`.
@@ -1112,9 +1141,9 @@ export interface ContentApi {
   types(): ContentType[]
   getType(name: string): ContentType | undefined
   /** Adds an entry, like `wp_insert_post()`. Throws `ContentError` for a type no active plugin registers. */
-  create(type: ContentTypeName, entry?: NewEntry): Promise<Entry>
+  create(type: ContentTypeName, entry?: NewEntry, options?: SaveOptions): Promise<Entry>
   /** Changes an entry, like `wp_update_post()`. An entry in the trash must be restored first. */
-  update(id: string, changes: EntryChanges): Promise<Entry>
+  update(id: string, changes: EntryChanges, options?: SaveOptions): Promise<Entry>
   get(id: string): Promise<Entry | null>
   /**
    * The published or private entry with this slug. `parentId` picks the level of a hierarchical
@@ -1174,6 +1203,18 @@ export interface ContentApi {
   archiveUrl(type: ContentTypeName): string | null
   /** Where an entry's preview shows it, saved but unpublished, to those who may read it. */
   previewUrl(entry: Entry): string
+  /** An entry's revisions, newest first, like `wp_get_post_revisions()`. */
+  revisions(
+    entryId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{ revisions: Revision[]; total: number }>
+  getRevision(id: string): Promise<Revision | null>
+  /**
+   * Puts an entry back as a revision had it: its title, body, excerpt and custom fields, like
+   * `wp_restore_post_revision()`. The restore is a save like any other, with a revision of its
+   * own.
+   */
+  restoreRevision(id: string, options?: SaveOptions): Promise<Entry>
   /** Adds a term, like `wp_insert_term()`. Names are unique among a term's siblings. */
   createTerm(taxonomy: TaxonomyName, term: NewTerm): Promise<Term>
   /** Changes a term, like `wp_update_term()`. The default term keeps its slug. */

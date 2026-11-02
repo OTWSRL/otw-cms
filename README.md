@@ -424,6 +424,11 @@ post types in LearnDash, LifterLMS and Tutor.
   site's `src/cms/templates.tsx` wins over a plugin's `cms.content.template()`, which wins over
   the defaults in `@otw/next/site`. `permalinks(entries)` batches a page of addresses; the
   admin shows View and Preview links.
+- **Revisions.** Types with the `revisions` feature (Posts and Pages) keep what each save wrote
+  (title, body, excerpt, custom fields) in `cms_revisions`, with who saved it, in the save's
+  transaction; status-only saves keep none, and each entry keeps its type's number (25 by
+  default), the oldest pruned by one delete. The revisions screen compares one with the one
+  before, field by field, and restores it (as a save of its own), for those who may edit.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
   links included, and `Blocks` from `@otw/next/site` renders them on the site with no

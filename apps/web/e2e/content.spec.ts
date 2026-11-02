@@ -248,3 +248,40 @@ test('authors add tags as they write, but not categories, which default to Uncat
   await expect(author.getByRole('checkbox', { name: 'Uncategorized' })).toBeChecked()
   expect((await author.goto('/admin/posts/tags'))?.status()).toBe(403)
 })
+
+test('revisions keep each save, to compare and restore', async ({ page }) => {
+  await signInAsAdmin(page)
+  await page.goto('/admin/posts/new')
+  await page.getByLabel('Add title').fill('First draft')
+  await editor(page).click()
+  await page.keyboard.type('First words.')
+  await page.getByRole('button', { name: 'Save Draft' }).click()
+  await notice(page, 'Post draft updated.')
+  await page.getByLabel('Add title').fill('Second draft')
+  await editor(page).click()
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.type('Second words.')
+  await page.getByRole('button', { name: 'Save Draft' }).click()
+  await notice(page, 'Post draft updated.')
+
+  await page.getByRole('link', { name: 'Browse' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Compare Revisions of “Second draft”' }),
+  ).toBeVisible()
+  const diff = page.locator('.revisions-diff')
+  await expect(diff.locator('.diff-removed td:last-child')).toHaveText([
+    'Removed: First draft',
+    'Removed: First words.',
+  ])
+  await expect(diff.locator('.diff-added td:last-child')).toHaveText([
+    'Added: Second draft',
+    'Added: Second words.',
+  ])
+
+  await page.getByRole('navigation', { name: 'Revisions' }).getByRole('link').nth(1).click()
+  await expect(page.getByRole('heading', { name: /^The first revision/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Restore This Revision' }).click()
+  await notice(page, 'Post restored to the revision from')
+  await expect(page.getByLabel('Add title')).toHaveValue('First draft')
+  await expect(editor(page)).toHaveText('First words.')
+})

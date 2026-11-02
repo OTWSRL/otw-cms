@@ -33,7 +33,7 @@ import type { ContentRoutes } from './content-routes'
 import { permalinksOf } from './site-content'
 import { inSentence, type ContentTypeStore } from './content-types'
 import { entryTermsCondition, type createTermService } from './terms'
-import { entries, users } from './core-schema'
+import { entries, revisions, users } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { HookBus } from './hooks'
 import { firstFreeSlug, slugify, slugStem } from './slugs'
@@ -373,7 +373,42 @@ export function createContentService({
     }
   }
 
-  return {
+  /**
+   * Keeps a revision of what an author wrote, when a save changed it (not for a status alone),
+   * and lets go of the oldest beyond the type's number, in the save's transaction.
+   */
+  const saveRevision = async (
+    type: ContentType,
+    row: Entry,
+    previous: Entry | null,
+    by: string | null | undefined,
+  ): Promise<void> => {
+    if (type.revisions === 0) return
+    const written = (entry: Entry) =>
+      JSON.stringify([entry.title, entry.body, entry.excerpt, entry.meta])
+    if (previous && written(previous) === written(row)) return
+    if (by !== undefined && by !== null && (typeof by !== 'string' || !UUID.test(by))) {
+      invalid('Who saved it must be given by user id')
+    }
+    await db.current.insert(revisions).values({
+      entryId: row.id,
+      authorId: by ?? null,
+      title: row.title,
+      body: row.body,
+      excerpt: row.excerpt,
+      meta: row.meta,
+      // Distinct times for saves in one transaction, which now() would give the same.
+      createdAt: sql`clock_timestamp()`,
+    })
+    await db.current.execute(sql`
+      DELETE FROM cms_revisions WHERE entry_id = ${row.id} AND id NOT IN (
+        SELECT id FROM cms_revisions WHERE entry_id = ${row.id}
+        ORDER BY created_at DESC, id DESC LIMIT ${type.revisions}
+      )
+    `)
+  }
+
+  const service: ContentService = {
     ...terms.service,
     types: () => types.list(),
     getType: (name) => types.get(name),
@@ -383,26 +418,76 @@ export function createContentService({
     archiveUrl: (type) => links.routes()?.archiveUrl(type) ?? null,
     previewUrl: (entry) => `/?preview=${entry.id}`,
 
-    create: (typeName, input) =>
+    async revisions(entryId, { limit = DEFAULT_LIMIT, offset = 0 } = {}) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+        invalid(`The limit must be 1 to ${MAX_LIMIT}`)
+      }
+      if (!Number.isSafeInteger(offset) || offset < 0) invalid('The offset must be 0 or more')
+      if (!UUID.test(entryId)) return { revisions: [], total: 0 }
+      const rows = await db.current
+        .select({
+          ...getTableColumns(revisions),
+          total: sql<number>`count(*) over ()`.mapWith(Number),
+        })
+        .from(revisions)
+        .where(eq(revisions.entryId, entryId))
+        .orderBy(desc(revisions.createdAt), desc(revisions.id))
+        .limit(limit)
+        .offset(offset)
+      return {
+        revisions: rows.map(({ total: _total, ...revision }) => revision),
+        total: rows[0]?.total ?? 0,
+      }
+    },
+
+    async getRevision(id) {
+      if (!UUID.test(id)) return null
+      const [row] = await db.current.select().from(revisions).where(eq(revisions.id, id)).limit(1)
+      return row ?? null
+    },
+
+    restoreRevision: (id, options) =>
+      db.transaction(async () => {
+        const revision = await service.getRevision(id)
+        if (!revision) throw new ContentError('not_found', 'That revision no longer exists')
+        const entry = await service.get(revision.entryId)
+        if (!entry) notFound()
+        // The custom fields the type has now, as the revision had them; unset ones go.
+        const meta: Record<string, unknown> = {}
+        for (const field of service.metaFields(entry.type)) {
+          meta[field.key] = (revision.meta as Record<string, unknown>)[field.key] ?? null
+        }
+        return service.update(
+          entry.id,
+          { title: revision.title, body: revision.body, excerpt: revision.excerpt, meta },
+          options,
+        )
+      }),
+
+    create: (typeName, input, options) =>
       db.transaction(async () => {
         const type = requireType(typeName)
         const id = randomUUID()
         const fields = await prepare(type, NEW_ENTRY, input, null)
         await checkRelations(type, id, fields, null)
-        const entry = present(await write(type, id, fields, null))
+        const row = await write(type, id, fields, null)
+        await saveRevision(type, row, null, options?.by)
+        const entry = present(row)
         await terms.applyDefaultTerms(entry)
         await announce(entry, null)
         return entry
       }),
 
-    update: (id, changes) =>
+    update: (id, changes, options) =>
       db.transaction(async () => {
         const previous = await lock(id)
         if (previous.status === 'trash') invalid('Restore the entry from the trash to change it')
         const type = requireType(previous.type)
         const fields = await prepare(type, fieldsOf(previous), changes, previous)
         await checkRelations(type, previous.id, fields, previous)
-        const entry = present(await write(type, previous.id, fields, previous))
+        const row = await write(type, previous.id, fields, previous)
+        await saveRevision(type, row, previous, options?.by)
+        const entry = present(row)
         await terms.applyDefaultTerms(entry)
         await announce(entry, present(previous))
         return entry
@@ -537,6 +622,7 @@ export function createContentService({
         await hooks.doAction('content.deleted', { entry: present(entry) })
       }),
   }
+  return service
 }
 
 function fieldsOf(entry: Entry): EntryFields {

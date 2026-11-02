@@ -223,8 +223,11 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
         }
         changes.status = status
 
+        const by = { by: user.id }
         const entry = await asActionError(() =>
-          previous ? content.update(previous.id, changes) : content.create(type.name, changes),
+          previous
+            ? content.update(previous.id, changes, by)
+            : content.create(type.name, changes, by),
         )
         await saveTerms(entry, type, form, user)
         for (const box of deps.screens.for(type.name).metaBoxes) {
@@ -443,8 +446,27 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
     },
   }
 
+  /** revision.php's Restore: the entry as the revision had it, for those who may edit it. */
+  const restoreRevision: InternalAction = {
+    name: 'restore-revision',
+    capability: 'core.access_admin',
+    async handler({ form, user }) {
+      const revision = await content.getRevision(field(form, 'id'))
+      if (!revision) throw new ActionError('That revision no longer exists.')
+      const { entry, type } = await entryOf(revision.entryId)
+      if (!can(user!, type.capabilities.editEntry, entry)) throw new ForbiddenError()
+      await asActionError(() => content.restoreRevision(revision.id, { by: user!.id }))
+      const when = revision.createdAt.toISOString().slice(0, 16).replace('T', ' ')
+      return {
+        redirect: `${type.adminPath}/${entry.id}`,
+        notice: `${type.labels.singular} restored to the revision from ${when} UTC.`,
+      }
+    },
+  }
+
   return [
     save,
+    restoreRevision,
     ...termForms,
     single(
       'trash-entry',

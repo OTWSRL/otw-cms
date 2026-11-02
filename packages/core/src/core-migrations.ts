@@ -147,4 +147,25 @@ export const coreMigrations: Migration[] = [
       )
     },
   },
+  {
+    id: '0005_revisions',
+    up: async (db) => {
+      // Revisions apart from entries, unlike WordPress's in wp_posts: lists never wade through them.
+      await db.execute(sql`
+        CREATE TABLE cms_revisions (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          entry_id uuid NOT NULL REFERENCES cms_entries (id) ON DELETE CASCADE,
+          author_id uuid REFERENCES cms_users (id) ON DELETE SET NULL,
+          title text NOT NULL,
+          body jsonb NOT NULL,
+          excerpt text NOT NULL,
+          meta jsonb NOT NULL DEFAULT '{}',
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `)
+      await db.execute(sql`
+        CREATE INDEX cms_revisions_entry_idx ON cms_revisions (entry_id, created_at DESC, id DESC)
+      `)
+    },
+  },
 ]
