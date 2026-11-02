@@ -850,7 +850,8 @@ function metaCondition(values: EntryQuery['meta']): SQL | undefined {
   return sql`cms_entries.meta @> ${JSON.stringify(values)}::jsonb`
 }
 
-function isUniqueViolation(error: unknown): boolean {
+/** A unique index refused the write, however the driver wraps the error. */
+export function isUniqueViolation(error: unknown): boolean {
   for (let cause = error; cause instanceof Object; cause = (cause as { cause?: unknown }).cause) {
     if ((cause as { code?: unknown }).code === '23505') return true
   }

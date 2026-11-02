@@ -218,4 +218,24 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    id: '0008_accounts',
+    up: async (db) => {
+      await db.execute(sql`ALTER TABLE cms_users ADD COLUMN email_verified_at timestamptz`)
+      await db.execute(sql`
+        CREATE TABLE cms_user_tokens (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid NOT NULL REFERENCES cms_users (id) ON DELETE CASCADE,
+          purpose text NOT NULL CHECK (purpose IN ('password', 'email')),
+          token_hash text NOT NULL UNIQUE,
+          new_email text,
+          expires_at timestamptz NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `)
+      await db.execute(sql`
+        CREATE INDEX cms_user_tokens_user_idx ON cms_user_tokens (user_id, created_at)
+      `)
+    },
+  },
 ]

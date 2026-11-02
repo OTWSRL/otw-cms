@@ -61,6 +61,9 @@ import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService }
 import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
 import { createMailService, type MailService } from './mail'
+import { accountActions } from './account-actions'
+import { createAccountPages, type AccountResolution } from './account-pages'
+import { createAccountService, type AccountService } from './accounts'
 import { localStorage, UPLOADS_PATH } from './media-storage'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
@@ -243,6 +246,14 @@ export interface Kernel {
   readonly media: MediaService
   /** Sending email, through the transport a plugin provides. */
   readonly mail: MailService
+  /** People's own accounts: signing up, resetting passwords, changing their details. */
+  readonly accounts: AccountService
+  /** The account page at a site path (`/account`, its reset and email pages), or `null`. */
+  resolveAccount(
+    pathname: string,
+    searchParams: SearchParams,
+    user: User | null,
+  ): Promise<AccountResolution | null>
   /** The largest file one upload may be, in bytes. */
   readonly maxUploadBytes: number
   /** Answers a request for an upload, `/uploads/{key}`, from the storage. */
@@ -752,6 +763,7 @@ async function boot(
   registerCoreContent({ register: registerContentType, taxonomy: registerTaxonomy })
   const actions = coreActions({
     auth,
+    canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
     async activate(id) {
       if (options.active) throw new ActionError(PINNED)
       const plugin = installed.get(id)
@@ -829,6 +841,23 @@ async function boot(
     maxBytes: maxUploadBytes,
   }
   for (const action of mediaActions(mediaDependencies)) registerAction(CORE, action)
+  const accounts = createAccountService({
+    db,
+    auth,
+    mail,
+    logger,
+    siteTitle: () => values['site.title'] ?? '',
+    registrationOpen: () => values['users.can_register'] ?? false,
+    roleExists: (role) => stores.capabilities.hasRole(role),
+    hashCost: options.passwordHashing,
+  })
+  for (const action of accountActions({ auth, accounts })) registerAction(CORE, action)
+  const resolveAccount = createAccountPages({
+    accounts,
+    canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
+    actionUrl: (name) => actionPath(CORE, name),
+    readFlash: (value) => prepared.flash.decode(value),
+  })
   registerApi(CORE, mediaUploadRoute(mediaDependencies))
   registerApi(CORE, mediaListRoute(mediaDependencies))
 
@@ -1269,6 +1298,8 @@ async function boot(
     mediaStorage,
     maxUploadBytes,
     mail,
+    accounts,
+    resolveAccount,
   })
 }
 
@@ -1313,6 +1344,8 @@ function buildKernel(input: {
   mediaStorage: () => MediaStorage
   maxUploadBytes: number
   mail: MailService
+  accounts: AccountService
+  resolveAccount: ReturnType<typeof createAccountPages>
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
   const { options, logger, db } = prepared
@@ -1450,6 +1483,9 @@ function buildKernel(input: {
     content: input.content,
     media: input.media,
     mail: input.mail,
+    accounts: input.accounts,
+    resolveAccount: (pathname, searchParams, user) =>
+      input.resolveAccount(pathname, searchParams, user),
     maxUploadBytes: input.maxUploadBytes,
     serveUpload: (request, key) => serveUpload(input.mediaStorage(), key, request),
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),

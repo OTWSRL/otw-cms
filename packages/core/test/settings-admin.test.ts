@@ -158,6 +158,7 @@ describe('settings pages', () => {
     expect(layout(kernel, 'core.general', user)).toEqual([
       { title: 'Site', fields: ['site.title', 'site.url', 'site.locale', 'seo.separator'] },
       { title: 'Email', fields: ['mail.from'] },
+      { title: 'Membership', fields: ['users.can_register'] },
     ])
     expect(layout(kernel, 'shop.store', user)).toEqual([
       { title: 'Gateway', fields: ['gateway.enabled', 'gateway.label'] },

@@ -75,6 +75,8 @@ export interface ActionInput {
   form: FormData
   /** Whether cookies set by this response should be Secure. */
   secure: boolean
+  /** The site's public origin, `https://example.com`, for links in emails. */
+  origin: string
 }
 
 export interface ActionOutput extends AdminActionResult {
@@ -199,7 +201,14 @@ export function createActionHandler(action: InternalAction, deps: ActionDependen
     try {
       const site = deps.origins.siteUrl() ?? publicOrigin(request, deps.origins.trustProxy)
       const secure = new URL(site).protocol === 'https:'
-      const result = (await action.handler({ user, sessionToken, form, secure })) ?? {}
+      const result =
+        (await action.handler({
+          user,
+          sessionToken,
+          form,
+          secure,
+          origin: new URL(site).origin,
+        })) ?? {}
       const target = safeRedirectPath(result.redirect) ?? back
       const notice: Flash | null = result.notice ? { kind: 'notice', message: result.notice } : null
       return redirect(flashTo(target, notice), result.cookies)

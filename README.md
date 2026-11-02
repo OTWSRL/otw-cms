@@ -467,6 +467,18 @@ when delivery fails. Core has no mailer: one plugin provides the transport
 production). Settings › General › Send email from (`MAIL_FROM`). `@otw/plugin-mail-file` writes
 each email to a folder, for development and the reference site's tests.
 
+## Accounts on the site
+
+`/account`, WooCommerce's My Account: signed out, sign in and (with Settings › General ›
+Membership › Anyone can register, and a mail plugin) register; signed in, name, email and password,
+and sign out. Sign-up is WordPress's: name and email, then an emailed link to set the password,
+which proves the address (`email_verified_at`). Lost password emails a link too. Links are random,
+stored hashed in `cms_user_tokens`, single-use, valid a day, three emails an hour per address;
+setting a password ends every session, changing it ends the others and tells the address; a new
+email address changes only once a link sent to it is used, and the old one is told. No form says
+whether an account exists. Sign-ups are Customers; a customer signing in at the admin lands on
+`/account`. Sites replace the pages with an `account` template.
+
 ## Security model
 
 Plugins run in-process with full access, the same trust model as WordPress and npm. Declared

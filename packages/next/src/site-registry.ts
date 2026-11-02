@@ -1,6 +1,7 @@
 import type { Brand } from '@otw/core'
 import type {
   AdminDefinition,
+  AccountTemplateProps,
   ArchiveTemplateProps,
   EntryTemplateProps,
   PluginDefinition,
@@ -17,6 +18,8 @@ export interface SiteTemplates {
   single?: Readonly<Record<string, Template<EntryTemplateProps>>>
   archive?: Readonly<Record<string, Template<ArchiveTemplateProps>>>
   term?: Readonly<Record<string, Template<ArchiveTemplateProps>>>
+  /** The account pages, every view (`props.view` says which). */
+  account?: Template<AccountTemplateProps>
 }
 
 /** What a site gives the CMS. `cms generate` writes it to `src/cms/site.generated.ts`. */

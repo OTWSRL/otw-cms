@@ -21,8 +21,11 @@ export const users = pgTable('cms_users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull().default(''),
   role: text('role').notNull(),
+  /** Empty until the person sets one, from the link sign-up emails them. */
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** When the person proved they read this address, by using a link sent to it. */
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
 })
 
 export const sessions = pgTable(
@@ -177,4 +180,28 @@ export const media = pgTable(
     index('cms_media_entry_idx').on(table.entryId),
     index('cms_media_author_idx').on(table.authorId),
   ],
+)
+
+/** What a token in an emailed link is for: setting a password, or confirming a new address. */
+export type UserTokenPurpose = 'password' | 'email'
+
+/**
+ * Links sent by email, like WordPress's `user_activation_key`: kept hashed, used once, and only
+ * until they expire.
+ */
+export const userTokens = pgTable(
+  'cms_user_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    purpose: text('purpose').$type<UserTokenPurpose>().notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    /** For `email`: the address being confirmed. */
+    newEmail: text('new_email'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('cms_user_tokens_user_idx').on(table.userId, table.createdAt)],
 )

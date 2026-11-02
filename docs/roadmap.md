@@ -27,8 +27,8 @@ screens).
 Milestone 7, Content, is complete: content types and entries, their screens and the block
 editor, taxonomies and custom fields, site pages and revisions, and the media library.
 
-Now: 8, Accounts and email, in three parts. 8a, email, is done; next, 8b, accounts on the
-site, then 8c, profiles and user meta.
+Now: 8, Accounts and email, in three parts. 8a, email, and 8b, accounts on the site, are done;
+next, 8c, profiles and user meta.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -467,11 +467,11 @@ type's capabilities (`capability_type => 'post'`).
 Customer sign-up and sign-in on the storefront, password reset, profile screens with fields
 plugins add (`show_user_profile`), user meta, and a mail transport with filters (`wp_mail`).
 
-| Part | What                                                                    | WordPress's                               |
-| ---- | ----------------------------------------------------------------------- | ----------------------------------------- |
-| 8a   | `cms.mail.send()`, a transport from one plugin, hooks (done)            | `wp_mail()`, SMTP plugins                 |
-| 8b   | Sign-up with a verified email, sign-in, lost password, `/account`       | `wp-login.php`, WooCommerce's My Account  |
-| 8c   | User meta, Profile and Edit User screens, account sections from plugins | `profile.php`, `user-edit.php`, user meta |
+| Part | What                                                                     | WordPress's                               |
+| ---- | ------------------------------------------------------------------------ | ----------------------------------------- |
+| 8a   | `cms.mail.send()`, a transport from one plugin, hooks (done)             | `wp_mail()`, SMTP plugins                 |
+| 8b   | Sign-up with a verified email, sign-in, lost password, `/account` (done) | `wp-login.php`, WooCommerce's My Account  |
+| 8c   | User meta, Profile and Edit User screens, account sections from plugins  | `profile.php`, `user-edit.php`, user meta |
 
 ### 8a. Email (done)
 
@@ -485,6 +485,30 @@ plugins add (`show_user_profile`), user meta, and a mail transport with filters 
 - Settings › General › **Send email from** (`mail.from`, `MAIL_FROM`).
 - **Mail to files** (`@otw/plugin-mail-file`), a first-party transport for development and tests:
   each email as a JSON file in `MAIL_FILE_DIR`. The reference site uses it.
+
+### 8b. Accounts on the site (done)
+
+- **Pages** at `/account`, after plugins' routes and before content: sign in (and register),
+  the account, lost password, set a password (`/account/reset?token=`), confirm an email address
+  (`/account/email?token=`). `kernel.resolveAccount()` gives `AccountTemplateProps`;
+  `AccountTemplate` in `@otw/next/site` renders plain forms; a site's `account` template replaces
+  it. Pages are noindex, and token pages send Referer to the site only (`same-origin`:
+  `no-referrer` would post their forms with `Origin: null`, which actions refuse).
+- **Sign-up**, with Settings › General › Membership › Anyone can register (`users.can_register`)
+  and a mail plugin: name and email; a Customer with no password, and an emailed link to set one,
+  which proves the address (`cms_users.email_verified_at`, migration core/0008_accounts). An
+  address that has an account gets an email saying so, with a reset link; the form answers the
+  same.
+- **Links** in `cms_user_tokens`: random, stored as SHA-256, one purpose (`password`, `email`),
+  single-use, a day (WordPress's `password_reset_expiration`), at most three emails an hour per
+  address.
+- **Lost password**, the same answer whether or not an account uses the address; setting the
+  password ends every session (WordPress's reset) and signs in.
+- **Signed in**: name; password with the current one (counted against sign-in's throttle), ending
+  the other sessions and emailing the address; email changed only from a link sent to the new
+  address, the old one told. `auth.checkPassword()` and `auth.signOutEverywhere()`.
+- Admin sign-in: Lost your password?, and a customer is sent to `/account`. Sign-in for an
+  account with no password costs a hash too, so it can't be told apart.
 
 ## 9. LMS plugin
 

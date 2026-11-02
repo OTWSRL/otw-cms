@@ -246,3 +246,69 @@ a {
   gap: 1rem;
   padding-top: 1rem;
 }
+
+/* The account pages: sign in and up, lost and reset passwords, and the account's details. */
+.account {
+  max-width: 28rem;
+}
+
+.account h2 {
+  margin-top: 2rem;
+  font-size: 1.15rem;
+}
+
+.account-form {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.account-field {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0 0 0.5rem;
+}
+
+.account-field input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+.account-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.account button {
+  padding: 0.6rem 1rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-sign-out {
+  margin-top: 2rem;
+}
+
+.account-sign-out button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.account-notice {
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+}
+
+.account-notice-error {
+  border-left-color: var(--danger);
+}

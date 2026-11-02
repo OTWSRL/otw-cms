@@ -1022,6 +1022,48 @@ export interface ArchiveTemplateProps {
   pageUrl(page: number): string
 }
 
+/**
+ * Which account page: signing in (and up), the signed-in person's account, asking for a reset
+ * link, setting a password from one, and confirming a new email address.
+ */
+export type AccountView = 'sign-in' | 'account' | 'lost-password' | 'reset' | 'confirm-email'
+
+/** What the account pages' template receives: WooCommerce's My Account, by view. */
+export interface AccountTemplateProps {
+  view: AccountView
+  /** The signed-in person; `null` signed out. */
+  user: User | null
+  /** Whether they've proved their address, by using a link sent to it. */
+  verified: boolean
+  /** Whether they may use the admin, for a link to it. */
+  canUseAdmin: boolean
+  /** Settings › General's "Anyone can register", with a mail plugin to send the link. */
+  canRegister: boolean
+  /** On `reset` and `confirm-email`: the link's token, and whether it still works. */
+  token: string | null
+  valid: boolean
+  /** On `confirm-email`: the address being confirmed. */
+  newEmail: string | null
+  /** The one-time message after a form. */
+  notice: { kind: 'notice' | 'error'; message: string } | null
+  /** Where to go after signing in, from the `next` query; a path on the site. */
+  next: string | null
+  /** Where each form posts. */
+  actions: {
+    signIn: string
+    register: string
+    lostPassword: string
+    reset: string
+    name: string
+    password: string
+    email: string
+    confirmEmail: string
+    signOut: string
+  }
+  /** The pages' addresses. */
+  paths: { account: string; lostPassword: string }
+}
+
 /** Which page a template shows: an entry, a type's archive, or a term's. */
 export type ContentView = 'single' | 'archive' | 'term'
 

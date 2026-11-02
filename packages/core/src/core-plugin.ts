@@ -11,6 +11,7 @@ import type {
 } from '@otw/sdk'
 import { ActionError } from '@otw/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
+import { ACCOUNT_PATH } from './accounts'
 import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, READ, type CapabilityStore } from './capabilities'
 import { coreMigrations } from './core-migrations'
@@ -126,6 +127,13 @@ const coreSettings: SettingDefinitions = {
         ? null
         : 'Use an address, such as My Site <hello@example.com>',
   },
+  'users.can_register': {
+    type: 'boolean',
+    label: 'Anyone can register',
+    description:
+      'People sign up at /account as Customers, with a link emailed to set their password. Needs a mail plugin.',
+    default: false,
+  },
   'site.locale': {
     type: 'text',
     label: 'Locale',
@@ -240,6 +248,12 @@ export function registerCoreSettings(layout: SettingsLayoutStore): void {
     title: 'Email',
     fields: ['mail.from'],
   })
+  layout.section(CORE, {
+    name: 'membership',
+    page: 'core.general',
+    title: 'Membership',
+    fields: ['users.can_register'],
+  })
   // WordPress's Settings › Reading.
   layout.page(
     CORE,
@@ -294,6 +308,8 @@ export function registerCoreSettings(layout: SettingsLayoutStore): void {
 
 export interface CoreActionDependencies {
   auth: AuthService
+  /** Whether the user may use the admin; others sign in to their account on the site instead. */
+  canUseAdmin(user: User): boolean
   /** Each returns the notice to show. */
   activate(pluginId: string): Promise<string>
   deactivate(pluginId: string): Promise<string>
@@ -326,11 +342,15 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
       name: 'login',
       capability: null,
       async handler({ form, secure }) {
-        const { token } = await asActionError(() =>
+        const { user, token } = await asActionError(() =>
           auth.signIn(field(form, 'email'), field(form, 'password')),
         )
+        const next = safeRedirectPath(field(form, 'next')) ?? ADMIN_PREFIX
+        const admin = next === ADMIN_PREFIX || next.startsWith(`${ADMIN_PREFIX}/`)
         return {
-          redirect: safeRedirectPath(field(form, 'next')) ?? ADMIN_PREFIX,
+          // A customer at the admin's sign-in goes to their account, as WordPress sends a
+          // subscriber to their profile, rather than to a screen they may not open.
+          redirect: admin && !deps.canUseAdmin(user) ? ACCOUNT_PATH : next,
           cookies: [sessionCookie(token, secure)],
         }
       },

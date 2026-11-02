@@ -163,6 +163,11 @@ export interface Settings {
    * the mail plugin. `MAIL_FROM` overrides it.
    */
   'mail.from': string
+  /**
+   * Settings › General › Membership: anyone can sign up on the site, as a Customer, with an
+   * address they prove. WordPress's `users_can_register`. Off by default.
+   */
+  'users.can_register': boolean
 }
 
 /** Capability name -> `true`. Admin pages and actions each require one. */

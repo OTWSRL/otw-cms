@@ -1,4 +1,4 @@
-import type { ContentResolution } from '@otw/core'
+import type { AccountResolution, ContentResolution } from '@otw/core'
 import type { SearchParams } from '@otw/sdk'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
@@ -6,6 +6,7 @@ import { cache } from 'react'
 import { currentSite } from '../site-registry'
 import { getKernel } from '../runtime/kernel'
 import { getCurrentUser } from '../runtime/session'
+import { AccountTemplate } from './account'
 import { ArchiveTemplate, EntryTemplate } from './templates'
 import {
   parseSearchParams,
@@ -31,9 +32,16 @@ const loadContent = cache(async (pathname: string, query: string) => {
   return kernel.resolveContent(pathname, parseSearchParams(query), user)
 })
 
+// The account pages are the viewer's: signed in, the details; signed out, the sign-in form.
+const loadAccount = cache(async (pathname: string, query: string) => {
+  const [kernel, user] = await Promise.all([getKernel(), getCurrentUser()])
+  return kernel.resolveAccount(pathname, parseSearchParams(query), user)
+})
+
 /**
- * What the path shows: a plugin's page, then content (a page, a post, an archive), as WordPress
- * lets plugins' rewrite rules come first. A preview link is for content wherever it points.
+ * What the path shows: a plugin's page, then the account pages, then content (a page, a post, an
+ * archive), as WordPress lets plugins' rewrite rules come first. A preview link is for content
+ * wherever it points.
  */
 async function resolve({ params, searchParams }: SiteRouteProps) {
   const { slug } = await params
@@ -42,13 +50,19 @@ async function resolve({ params, searchParams }: SiteRouteProps) {
   const serialized = serializeSearchParams(query)
   const preview = query.preview !== undefined
   const page = preview ? null : await loadPage(pathname, serialized)
-  return { slug, preview, page, content: page ? null : await loadContent(pathname, serialized) }
+  const account = page || preview ? null : await loadAccount(pathname, serialized)
+  const content = page || account ? null : await loadContent(pathname, serialized)
+  return { slug, preview, page, account, content }
 }
 
 /** The page's title and description, from the plugin page or the content at this path. */
 export async function generateSiteMetadata(props: SiteRouteProps): Promise<Metadata> {
-  const { page, content } = await resolve(props)
+  const { page, account, content } = await resolve(props)
   if (page) return page.metadata()
+  if (account) {
+    const { title, referrer } = account.metadata
+    return { title, robots: { index: false, follow: false }, ...(referrer ? { referrer } : {}) }
+  }
   if (!content) return {}
   const { title, description, noindex } = content.metadata
   return { title, description, robots: noindex ? { index: false, follow: false } : undefined }
@@ -56,11 +70,12 @@ export async function generateSiteMetadata(props: SiteRouteProps): Promise<Metad
 
 /** Every site URL: a plugin's page, the content there, or the default home page. */
 export async function SitePage(props: SiteRouteProps) {
-  const { slug, preview, page, content } = await resolve(props)
+  const { slug, preview, page, account, content } = await resolve(props)
   if (page) {
     const { Component, props: pageProps } = page
     return <Component {...pageProps} />
   }
+  if (account) return <Account resolution={account} />
   if (content) return <Content resolution={content} />
   // A preview this viewer may not see is a 404, wherever it points, not the home page.
   if (!slug?.length && !preview) return <DefaultHome />
@@ -88,6 +103,12 @@ async function Content({ resolution }: { resolution: ContentResolution }) {
     (kernel.contentTemplate(resolution.view, resolution.name) as
       typeof ArchiveTemplate | undefined) ??
     ArchiveTemplate
+  return <Template {...resolution.props} />
+}
+
+/** The account pages in the site's own template, or the default. */
+function Account({ resolution }: { resolution: AccountResolution }) {
+  const Template = currentSite().templates?.account ?? AccountTemplate
   return <Template {...resolution.props} />
 }
 

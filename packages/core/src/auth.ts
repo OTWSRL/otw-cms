@@ -27,6 +27,8 @@ export type AuthErrorCode =
   | 'last_administrator'
   | 'not_found'
   | 'already_set_up'
+  | 'invalid_token'
+  | 'closed'
 
 /** Messages are written for the person filling in the form. */
 export class AuthError extends Error {
@@ -61,6 +63,13 @@ export interface AuthService {
   setRoles(userIds: readonly string[], role: string): Promise<User[]>
   /** Throttled per email address; returns a new session token. */
   signIn(email: string, password: string): Promise<{ user: User; token: string }>
+  /**
+   * Whether `password` is the user's, as a form that changes their email or password asks:
+   * counted against the same failed attempts as signing in. Throws `throttled` past them.
+   */
+  checkPassword(email: string, password: string): Promise<boolean>
+  /** Ends every session of the user's but `except`, the one they're using. */
+  signOutEverywhere(userId: string, except?: string | null): Promise<void>
   createSession(userId: string): Promise<string>
   userForSession(token: string | null | undefined): Promise<User | null>
   signOut(token: string | null | undefined): Promise<void>
@@ -142,6 +151,33 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
     return token
   }
 
+  /**
+   * The user whose password this is, or `null`: throttled per address, and as slow for an
+   * address with no account, or no password yet, as for a real one.
+   */
+  const verified = async (rawEmail: string, password: string) => {
+    const email = normalizeEmail(rawEmail)
+    const windowStart = new Date(now().getTime() - LOGIN_FAILURE_WINDOW_MS)
+    const [{ failures } = { failures: 0 }] = await db.current
+      .select({ failures: count() })
+      .from(loginFailures)
+      .where(and(eq(loginFailures.email, email), gt(loginFailures.failedAt, windowStart)))
+    if (failures >= MAX_LOGIN_FAILURES) {
+      throw new AuthError('throttled', 'Too many failed attempts. Try again in 15 minutes.')
+    }
+    const [row] = await db.current.select().from(users).where(eq(users.email, email)).limit(1)
+    const valid =
+      password.length <= MAX_PASSWORD_LENGTH &&
+      (await verifyPassword(password, row?.passwordHash || (await decoyHash())))
+    if (!row || !valid) {
+      await db.current.insert(loginFailures).values({ email, failedAt: now() })
+      await db.current.delete(loginFailures).where(lt(loginFailures.failedAt, windowStart))
+      return null
+    }
+    await db.current.delete(loginFailures).where(eq(loginFailures.email, email))
+    return row
+  }
+
   const service: AuthService = {
     async createUser(input) {
       return insertUser(await validated(input))
@@ -217,29 +253,27 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
     },
 
     async signIn(rawEmail, password) {
-      const email = normalizeEmail(rawEmail)
-      const windowStart = new Date(now().getTime() - LOGIN_FAILURE_WINDOW_MS)
-      const [{ failures } = { failures: 0 }] = await db.current
-        .select({ failures: count() })
-        .from(loginFailures)
-        .where(and(eq(loginFailures.email, email), gt(loginFailures.failedAt, windowStart)))
-      if (failures >= MAX_LOGIN_FAILURES) {
-        throw new AuthError('throttled', 'Too many failed attempts. Try again in 15 minutes.')
-      }
-
-      const [row] = await db.current.select().from(users).where(eq(users.email, email)).limit(1)
-      const valid =
-        password.length <= MAX_PASSWORD_LENGTH &&
-        (await verifyPassword(password, row?.passwordHash ?? (await decoyHash())))
-      if (!row || !valid) {
-        await db.current.insert(loginFailures).values({ email, failedAt: now() })
-        await db.current.delete(loginFailures).where(lt(loginFailures.failedAt, windowStart))
-        throw new AuthError('invalid_credentials', 'Incorrect email or password.')
-      }
-
-      await db.current.delete(loginFailures).where(eq(loginFailures.email, email))
-      const { id, name, role } = row
+      const row = await verified(rawEmail, password)
+      if (!row) throw new AuthError('invalid_credentials', 'Incorrect email or password.')
+      const { id, email, name, role } = row
       return { user: { id, email, name, role }, token: await createSession(id) }
+    },
+
+    async checkPassword(email, password) {
+      return (await verified(email, password)) !== null
+    },
+
+    async signOutEverywhere(userId, except) {
+      if (!UUID.test(userId)) return
+      const keep = except && TOKEN.test(except) ? hashToken(except) : null
+      await db.current
+        .delete(sessions)
+        .where(
+          and(
+            eq(sessions.userId, userId),
+            keep ? sql`${sessions.tokenHash} <> ${keep}` : undefined,
+          ),
+        )
     },
 
     createSession,

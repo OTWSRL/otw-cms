@@ -2,6 +2,7 @@
 export { getKernel } from '../runtime/kernel'
 export { getCurrentUser } from '../runtime/session'
 export { SitePage, generateSiteMetadata, type SiteRouteProps } from './page'
+export { AccountTemplate } from './account'
 export { Blocks } from './blocks'
 export { Image, srcSetOf } from './image'
 export { ArchiveTemplate, EntryTemplate, excerptOf } from './templates'

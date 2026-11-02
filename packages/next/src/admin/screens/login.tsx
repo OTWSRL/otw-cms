@@ -1,4 +1,4 @@
-import { safeRedirectPath } from '@otw/core'
+import { ACCOUNT_PATH, safeRedirectPath } from '@otw/core'
 import type { SearchParams } from '@otw/sdk'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -56,6 +56,9 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
           </button>
         </p>
       </form>
+      <p className="login-links">
+        <Link href={`${ACCOUNT_PATH}/lost-password`}>Lost your password?</Link>
+      </p>
       <p className="login-links">
         <Link href="/">← Go to {site}</Link>
       </p>
