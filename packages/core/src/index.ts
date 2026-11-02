@@ -17,6 +17,7 @@ export {
 export { DEFAULT_BRAND, type Brand } from './brand'
 export type { ContentService } from './content'
 export type { ContentScreenExtensions, Keyed } from './content-screens'
+export { metaOptions } from './content-meta'
 export { inSentence } from './content-types'
 export { ADMINISTRATOR, type CapabilityInfo, type RoleInfo } from './capabilities'
 export { CORE } from './core-plugin'

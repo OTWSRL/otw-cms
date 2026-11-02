@@ -160,6 +160,12 @@ export interface Taxonomies {
   'core.tag': true
 }
 
+/**
+ * Custom field key -> its value's type, for entries' `meta`. Register each with
+ * `cms.content.meta()`; keys start with the plugin's id, as `lms.level`.
+ */
+export interface EntryMeta {}
+
 /** Slot name -> the props each fill receives. */
 export interface Slots {
   /** Links in the site's main navigation, which the site's layout renders with `<Slot name="header.nav" />`. */
@@ -189,6 +195,8 @@ export type ServiceName = keyof Services & string
 export type SettingName = keyof Settings & string
 /** Any declared content type's name. */
 export type ContentTypeName = keyof ContentTypes & string
+/** Any declared custom field's key. */
+export type EntryMetaKey = keyof EntryMeta & string
 /** Any declared taxonomy's name. */
 export type TaxonomyName = keyof Taxonomies & string
 /** Any declared capability's name, content types' and taxonomies' included. */

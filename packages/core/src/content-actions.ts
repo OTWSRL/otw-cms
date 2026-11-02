@@ -1,6 +1,8 @@
 import type {
   CapabilityName,
   ContentType,
+  EntryMetaChanges,
+  MetaField,
   Taxonomy,
   TaxonomyName,
   Entry,
@@ -77,7 +79,8 @@ function countOf(type: ContentType, count: number): string {
   return `${count} ${inSentence(count === 1 ? type.labels.singular : type.labels.plural)}`
 }
 
-function draftOf(type: ContentType, fields: EntryChanges, user: User): Entry {
+/** The entry a first save would make, for checking whether its user may publish it. */
+function draftOf(type: ContentType, changes: EntryChanges, user: User): Entry {
   const now = new Date()
   return {
     id: '',
@@ -95,7 +98,9 @@ function draftOf(type: ContentType, fields: EntryChanges, user: User): Entry {
     updatedAt: now,
     trashedFrom: null,
     trashedAt: null,
-    ...(fields as Partial<EntryFields>),
+    ...(changes as Partial<Omit<EntryFields, 'meta'>>),
+    // Custom field changes aren't values yet; a capability check reads the rest.
+    meta: {},
   }
 }
 
@@ -154,6 +159,23 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
     return changes
   }
 
+  /**
+   * The values of the field boxes' custom fields: only those the form had (named in
+   * `metaFields`), each needing its own capability if it has one. An empty input removes the
+   * field, so its default shows again.
+   */
+  const metaChangesFrom = (form: FormData, type: ContentType, user: User): EntryMetaChanges => {
+    const shown = new Set(form.getAll('metaFields').filter((key) => typeof key === 'string'))
+    const changes: Record<string, unknown> = {}
+    for (const field of content.metaFields(type.name)) {
+      if (!shown.has(field.key)) continue
+      const capability = field.definition.capability
+      if (capability && !can(user, capability)) throw new ForbiddenError()
+      changes[field.key] = metaFromForm(field, form)
+    }
+    return changes as EntryMetaChanges
+  }
+
   const save: InternalAction = {
     name: 'save-entry',
     capability: 'core.access_admin',
@@ -182,6 +204,7 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
         }
 
         const changes = changesFrom(form, type)
+        changes.meta = metaChangesFrom(form, type, user)
         const author = previous ? previous.authorId : user.id
         changes.authorId = form.has('author') ? field(form, 'author') || null : author
         if (changes.authorId !== author && !can(user, caps.editOthers)) throw new ForbiddenError()
@@ -468,6 +491,37 @@ const CORE_BULK: Readonly<
     run: (content, entry) => content.delete(entry.id),
     done: 'permanently deleted',
   },
+}
+
+/** A field box's input as the field's value; `null` for an empty one, which removes the field. */
+export function metaFromForm(field: MetaField, form: FormData): unknown {
+  const name = `meta.${field.key}`
+  const { definition } = field
+  if (definition.type === 'boolean') return form.has(name)
+  const raw = form.get(name)
+  // Text is tidied (and trimmed) by the field's own checks when the entry is saved.
+  const value = typeof raw === 'string' ? raw : ''
+  if (value.trim() === '') return null
+  switch (definition.type) {
+    case 'string':
+      return value
+    case 'number': {
+      const number = Number(value)
+      if (!Number.isFinite(number)) throw new ActionError(`${definition.label} must be a number.`)
+      return number
+    }
+    case 'strings':
+      return value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    case 'json':
+      try {
+        return JSON.parse(value) as unknown
+      } catch {
+        throw new ActionError(`${definition.label} must be valid JSON.`)
+      }
+  }
 }
 
 /** "news, Local Events ,, news" → ["news", "Local Events"]: as WordPress splits a tags field. */

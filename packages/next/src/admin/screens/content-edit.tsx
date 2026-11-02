@@ -4,6 +4,7 @@ import type { ContentType, Entry, SearchParams, Taxonomy, Term, User } from '@ot
 import { EditorLoader } from '../editor/editor-loader'
 import { AdminScreen } from '../screen'
 import { formatDate } from './content-dates'
+import { MetaFields } from './meta-fields'
 
 /** A parent dropdown lists at most this many entries, as a page of 100 at a time. */
 const MAX_PARENTS = 1000
@@ -123,12 +124,26 @@ export async function ContentEditScreen({
       canManage={kernel.can(user, taxonomy.capabilities.manage)}
     />
   ))
+  // A field box's custom fields, in its order, as far as they're registered for this type.
+  const typeFields = new Map(
+    kernel.content.metaFields(type.name).map((field) => [field.key, field]),
+  )
   const boxes = (context: 'normal' | 'side') =>
     extensions.metaBoxes
       .filter((box) => (box.context ?? 'normal') === context)
-      .map(({ key, title, component: Box }) => (
+      .map(({ key, title, fields, component: Box }) => (
         <Postbox key={key} id={`box-${key.replace('.', '-')}`} title={title}>
-          <Box entry={entry} type={type} user={user} />
+          {fields ? (
+            <MetaFields
+              fields={fields.flatMap((name) => typeFields.get(name) ?? [])}
+              meta={entry?.meta ?? {}}
+              editable={(field) =>
+                !field.definition.capability || kernel.can(user, field.definition.capability)
+              }
+            />
+          ) : (
+            Box && <Box entry={entry} type={type} user={user} />
+          )}
         </Postbox>
       ))
   const newKey = `new:${type.name}`

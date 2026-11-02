@@ -63,6 +63,7 @@ function entry(type: string, status: EntryStatus, authorId: string | null): Entr
     updatedAt: new Date(),
     trashedFrom: trashed ? from : null,
     trashedAt: trashed ? new Date() : null,
+    meta: {},
   }
 }
 

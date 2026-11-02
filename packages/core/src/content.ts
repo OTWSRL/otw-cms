@@ -28,6 +28,7 @@ import {
   type SQL,
 } from 'drizzle-orm'
 import { cleanBlocks } from './blocks'
+import type { MetaStore } from './content-meta'
 import { inSentence, type ContentTypeStore } from './content-types'
 import { entryTermsCondition, type createTermService } from './terms'
 import { entries, users } from './core-schema'
@@ -35,14 +36,15 @@ import type { DatabaseContext } from './database'
 import type { HookBus } from './hooks'
 import { firstFreeSlug, slugify, slugStem } from './slugs'
 
-/** `cms.content` without `type()` and `taxonomy()`, which only plugins call, in setup. */
-export type ContentService = Omit<ContentApi, 'type' | 'taxonomy'>
+/** `cms.content` without `type()`, `taxonomy()` and `meta()`, which only plugins call, in setup. */
+export type ContentService = Omit<ContentApi, 'type' | 'taxonomy' | 'meta'>
 
 export interface ContentServiceOptions {
   db: DatabaseContext
   types: ContentTypeStore
   hooks: HookBus
   terms: ReturnType<typeof createTermService>
+  meta: MetaStore
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -61,6 +63,7 @@ const FIELDS: readonly (keyof EntryFields)[] = [
   'parentId',
   'position',
   'publishedAt',
+  'meta',
 ]
 const MAX_TITLE = 500
 const MAX_EXCERPT = 10_000
@@ -90,6 +93,7 @@ const NEW_ENTRY: EntryFields = {
   parentId: null,
   position: 0,
   publishedAt: null,
+  meta: {},
 }
 
 const SORTS = {
@@ -117,7 +121,12 @@ export function createContentService({
   types,
   hooks,
   terms,
+  meta,
 }: ContentServiceOptions): ContentService {
+  /** An entry as callers see it: its type's custom field defaults under what it stores. */
+  const present = (row: Entry): Entry => ({ ...row, meta: meta.withDefaults(row.type, row.meta) })
+  const presentOrNull = (row: Entry | undefined): Entry | null => (row ? present(row) : null)
+
   const requireType = (name: string): ContentType => {
     const type = types.get(name)
     if (!type) {
@@ -164,13 +173,27 @@ export function createContentService({
     return firstFreeSlug(base, new Set(rows.map((row) => row.slug)))
   }
 
-  /** Runs the `content.entry` filter, then checks what it returned: the filters are any plugin's. */
-  const filtered = async (
+  /**
+   * The fields to save: `changes` over `base`, custom fields merged key by key. Then the
+   * `content.entry` filter, and the same checks again on what it returned: filters are any
+   * plugin's.
+   */
+  const prepare = async (
     type: ContentType,
-    fields: EntryFields,
+    base: EntryFields,
+    changes: EntryChanges | undefined,
     previous: Entry | null,
-  ): Promise<EntryFields> =>
-    cleanFields(await hooks.applyFilters('content.entry', fields, { type: type.name, previous }))
+  ): Promise<EntryFields> => {
+    const fields = cleanFields(merge(base, changes))
+    fields.meta = meta.merge(type.name, base.meta, changes?.meta)
+    const result = await hooks.applyFilters('content.entry', fields, {
+      type: type.name,
+      previous: previous && present(previous),
+    })
+    const checked = cleanFields(result)
+    checked.meta = meta.check(type.name, result.meta, base.meta)
+    return checked
+  }
 
   /** The author must exist; the parent must be an entry of the same type, and not a descendant. */
   const checkRelations = async (
@@ -317,7 +340,7 @@ export function createContentService({
     const byId = new Map(rows.map((row) => [row.id, row]))
     const shown = page.filter((row) => byId.has(row.id))
     return {
-      entries: shown.map((row) => byId.get(row.id)!),
+      entries: shown.map((row) => present(byId.get(row.id)!)),
       total: Number(page[0]!.total),
       depths: shown.map((row) => Number(row.depth)),
     }
@@ -349,14 +372,15 @@ export function createContentService({
     ...terms.service,
     types: () => types.list(),
     getType: (name) => types.get(name),
+    metaFields: (type) => meta.list(type),
 
     create: (typeName, input) =>
       db.transaction(async () => {
         const type = requireType(typeName)
         const id = randomUUID()
-        const fields = await filtered(type, cleanFields(merge(NEW_ENTRY, input)), null)
+        const fields = await prepare(type, NEW_ENTRY, input, null)
         await checkRelations(type, id, fields, null)
-        const entry = await write(type, id, fields, null)
+        const entry = present(await write(type, id, fields, null))
         await terms.applyDefaultTerms(entry)
         await announce(entry, null)
         return entry
@@ -367,22 +391,18 @@ export function createContentService({
         const previous = await lock(id)
         if (previous.status === 'trash') invalid('Restore the entry from the trash to change it')
         const type = requireType(previous.type)
-        const fields = await filtered(
-          type,
-          cleanFields(merge(fieldsOf(previous), changes)),
-          previous,
-        )
+        const fields = await prepare(type, fieldsOf(previous), changes, previous)
         await checkRelations(type, previous.id, fields, previous)
-        const entry = await write(type, previous.id, fields, previous)
+        const entry = present(await write(type, previous.id, fields, previous))
         await terms.applyDefaultTerms(entry)
-        await announce(entry, previous)
+        await announce(entry, present(previous))
         return entry
       }),
 
     async get(id) {
       if (!UUID.test(id)) return null
       const [row] = await db.current.select().from(entries).where(eq(entries.id, id)).limit(1)
-      return row ?? null
+      return presentOrNull(row)
     },
 
     async getBySlug(type, slug, { parentId = null } = {}) {
@@ -399,7 +419,7 @@ export function createContentService({
           ),
         )
         .limit(1)
-      return row ?? null
+      return presentOrNull(row)
     },
 
     async list(query) {
@@ -425,7 +445,7 @@ export function createContentService({
         return { entries: [], total: count?.total ?? 0 }
       }
       return {
-        entries: rows.map(({ total: _total, ...entry }) => entry),
+        entries: rows.map(({ total: _total, ...entry }) => present(entry)),
         total: rows[0]?.total ?? 0,
       } satisfies EntryList
     },
@@ -468,8 +488,8 @@ export function createContentService({
     trash: (id) =>
       db.transaction(async () => {
         const previous = await lock(id)
-        if (previous.status === 'trash') return previous
-        const [entry] = await db.current
+        if (previous.status === 'trash') return present(previous)
+        const [row] = await db.current
           .update(entries)
           .set({
             status: 'trash',
@@ -479,23 +499,25 @@ export function createContentService({
           })
           .where(eq(entries.id, previous.id))
           .returning()
-        await announce(entry!, previous)
-        await hooks.doAction('content.trashed', { entry: entry! })
-        return entry!
+        const entry = present(row!)
+        await announce(entry, present(previous))
+        await hooks.doAction('content.trashed', { entry })
+        return entry
       }),
 
     restore: (id) =>
       db.transaction(async () => {
         const previous = await lock(id)
-        if (previous.status !== 'trash') return previous
-        const [entry] = await db.current
+        if (previous.status !== 'trash') return present(previous)
+        const [row] = await db.current
           .update(entries)
           .set({ status: 'draft', trashedFrom: null, trashedAt: null, updatedAt: TOUCHED })
           .where(eq(entries.id, previous.id))
           .returning()
-        await announce(entry!, previous)
-        await hooks.doAction('content.restored', { entry: entry! })
-        return entry!
+        const entry = present(row!)
+        await announce(entry, present(previous))
+        await hooks.doAction('content.restored', { entry })
+        return entry
       }),
 
     delete: (id) =>
@@ -503,7 +525,7 @@ export function createContentService({
         const entry = await lock(id)
         await moveChildrenUp(entry)
         await db.current.delete(entries).where(eq(entries.id, entry.id))
-        await hooks.doAction('content.deleted', { entry })
+        await hooks.doAction('content.deleted', { entry: present(entry) })
       }),
   }
 }
@@ -520,7 +542,8 @@ function merge(base: EntryFields, changes: EntryChanges | undefined): EntryField
   const merged: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(changes)) {
     if (!(FIELDS as readonly string[]).includes(key)) invalid(`Unknown entry field "${key}"`)
-    if (value !== undefined) merged[key] = value
+    // Custom fields merge key by key, through the meta store.
+    if (value !== undefined && key !== 'meta') merged[key] = value
   }
   return merged as unknown as EntryFields
 }
@@ -544,6 +567,7 @@ export function cleanFields(fields: EntryFields): EntryFields {
     parentId: cleanId(fields.parentId, 'The parent'),
     position: cleanPosition(fields.position),
     publishedAt: cleanDate(fields.publishedAt),
+    meta: fields.meta,
   }
 }
 
@@ -688,6 +712,7 @@ function listQuery(query: EntryQuery) {
             ? isNull(entries.parentId)
             : eq(entries.parentId, parentId),
         ids === undefined ? undefined : inArray(entries.id, ids),
+        metaCondition(query.meta),
         byTerms ?? undefined,
         search === undefined ? undefined : searchCondition(search),
         after === undefined ? undefined : gte(SORTS.date, dateBound(after, 'after')),
@@ -701,6 +726,15 @@ function listQuery(query: EntryQuery) {
     orderBy: [direction(sort), direction(entries.id)],
     tree: orderBy === 'tree' ? typeNames[0]! : null,
   }
+}
+
+/** `meta` @> the values: jsonb containment, which the GIN index answers. */
+function metaCondition(values: EntryQuery['meta']): SQL | undefined {
+  if (values === undefined) return undefined
+  if (typeof values !== 'object' || values === null || Array.isArray(values)) {
+    invalid('meta must be an object of custom field values')
+  }
+  return sql`cms_entries.meta @> ${JSON.stringify(values)}::jsonb`
 }
 
 function isUniqueViolation(error: unknown): boolean {

@@ -1,4 +1,4 @@
-import type { Block, EntryStatus } from '@otw/sdk'
+import type { Block, EntryMetaValues, EntryStatus } from '@otw/sdk'
 import {
   boolean,
   index,
@@ -84,6 +84,7 @@ export const entries = pgTable('cms_entries', {
   trashedAt: timestamp('trashed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  meta: jsonb('meta').$type<EntryMetaValues>().notNull().default({}),
 })
 
 /** Every taxonomy's terms, like WordPress's `wp_terms` and `wp_term_taxonomy` in one. */

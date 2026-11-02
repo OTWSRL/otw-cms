@@ -25,7 +25,7 @@ and the API routes load, so none of it reaches the site's visitors (Plugin Handb
 screens).
 
 Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
-screens, are done; 7c has taxonomies, with meta to come.
+screens, are done, and so is 7c, taxonomies and custom fields.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -355,7 +355,7 @@ source.
 - Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
   which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
 
-### 7c. Taxonomies (done) and meta
+### 7c. Taxonomies and custom fields (done)
 
 - **Taxonomies**: `cms.content.taxonomy()` in `setup()`, sharing names with content types.
   WordPress's capabilities (`manage_`, `edit_`, `delete_`, `assign_`, and `edit_`, `delete_`,
@@ -368,7 +368,20 @@ source.
   when two saves race. `list({ terms })` includes descendants.
 - **Screens**: `edit-tags.php` with the add form, `term.php`, the edit screen's checklist and
   tags field (each checked against `assign_`), list columns and an "All Categories" filter.
-- Not yet: term meta, adding a category from the edit screen, term pages on the site (7d).
+- **Custom fields**: `cms.content.meta(key, definition)` in `setup()`, typed by `EntryMeta`.
+  Unlike WordPress, registration is required: unknown keys are refused, so what's stored is
+  valid. Types `string` (options, multiline, validate), `number` (integer, min, max), `boolean`,
+  `strings` and `json` (validate required); a default must pass its own checks. One `meta`
+  jsonb column per entry (migration core/0004_entry_meta) with a GIN index for
+  `list({ meta })`; updates merge key by key under the entry's row lock, `null` removes a key,
+  and defaults fill in on read. The `content.entry` filter sees and may change meta; what it
+  changes is checked again. A deactivated plugin's values stay, read-only.
+- **Field boxes**: `cms.admin.metaBox(type, { fields })` renders the fields as a form table and
+  the save stores them with the entry (empty removes, unticked is false); a field's
+  `capability` is checked on save. Boxes naming unregistered fields are warned about.
+- Not yet: term meta, ordering by a field, adding a category from the edit screen, term pages
+  on the site (7d). No e2e for field boxes: no plugin on the test site has custom fields, so
+  the screen is covered by a component test and the save by integration tests.
 
 Not in 7b: Quick Edit and Bulk Edit, preview and View links (7d), plugin-defined blocks and a
 raw-HTML block, autosave to the server, screen options, editing the publish date, a site time

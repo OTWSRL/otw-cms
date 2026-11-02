@@ -7,6 +7,8 @@ import type {
   CapabilityArgs,
   CapabilityName,
   ContentTypeName,
+  EntryMeta,
+  EntryMetaKey,
   TaxonomyName,
   FilterContext,
   FilterName,
@@ -542,7 +544,18 @@ export interface Entry {
   /** In the trash: the status it had, which capability checks still go by. */
   trashedFrom: Exclude<EntryStatus, 'trash'> | null
   trashedAt: Date | null
+  /**
+   * Its custom fields, typed by the `EntryMeta` interface. A registered field it has no value for
+   * shows its default. Values a deactivated plugin's fields hold are kept.
+   */
+  meta: EntryMetaValues
 }
+
+/** An entry's custom fields by key, as `EntryMeta` declares them. */
+export type EntryMetaValues = { [K in EntryMetaKey]?: EntryMeta[K] }
+
+/** Custom fields to change: a value sets the field, `null` removes it. */
+export type EntryMetaChanges = { [K in EntryMetaKey]?: EntryMeta[K] | null }
 
 /** What an entry is saved with. The `content.entry` filter receives and returns it. */
 export interface EntryFields {
@@ -557,13 +570,18 @@ export interface EntryFields {
   position: number
   /** Set when the entry is first published; set it to backdate one. Never in the future. */
   publishedAt: Date | null
+  /** Every custom field the entry will have, defaults left out. */
+  meta: EntryMetaValues
 }
 
-/** A new entry's fields. All optional: an entry starts as an untitled draft with no author. */
-export type NewEntry = Partial<EntryFields>
+/**
+ * A new entry's fields. All optional: an entry starts as an untitled draft with no author. Its
+ * custom fields must be registered for its type.
+ */
+export type NewEntry = Partial<Omit<EntryFields, 'meta'>> & { meta?: EntryMetaChanges }
 
-/** The fields to change. Those left out keep their values. */
-export type EntryChanges = Partial<EntryFields>
+/** The fields to change. Those left out keep their values; `meta` changes only the keys named. */
+export type EntryChanges = Partial<Omit<EntryFields, 'meta'>> & { meta?: EntryMetaChanges }
 
 /** Which entries `list()` returns, and in what order. */
 export interface EntryQuery {
@@ -580,6 +598,11 @@ export interface EntryQuery {
    * taxonomies include the terms' descendants, as WordPress's category queries do.
    */
   terms?: Partial<Record<TaxonomyName, readonly string[]>>
+  /**
+   * Entries whose custom fields have these values, like a `meta_query` with `=`; the index
+   * answers it. An entry without the field doesn't match, even if its default would.
+   */
+  meta?: EntryMetaValues
   /** Words in the title, excerpt or body, like WordPress's `s`. Letters' case doesn't matter. */
   search?: string
   /** Dated (as `orderBy: 'date'` dates them) at or after this. */
@@ -832,6 +855,90 @@ export interface ContentType {
   capabilities: ContentTypeCapabilities
 }
 
+interface MetaDefinitionBase {
+  /** The content types with this field: one, several, or `'*'` for all. */
+  types: ContentTypeSelector
+  label: string
+  description?: string
+  /**
+   * Who may change it on the edit screen, besides being able to edit the entry. The content API
+   * itself checks no capabilities, as for every field.
+   */
+  capability?: CapabilityName
+}
+
+/** Text: one line, or several with `multiline`. Control characters go; `options` limit it. */
+export interface StringMetaDefinition extends MetaDefinitionBase {
+  type: 'string'
+  default?: string
+  /** Defaults to 10 000. */
+  maxLength?: number
+  multiline?: boolean
+  /** The values allowed, shown as a dropdown. */
+  options?: readonly (string | { value: string; label: string })[]
+  /** Return an error message to refuse the (tidied) value. */
+  validate?: (value: string) => string | null
+}
+
+/** A number, whole with `integer`, between `min` and `max`. */
+export interface NumberMetaDefinition extends MetaDefinitionBase {
+  type: 'number'
+  default?: number
+  integer?: boolean
+  min?: number
+  max?: number
+}
+
+/** A checkbox. */
+export interface BooleanMetaDefinition extends MetaDefinitionBase {
+  type: 'boolean'
+  default?: boolean
+}
+
+/** A list of short texts, WordPress's meta with `single => false`; one per line on the screen. */
+export interface StringsMetaDefinition extends MetaDefinitionBase {
+  type: 'strings'
+  default?: readonly string[]
+  /** Defaults to 100. */
+  maxItems?: number
+  /** Each item's; defaults to 500. */
+  maxLength?: number
+}
+
+/** Any JSON, which `validate` must accept: for structured values the other types can't hold. */
+export interface JsonMetaDefinition<V = unknown> extends MetaDefinitionBase {
+  type: 'json'
+  default?: V
+  validate: (value: unknown) => string | null
+}
+
+/** A custom field, as `cms.content.meta()` takes it. */
+export type MetaDefinition =
+  | StringMetaDefinition
+  | NumberMetaDefinition
+  | BooleanMetaDefinition
+  | StringsMetaDefinition
+  | JsonMetaDefinition
+
+/** The definitions that can hold a value of type `V`, as for settings. */
+export type MetaDefinitionFor<V> = [V] extends [boolean]
+  ? BooleanMetaDefinition
+  : [V] extends [number]
+    ? NumberMetaDefinition
+    : [V] extends [string]
+      ? StringMetaDefinition
+      : [V] extends [readonly string[]]
+        ? StringsMetaDefinition | JsonMetaDefinition<V>
+        : JsonMetaDefinition<V>
+
+/** A registered custom field. */
+export interface MetaField {
+  /** Such as `lms.level`. */
+  key: string
+  pluginId: string
+  definition: MetaDefinition
+}
+
 /** What a content screen's extensions are added to: one type, several, or every type with screens. */
 export type ContentTypeSelector = ContentTypeName | readonly ContentTypeName[] | '*'
 
@@ -864,8 +971,10 @@ export interface ContentMetaBoxProps {
 }
 
 /**
- * A box on a content type's edit screen, like `add_meta_box()`. Its fields are part of the entry's
- * form; name them after the plugin (`seo.title`) so they don't clash.
+ * A box on a content type's edit screen, like `add_meta_box()`. Either its `fields`, custom fields
+ * the CMS renders and saves with the entry, like a settings section; or a `component` of its own,
+ * whose inputs are part of the entry's form (name them after the plugin, `seo.title`, so they
+ * don't clash) and which `save` stores.
  */
 export interface ContentMetaBox {
   /** Unique within the plugin. */
@@ -875,7 +984,9 @@ export interface ContentMetaBox {
   context?: 'normal' | 'side'
   /** Lower comes first. Defaults to 10. */
   order?: number
-  component: (props: ContentMetaBoxProps) => ReactNode | Promise<ReactNode>
+  /** Custom fields registered for the type, in the order shown; any plugin's. */
+  fields?: readonly EntryMetaKey[]
+  component?: (props: ContentMetaBoxProps) => ReactNode | Promise<ReactNode>
   /**
    * Saves the box's fields once the entry is written, in the same transaction, as `save_post`
    * handlers read `$_POST`. Runs only when the user may edit the entry.
@@ -965,6 +1076,13 @@ export interface ContentApi {
   /** The registered taxonomies; with `type`, those classifying it. */
   taxonomies(type?: string): Taxonomy[]
   getTaxonomy(name: string): Taxonomy | undefined
+  /**
+   * Registers a custom field, like `register_meta()`: its key starts with this plugin's id, and
+   * `types` says which content types have it. Declare its value's type in `EntryMeta`.
+   */
+  meta<K extends EntryMetaKey>(key: K, definition: MetaDefinitionFor<EntryMeta[K]>): void
+  /** The custom fields registered for a content type, or every one. */
+  metaFields(type?: string): MetaField[]
   /** Adds a term, like `wp_insert_term()`. Names are unique among a term's siblings. */
   createTerm(taxonomy: TaxonomyName, term: NewTerm): Promise<Term>
   /** Changes a term, like `wp_update_term()`. The default term keeps its slug. */

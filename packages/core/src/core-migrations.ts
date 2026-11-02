@@ -133,4 +133,18 @@ export const coreMigrations: Migration[] = [
       )
     },
   },
+  {
+    id: '0004_entry_meta',
+    up: async (db) => {
+      // Custom fields beside the entry, one object, not a row per key as wp_postmeta keeps them.
+      await db.execute(sql`
+        ALTER TABLE cms_entries
+          ADD COLUMN meta jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(meta) = 'object')
+      `)
+      // Answers list({ meta: { key: value } }) with jsonb containment.
+      await db.execute(
+        sql`CREATE INDEX cms_entries_meta_idx ON cms_entries USING gin (meta jsonb_path_ops)`,
+      )
+    },
+  },
 ]

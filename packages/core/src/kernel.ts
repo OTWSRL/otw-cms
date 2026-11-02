@@ -53,6 +53,7 @@ import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilit
 import { createContentService, type ContentService } from './content'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
+import { MetaStore } from './content-meta'
 import { ContentTypeStore } from './content-types'
 import { TaxonomyStore } from './taxonomies'
 import { createTermService } from './terms'
@@ -427,11 +428,13 @@ async function boot(
   })
   const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
   const taxonomies = new TaxonomyStore(assertOpen, stores.capabilities)
+  const metaFields = new MetaStore(assertOpen)
   const content = createContentService({
     db,
     types: contentTypes,
     hooks: stores.hooks,
     terms: createTermService({ db, taxonomies, hooks: stores.hooks }),
+    meta: metaFields,
   })
   const contentScreens = new ContentScreenStore(assertOpen)
   const typesInMenu = new Map<string, number>()
@@ -868,6 +871,14 @@ async function boot(
           }
           registerTaxonomy(plugin.id, name, definition)
         },
+        meta: (key, definition) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Register custom field "${key}" in setup(), so every part of the site knows it: the admin entry is loaded only where the admin is`,
+            )
+          }
+          metaFields.register(plugin.id, key, definition)
+        },
       },
       admin: {
         page: (page) => {
@@ -1030,6 +1041,16 @@ async function boot(
 
   const registrationWarnings = [
     ...unusedOverrideWarnings(options.routes, overridesUsed),
+    ...contentScreens
+      .allMetaBoxes()
+      .flatMap((box) =>
+        (box.fields ?? [])
+          .filter((key) => !metaFields.get(key))
+          .map(
+            (key) =>
+              `Meta box "${box.key}" shows custom field "${key}", which no active plugin registers`,
+          ),
+      ),
     ...layout.warnings,
     ...menuWarnings,
     ...requiredCapabilities

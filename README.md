@@ -406,6 +406,13 @@ post types in LearnDash, LifterLMS and Tutor.
   Deleting a term moves its children up and gives lonely entries the default. Screens: the
   taxonomy's (add form beside the list) and a term's, a checklist or tags field on the edit
   screen, a column and a category filter on the list; `list({ terms })` includes child terms.
+- **Custom fields.** `cms.content.meta('lms.hours', { types, type: 'number', min: 1, … })`, like
+  `register_meta()` but required: an entry holds only fields registered for its type, each
+  checked on save (`string`, `number`, `boolean`, `strings`, `json`), typed by the `EntryMeta`
+  interface, with defaults shown on read. They live in one `meta` jsonb column, GIN-indexed for
+  `list({ meta })`, so they load with the entry and save with it. A meta box with `fields`
+  renders and saves them, like a settings section; a field's `capability` guards it on screen.
+  Values a deactivated plugin's fields hold are kept.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
   links included, and `Blocks` from `@otw/next/site` renders them on the site with no

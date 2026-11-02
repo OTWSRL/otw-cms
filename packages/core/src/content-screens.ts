@@ -60,8 +60,14 @@ export class ContentScreenStore {
   }
 
   metaBox(pluginId: string, types: ContentTypeSelector, box: ContentMetaBox): void {
-    if (typeof box.component !== 'function') {
-      throw new TypeError(`Meta box "${pluginId}.${box.name}" needs a component`)
+    const fields = box.fields
+    const hasFields =
+      Array.isArray(fields) && fields.length > 0 && fields.every((key) => typeof key === 'string')
+    if (fields !== undefined && !hasFields) {
+      throw new TypeError(`Meta box "${pluginId}.${box.name}" needs its fields as a list of keys`)
+    }
+    if (typeof box.component !== 'function' && !hasFields) {
+      throw new TypeError(`Meta box "${pluginId}.${box.name}" needs a component or fields`)
     }
     if (box.context !== undefined && box.context !== 'normal' && box.context !== 'side') {
       throw new Error(`Meta box "${pluginId}.${box.name}" goes in "normal" or "side"`)
@@ -81,6 +87,11 @@ export class ContentScreenStore {
       throw new TypeError(`Bulk action "${pluginId}.${action.name}" needs a handler`)
     }
     this.#add('bulkActions', pluginId, types, action)
+  }
+
+  /** Every meta box, whichever types it's for. */
+  allMetaBoxes(): Keyed<ContentMetaBox>[] {
+    return this.#registered.metaBoxes.map(({ item }) => item)
   }
 
   /** What applies to `type`, in registration (load) order; meta boxes by `order` first. */
@@ -115,13 +126,14 @@ export class ContentScreenStore {
       throw new Error(`The ${what} "${key}" is already registered`)
     }
     this.#registered[kind].push({
-      types: selected(types, `${what} "${key}"`),
+      types: selectedTypes(types, `${what} "${key}"`),
       item: { ...item, key, pluginId } as Keyed<ContentScreenExtensions[K][number]>,
     } as Registered<ContentScreenExtensions[K][number]>)
   }
 }
 
-function selected(types: ContentTypeSelector, what: string): '*' | ReadonlySet<string> {
+/** A selector's type names, or `'*'`; `what` names the registration in errors. */
+export function selectedTypes(types: ContentTypeSelector, what: string): '*' | ReadonlySet<string> {
   if (types === '*') return '*'
   const list: readonly unknown[] = typeof types === 'string' ? [types] : types
   if (!Array.isArray(list) || list.length === 0 || list.some((t) => typeof t !== 'string')) {
