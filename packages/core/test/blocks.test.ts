@@ -1,6 +1,6 @@
 import { ContentError, isSafeHref } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
-import { cleanBlocks } from '../src/blocks'
+import { cleanBlocks, imageIds } from '../src/blocks'
 
 const text = (value: string, marks?: unknown[]) => ({ type: 'text', text: value, marks })
 const paragraph = (...content: unknown[]) => ({ type: 'paragraph', content })
@@ -97,6 +97,54 @@ describe('cleanBlocks', () => {
   ])('refuses %s', (_what, body, message) => {
     expect(() => cleanBlocks(body)).toThrow(ContentError)
     expect(() => cleanBlocks(body)).toThrow(message)
+  })
+
+  it('keeps images from the media library, with their alt text, and nothing else of theirs', () => {
+    const id = '0F8FAD5B-D9CB-469F-A165-70867728950E'
+    const image = (attrs: Record<string, unknown>) => ({ type: 'image', attrs })
+    expect(
+      cleanBlocks([
+        image({ id, src: '/uploads/2026/11/a.jpg', alt: ' A\nboat ', width: 1024, height: 683 }),
+        image({ id, src: 'https://cdn.example.com/a.jpg', onerror: 'alert(1)', width: -1 }),
+      ]),
+    ).toEqual([
+      image({
+        id: id.toLowerCase(),
+        src: '/uploads/2026/11/a.jpg',
+        alt: 'A boat',
+        width: 1024,
+        height: 683,
+      }),
+      image({
+        id: id.toLowerCase(),
+        src: 'https://cdn.example.com/a.jpg',
+        alt: '',
+        width: null,
+        height: null,
+      }),
+    ])
+    for (const [attrs, message] of [
+      [{ src: '/a.jpg' }, 'a file in the media library'],
+      [{ id, src: 'javascript:alert(1)' }, 'path on this site or a web address'],
+      [
+        { id, src: 'data:image/svg+xml,<svg onload=alert(1)>' },
+        'path on this site or a web address',
+      ],
+      [{ id, src: '//evil.example/a.jpg' }, 'path on this site or a web address'],
+      [{ id, src: '/a.jpg" onerror="x' }, 'path on this site or a web address'],
+      [{ id, src: '/a.jpg', alt: 'x'.repeat(501) }, 'limited to 500'],
+    ] as const) {
+      expect(() => cleanBlocks([image(attrs)])).toThrow(message)
+    }
+  })
+
+  it('lists the files a body’s images show, nested ones included, each once', () => {
+    const a = '00000000-0000-4000-8000-00000000000a'
+    const b = '00000000-0000-4000-8000-00000000000b'
+    const image = (id: string) => ({ type: 'image', attrs: { id, src: '/x.jpg', alt: '' } })
+    expect(
+      imageIds([image(a), { type: 'blockquote', content: [image(b), image(a)] }] as never),
+    ).toEqual([a, b])
   })
 
   it('refuses nesting deeper than an editor would', () => {

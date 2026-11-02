@@ -277,3 +277,27 @@ describe('the upload API', () => {
     ])
   })
 })
+
+describe('the media picker’s list', () => {
+  it('pages the library for those who may upload, by kind and search', async () => {
+    const kernel = await bootKernel({ plugins: [] })
+    const author = await signIn(kernel, 'author')
+    const contributor = await signIn(kernel, 'contributor')
+    await kernel.media.upload({ name: 'Boat.jpg', data: await jpeg() })
+    await kernel.media.upload({ name: 'Boat notes.txt', data: bytes('a') })
+    const list = (query: string, cookie?: string) =>
+      kernel.handleApi(
+        new Request(new URL(`/api/p/core/media${query}`, ORIGIN), {
+          headers: cookie ? { cookie } : {},
+        }),
+      )
+    const response = await list('?kind=image&search=boat', author.cookie)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const body = (await response.json()) as { items: { filename: string }[]; total: number }
+    expect(body).toMatchObject({ total: 1, pages: 1, items: [{ filename: 'Boat.jpg' }] })
+    expect((await list('?page=0', author.cookie)).status).toBe(400)
+    expect((await list('', contributor.cookie)).status).toBe(403)
+    expect((await list('')).status).toBe(401)
+  })
+})

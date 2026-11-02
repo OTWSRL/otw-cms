@@ -22,6 +22,7 @@ const FEATURES: readonly ContentFeature[] = [
   'author',
   'position',
   'revisions',
+  'thumbnail',
 ]
 /** How many revisions an entry keeps unless its type says. */
 const DEFAULT_REVISIONS = 25

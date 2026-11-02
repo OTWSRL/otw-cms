@@ -444,6 +444,13 @@ post types in LearnDash, LifterLMS and Tutor.
   ETags, ranges, `nosniff` and a sandbox CSP. `core.upload_files` (Authors and up) and the meta
   capabilities `core.edit_media` and `core.delete_media`, mapped onto posts' as WordPress maps
   attachments; files are deleted after the delete commits.
+- **Images in entries.** The editor's Image button and the edit screen's Featured image box
+  (types with the `thumbnail` feature: Posts and Pages) share a picker, a modal in a portal with
+  Upload and Library tabs (`GET /api/p/core/media`). Image blocks keep the file's id, address
+  and alt text (checked: a library id, a site path or web address); `thumbnail_id` references
+  the file and is cleared when it's deleted. Templates get `thumbnail` and the body's `media` in
+  one query, and `Image` from `@otw/next/site` writes `srcset` and `sizes` from the same-shaped
+  sizes up to 2048, as `wp_calculate_image_srcset()`; a deleted image isn't shown.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
   links included, and `Blocks` from `@otw/next/site` renders them on the site with no

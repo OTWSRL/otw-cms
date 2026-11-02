@@ -61,6 +61,10 @@ export function diffLines(before: readonly string[], after: readonly string[]): 
 function blockLines(block: Block): string[] {
   const children = Array.isArray(block.content) ? (block.content as Block[]) : []
   if (block.type === 'horizontalRule') return ['———']
+  if (block.type === 'image') {
+    const alt = (block.attrs as { alt?: unknown } | undefined)?.alt
+    return [typeof alt === 'string' && alt ? `[Image: ${alt}]` : '[Image]']
+  }
   if (['bulletList', 'orderedList', 'listItem', 'blockquote'].includes(block.type)) {
     const prefix = block.type === 'blockquote' ? '> ' : block.type === 'listItem' ? '• ' : ''
     return children.flatMap(blockLines).map((line) => prefix + line)

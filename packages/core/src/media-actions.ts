@@ -1,4 +1,4 @@
-import type { ApiRoute, CapabilityName, MetaCapabilityName, User } from '@otw/sdk'
+import type { ApiRoute, CapabilityName, MediaKind, MetaCapabilityName, User } from '@otw/sdk'
 import { ActionError, ForbiddenError, HttpError, MediaError } from '@otw/sdk'
 import type { InternalAction } from './admin'
 import { formatBytes, type MediaService } from './media'
@@ -178,6 +178,44 @@ export function mediaUploadRoute(deps: MediaActionDependencies): ApiRoute {
         if (error instanceof MediaError) throw new HttpError(STATUS[error.code], error.message)
         throw error
       }
+    },
+  }
+}
+
+/** How many files the picker shows at a time. */
+const PICKER_PAGE = 40
+const KINDS = new Set(['image', 'audio', 'video', 'document', 'spreadsheet', 'archive'])
+
+/**
+ * `GET /api/p/core/media`: a page of the library for the media picker, as WordPress's
+ * `query-attachments`: `kind`, `search` and `page` (from 1). For those who may upload; others
+ * get 403, signed-out people 401.
+ */
+export function mediaListRoute(deps: MediaActionDependencies): ApiRoute {
+  return {
+    method: 'GET',
+    path: '/media',
+    async handler(request, context) {
+      const user = await context.user()
+      if (!user) throw new HttpError(401, 'Sign in to see the media library.')
+      if (!deps.can(user, 'core.access_admin') || !deps.can(user, 'core.upload_files')) {
+        throw new ForbiddenError('You are not allowed to see the media library.')
+      }
+      const query = new URL(request.url).searchParams
+      const kind = query.get('kind') ?? ''
+      const page = Number(query.get('page') ?? '1')
+      if (!Number.isSafeInteger(page) || page < 1)
+        throw new HttpError(400, 'Ask for a page from 1.')
+      const { items, total } = await deps.media.list({
+        ...(KINDS.has(kind) ? { kind: kind as MediaKind } : {}),
+        search: (query.get('search') ?? '').slice(0, 200) || undefined,
+        limit: PICKER_PAGE,
+        offset: (page - 1) * PICKER_PAGE,
+      })
+      return Response.json(
+        { items, total, pages: Math.max(1, Math.ceil(total / PICKER_PAGE)) },
+        { headers: { 'Cache-Control': 'no-store' } },
+      )
     },
   }
 }

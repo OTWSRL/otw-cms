@@ -191,6 +191,35 @@ a {
   background: var(--surface);
 }
 
+/* Images in the content and featured images: never wider than the column. */
+.wp-block-image,
+.entry-thumbnail {
+  margin: 1.5rem 0;
+}
+
+.wp-block-image img,
+.entry-thumbnail img,
+.archive-thumbnail img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.archive-item:has(.archive-thumbnail) {
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+  grid-auto-flow: dense;
+  gap: 0 1rem;
+}
+
+.archive-thumbnail {
+  grid-row: span 3;
+}
+
+.archive-item:has(.archive-thumbnail) > :not(.archive-thumbnail) {
+  grid-column: 2;
+}
+
 .entry-preview {
   padding: 0.5rem 0.75rem;
   border-left: 3px solid var(--warning);

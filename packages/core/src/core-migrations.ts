@@ -203,4 +203,19 @@ export const coreMigrations: Migration[] = [
       await db.execute(sql`CREATE INDEX cms_media_author_idx ON cms_media (author_id)`)
     },
   },
+  {
+    id: '0007_featured_images',
+    up: async (db) => {
+      // WordPress keeps _thumbnail_id in post meta; a column lets the image's delete clear it.
+      await db.execute(sql`
+        ALTER TABLE cms_entries
+          ADD COLUMN thumbnail_id uuid REFERENCES cms_media (id) ON DELETE SET NULL
+      `)
+      // Deleting a file looks up the entries that feature it.
+      await db.execute(sql`
+        CREATE INDEX cms_entries_thumbnail_idx ON cms_entries (thumbnail_id)
+          WHERE thumbnail_id IS NOT NULL
+      `)
+    },
+  },
 ]

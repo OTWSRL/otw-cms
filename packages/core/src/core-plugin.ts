@@ -183,13 +183,13 @@ export function registerCoreContent(types: {
   types.register(CORE, 'post', {
     labels: { singular: 'Post', plural: 'Posts' },
     public: true,
-    supports: ['title', 'body', 'excerpt', 'author', 'revisions'],
+    supports: ['title', 'body', 'excerpt', 'author', 'revisions', 'thumbnail'],
   })
   types.register(CORE, 'page', {
     labels: { singular: 'Page', plural: 'Pages' },
     public: true,
     hierarchical: true,
-    supports: ['title', 'body', 'author', 'position', 'revisions'],
+    supports: ['title', 'body', 'author', 'position', 'revisions', 'thumbnail'],
     roles: { editor: 'editor' },
   })
   // WordPress's categories and tags, with its capability names: core.manage_categories…

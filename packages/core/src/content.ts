@@ -33,7 +33,7 @@ import type { ContentRoutes } from './content-routes'
 import { permalinksOf } from './site-content'
 import { inSentence, type ContentTypeStore } from './content-types'
 import { entryTermsCondition, type createTermService } from './terms'
-import { entries, revisions, users } from './core-schema'
+import { entries, media, revisions, users } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { HookBus } from './hooks'
 import { firstFreeSlug, slugify, slugStem } from './slugs'
@@ -66,6 +66,7 @@ const FIELDS: readonly (keyof EntryFields)[] = [
   'authorId',
   'parentId',
   'position',
+  'thumbnailId',
   'publishedAt',
   'meta',
 ]
@@ -96,6 +97,7 @@ const NEW_ENTRY: EntryFields = {
   authorId: null,
   parentId: null,
   position: 0,
+  thumbnailId: null,
   publishedAt: null,
   meta: {},
 }
@@ -200,7 +202,10 @@ export function createContentService({
     return checked
   }
 
-  /** The author must exist; the parent must be an entry of the same type, and not a descendant. */
+  /**
+   * The author must exist; a featured image must be an image in the library, for a type that has
+   * them; the parent must be an entry of the same type, and not a descendant.
+   */
   const checkRelations = async (
     type: ContentType,
     id: string,
@@ -214,6 +219,18 @@ export function createContentService({
         .where(eq(users.id, fields.authorId))
         .limit(1)
       if (!user) invalid('No user has that id')
+    }
+    if (fields.thumbnailId !== null && fields.thumbnailId !== previous?.thumbnailId) {
+      if (!type.supports.includes('thumbnail')) {
+        invalid(`${type.labels.plural} don't have featured images`)
+      }
+      const [image] = await db.current
+        .select({ mimeType: media.mimeType })
+        .from(media)
+        .where(eq(media.id, fields.thumbnailId))
+        .limit(1)
+      if (!image) invalid('That image is no longer in the media library')
+      if (!image.mimeType.startsWith('image/')) invalid('The featured image must be an image')
     }
     if (fields.parentId === null || fields.parentId === previous?.parentId) return
     if (!type.hierarchical) invalid(`${type.labels.plural} don't have parents`)
@@ -661,6 +678,7 @@ export function cleanFields(fields: EntryFields): EntryFields {
     authorId: cleanId(fields.authorId, 'The author'),
     parentId: cleanId(fields.parentId, 'The parent'),
     position: cleanPosition(fields.position),
+    thumbnailId: cleanId(fields.thumbnailId, 'The featured image'),
     publishedAt: cleanDate(fields.publishedAt),
     meta: fields.meta,
   }

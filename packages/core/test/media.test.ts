@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { MediaError, MediaStorage } from '@otw/sdk'
+import type { ArchiveTemplateProps, EntryTemplateProps, MediaError, MediaStorage } from '@otw/sdk'
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
 import { localStorage } from '../src/media-storage'
@@ -376,5 +376,63 @@ describe('the library', () => {
     await kernel.media.update(item.id, { title: 'two' })
     await kernel.media.delete(item.id)
     expect(seen).toEqual(['uploaded one', 'updated one → two', 'deleted two'])
+  })
+})
+
+describe('featured images and images in entries', () => {
+  it('are images in the library, for types with the thumbnail feature', async () => {
+    const kernel = await bootKernel({ plugins: [] })
+    const photo = await kernel.media.upload({ name: 'cover.jpg', data: await image(800, 600) })
+    const pdf = await kernel.media.upload({ name: 'menu.pdf', data: bytes('%PDF-1.7') })
+    const post = await kernel.content.create('core.post', { title: 'Hi', thumbnailId: photo.id })
+    expect(post.thumbnailId).toBe(photo.id)
+    await expect(kernel.content.update(post.id, { thumbnailId: pdf.id })).rejects.toThrow(
+      'The featured image must be an image',
+    )
+    await expect(
+      kernel.content.update(post.id, { thumbnailId: '00000000-0000-4000-8000-000000000000' }),
+    ).rejects.toThrow('no longer in the media library')
+    const notes = plugin('notes', {
+      setup(cms) {
+        cms.content.type('note', { labels: { singular: 'Note', plural: 'Notes' } })
+      },
+    })
+    const other = await bootKernel({ plugins: [notes] })
+    const otherPhoto = await other.media.upload({ name: 'a.jpg', data: await image(40, 40) })
+    await expect(
+      other.content.create('notes.note', { thumbnailId: otherPhoto.id }),
+    ).rejects.toThrow("Notes don't have featured images")
+
+    // Deleting the image clears it, as WordPress's delete_attachment clears _thumbnail_id.
+    await kernel.media.delete(photo.id)
+    expect((await kernel.content.get(post.id))?.thumbnailId).toBeNull()
+  })
+
+  it('reach templates in one query: the featured image and the body’s images', async () => {
+    const kernel = await bootKernel({ plugins: [] })
+    const cover = await kernel.media.upload({ name: 'cover.jpg', data: await image(1200, 800) })
+    const inline = await kernel.media.upload({ name: 'inline.jpg', data: await image(600, 400) })
+    const gone = await kernel.media.upload({ name: 'gone.jpg', data: await image(60, 40) })
+    const imageBlock = (item: typeof cover) => ({
+      type: 'image',
+      attrs: { id: item.id, src: item.url, alt: 'An image' },
+    })
+    await kernel.content.create('core.post', {
+      title: 'With images',
+      slug: 'with-images',
+      status: 'published',
+      thumbnailId: cover.id,
+      body: [imageBlock(inline), imageBlock(gone)],
+    })
+    await kernel.media.delete(gone.id)
+    const found = await kernel.resolveContent('/with-images', {}, null)
+    expect(found?.view).toBe('single')
+    const props = found!.props as EntryTemplateProps
+    expect(props.thumbnail?.id).toBe(cover.id)
+    expect([...props.media.keys()].sort()).toEqual([cover.id, inline.id].sort())
+
+    const home = await kernel.resolveContent('/', {}, null)
+    const archive = home!.props as ArchiveTemplateProps
+    expect(archive.items[0]?.thumbnail?.sizes.medium?.url).toBe(cover.sizes.medium?.url)
   })
 })

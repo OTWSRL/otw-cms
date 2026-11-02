@@ -2548,6 +2548,155 @@ body:has(> .cms-login) {
   color: var(--wp-muted);
 }
 
+/* The media picker: WordPress's media modal, for images. */
+.media-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 32px));
+  padding: 0;
+  color: var(--wp-text);
+  background: #fff;
+  border: 0;
+  box-shadow: 0 5px 15px rgb(0 0 0 / 70%);
+}
+
+.media-modal:not([open]) {
+  display: none;
+}
+
+.media-modal::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+
+.media-modal-header,
+.media-modal-footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  min-height: 56px;
+}
+
+.media-modal-header {
+  border-bottom: 1px solid var(--wp-border);
+}
+
+.media-modal-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.media-modal-close {
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.media-modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--wp-border);
+}
+
+.media-modal-tabs button {
+  padding: 12px 8px;
+  color: var(--wp-text);
+  font: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  cursor: pointer;
+}
+
+.media-modal-tabs button[aria-selected='true'] {
+  color: var(--wp-heading);
+  font-weight: 600;
+  border-bottom-color: var(--wp-highlight);
+}
+
+.media-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.media-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.media-modal-grid button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  aspect-ratio: 1;
+  background: var(--wp-page-bg);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--wp-border);
+  cursor: pointer;
+}
+
+.media-modal-grid button[aria-pressed='true'] {
+  box-shadow: 0 0 0 3px var(--wp-highlight);
+}
+
+.media-modal-grid img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-modal-footer {
+  border-top: 1px solid var(--wp-border);
+}
+
+.media-modal-selection {
+  overflow: hidden;
+  color: var(--wp-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The Featured image box. */
+.cms-admin .featured-image-preview {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.cms-admin .featured-image-preview img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Images in the editor, as the site will show them, outlined when selected. */
+.cms-admin .block-editor-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+}
+
+.cms-admin .block-editor-content .ProseMirror-selectednode {
+  outline: 3px solid var(--wp-highlight);
+}
+
 /* The attachment edit screen. */
 .cms-admin .media-preview-wrap {
   margin: 16px 0;

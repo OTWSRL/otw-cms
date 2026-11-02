@@ -106,3 +106,63 @@ test.describe('without JavaScript', () => {
     await expect(page.getByText('File type: text/plain')).toBeVisible()
   })
 })
+
+test('a post gets an image in its content and a featured image, which the site shows sized', async ({
+  page,
+}) => {
+  await signInAsAdmin(page)
+  const run = Date.now().toString(36)
+  await page.goto('/admin/posts/new')
+  await page.getByLabel('Add title').fill(`Harbour ${run}`)
+  const content = page.getByRole('textbox', { name: /content$/ })
+  await content.click()
+  await page.keyboard.type('Before the image.')
+
+  // The picker: upload a file, which is chosen at once, then insert it.
+  await page.getByRole('button', { name: 'Image', exact: true }).click()
+  const picker = page.getByRole('dialog', { name: 'Add image' })
+  await picker.getByRole('tab', { name: 'Upload files' }).click()
+  await picker
+    .locator('#media-modal-file')
+    .setInputFiles({ name: `harbour-${run}.jpg`, mimeType: 'image/jpeg', buffer: PHOTO })
+  await expect(picker.getByRole('button', { name: `harbour-${run}`, pressed: true })).toBeVisible()
+  await picker.getByRole('button', { name: 'Insert image' }).click()
+  await expect(picker).toBeHidden()
+  const inserted = content.locator('img.block-editor-image')
+  await expect(inserted).toHaveAttribute('src', /\/uploads\/\d{4}\/\d{2}\/harbour-[a-z0-9]+\.jpg$/)
+  await inserted.click()
+  await page.getByLabel('Alternative text').fill('Boats in the harbour')
+
+  // The featured image, chosen from the library.
+  await page.getByRole('button', { name: 'Set featured image' }).click()
+  const featured = page.getByRole('dialog', { name: 'Featured image' })
+  await featured.getByRole('button', { name: `harbour-${run}` }).click()
+  await featured.getByRole('button', { name: 'Set featured image' }).click()
+  await expect(page.getByRole('button', { name: /^Change the featured image/ })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Publish' }).click()
+  await notice(page, 'Post published.')
+  await expect(page.getByRole('button', { name: /^Change the featured image/ })).toBeVisible()
+  await expect(content.locator('img.block-editor-image')).toHaveAttribute(
+    'alt',
+    'Boats in the harbour',
+  )
+
+  // On the site: the featured image first, then the content's, each with its sizes.
+  // View Post opens a tab of its own; go to its address here.
+  await page.goto((await page.getByRole('link', { name: 'View Post' }).getAttribute('href'))!)
+  const thumbnail = page.locator('figure.entry-thumbnail img')
+  await expect(thumbnail).toHaveAttribute('srcset', /-300x200\.jpg 300w, .+\.jpg 600w$/)
+  await expect(thumbnail).toHaveAttribute('loading', 'eager')
+  const image = page.locator('.entry-content figure.wp-block-image img')
+  await expect(image).toHaveAttribute('alt', 'Boats in the harbour')
+  await expect(image).toHaveAttribute('srcset', /300w/)
+  await expect
+    .poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0)
+
+  // And the latest posts show it as a thumbnail.
+  await page.goto('/')
+  const item = page.locator('.archive-item').filter({ hasText: `Harbour ${run}` })
+  await expect(item.locator('.archive-thumbnail img')).toHaveAttribute('src', /-300x200\.jpg$/)
+})

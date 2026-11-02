@@ -26,7 +26,8 @@ screens).
 
 Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
 screens, are done, and so are 7c, taxonomies and custom fields, 7d, site pages and revisions,
-and the media library of 7e. Next: images in the editor, and featured images.
+and 7e, the media library with images in the editor and featured images. Milestone 7 is
+complete.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -356,7 +357,7 @@ source.
 - Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
   which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
 
-### 7e. The media library (done) and images in the editor
+### 7e. The media library and images in entries (done)
 
 - **The library** (`upload.php`, `media-new.php`, the attachment's edit screen): a grid or a list,
   filtered by kind, month, unattached and mine, searched by title and file name, with bulk delete;
@@ -382,10 +383,18 @@ source.
 - **Capabilities**: `core.upload_files` for Authors, Editors and Administrators; `core.edit_media`
   and `core.delete_media` mapped onto posts' capabilities, as attachments are. Files go after the
   delete's transaction commits (`afterCommit()` on the database context).
-- Next in 7e: an Image block with a media picker in the editor, featured images (`thumbnail`),
-  and responsive images (`srcset`) on the site.
-- Not in 7e: image editing, regenerating sizes, custom fields and taxonomies on media, a media
-  trash, and a storage plugin for S3.
+- **Images in entries**: an `image` block (the file's id, address and alt text, checked on save:
+  a library id, a site path or web address) inserted from a media picker, a modal with Upload
+  and Library tabs (`GET /api/p/core/media`, `query-attachments`), with alt text editable when
+  it's selected. Featured images with the `thumbnail` feature (Posts and Pages), in
+  `cms_entries.thumbnail_id` (migration core/0007_featured_images) referencing the file, cleared
+  when it's deleted; the edit screen's Featured image box.
+- **On the site**: templates get `thumbnail` and the body's `media` from one query (`items[].thumbnail`
+  on archives); `Image` writes the size with its dimensions, `srcset` from same-shaped sizes up
+  to 2048 and `sizes`, lazy unless `priority`; `Blocks` renders images with `media`, leaving out
+  deleted ones. The default templates show the featured image, and thumbnails in lists.
+- Not in 7e: image editing, captions and alignment in image blocks, regenerating sizes, custom
+  fields and taxonomies on media, a media trash, and a storage plugin for S3.
 
 ### 7d. Site pages and revisions (done)
 

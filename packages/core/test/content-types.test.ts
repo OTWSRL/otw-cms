@@ -58,6 +58,7 @@ function entry(type: string, status: EntryStatus, authorId: string | null): Entr
     authorId,
     parentId: null,
     position: 0,
+    thumbnailId: null,
     publishedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),

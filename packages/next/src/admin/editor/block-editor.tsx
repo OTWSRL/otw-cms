@@ -3,6 +3,7 @@
 import { isSafeHref, type Block } from '@otw/sdk'
 import {
   EditorContent,
+  Node,
   useEditor,
   useEditorState,
   type Editor,
@@ -10,6 +11,7 @@ import {
 } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { MediaPicker, type PickedMedia } from '../media-picker'
 
 export interface BlockEditorProps {
   /** The form's hidden input that carries the body, as JSON. */
@@ -20,6 +22,8 @@ export interface BlockEditorProps {
   /** The Add New screen's key, cleared once its entry has been saved. */
   firstSaveKey: string
   label: string
+  /** The saved entry, which images uploaded from the editor are attached to. */
+  entryId?: string
 }
 
 /** What's backed up: the fields an author writes in, as WordPress's `wp.autosave.local` keeps. */
@@ -30,6 +34,61 @@ interface Backup {
 }
 
 const BACKUP_PREFIX = 'otw-entry-backup:'
+
+/**
+ * An image from the media library, as WordPress's image block: the file's id, which the site
+ * finds its sizes by, its address, its alternative text and its size. Only images with a library
+ * id are kept from pasted HTML; the server checks the rest.
+ */
+const ImageBlock = Node.create({
+  name: 'image',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      id: { default: null },
+      src: { default: null },
+      alt: { default: '' },
+      width: { default: null },
+      height: { default: null },
+    }
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'img[data-media-id]',
+        getAttrs: (element) => {
+          const side = (name: string) => Number(element.getAttribute(name)) || null
+          return {
+            id: element.getAttribute('data-media-id'),
+            src: element.getAttribute('src'),
+            alt: element.getAttribute('alt') ?? '',
+            width: side('width'),
+            height: side('height'),
+          }
+        },
+      },
+    ]
+  },
+  renderHTML({ node }) {
+    const { id, src, alt, width, height } = node.attrs as Record<string, string | number | null>
+    return ['img', { 'data-media-id': id, src, alt, width, height, class: 'block-editor-image' }]
+  },
+})
+
+/** The image as the editor inserts it: its large size, as WordPress inserts one. */
+function imageAttrs(item: PickedMedia) {
+  const large = item.sizes.large
+  return {
+    id: item.id,
+    src: large?.url ?? item.url,
+    alt: item.alt,
+    width: large?.width ?? item.width,
+    height: large?.height ?? item.height,
+  }
+}
 const EMPTY_DOC: JSONContent = { type: 'doc', content: [{ type: 'paragraph' }] }
 
 /** The doc's blocks; a lone empty paragraph is an empty body. */
@@ -97,6 +156,7 @@ export function BlockEditor({
   backupKey,
   firstSaveKey,
   label,
+  entryId,
 }: BlockEditorProps) {
   const [offer, setOffer] = useState<Backup | null>(null)
   const dirty = useRef(false)
@@ -133,6 +193,7 @@ export function BlockEditor({
           HTMLAttributes: { target: null, rel: null },
         },
       }),
+      ImageBlock,
     ],
     content: docOf(initial),
     editorProps: {
@@ -213,7 +274,7 @@ export function BlockEditor({
           </p>
         </div>
       )}
-      {editor && <Toolbar editor={editor} />}
+      {editor && <Toolbar editor={editor} entryId={entryId} />}
       <EditorContent editor={editor} />
     </div>
   )
@@ -225,7 +286,7 @@ const BLOCK_TYPES = [
   { value: 'code', label: 'Code' },
 ] as const
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, entryId }: { editor: Editor; entryId?: string }) {
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -240,12 +301,14 @@ function Toolbar({ editor }: { editor: Editor }) {
         bulletList: current.isActive('bulletList'),
         orderedList: current.isActive('orderedList'),
         blockquote: current.isActive('blockquote'),
+        image: current.isActive('image'),
         canUndo: current.can().undo(),
         canRedo: current.can().redo(),
       }
     },
   })
   const [linking, setLinking] = useState(false)
+  const [picking, setPicking] = useState(false)
   const chain = () => editor.chain().focus()
 
   const setBlock = (value: string) => {
@@ -323,6 +386,9 @@ function Toolbar({ editor }: { editor: Editor }) {
         <Tool label="Separator" onClick={() => chain().setHorizontalRule().run()}>
           —
         </Tool>
+        <Tool label="Image" onClick={() => setPicking(true)}>
+          Image
+        </Tool>
       </span>
       <span className="block-editor-group">
         <Tool label="Undo" disabled={!state.canUndo} onClick={() => chain().undo().run()}>
@@ -333,6 +399,21 @@ function Toolbar({ editor }: { editor: Editor }) {
         </Tool>
       </span>
       {linking && <LinkForm editor={editor} close={() => setLinking(false)} />}
+      {state.image && <AltForm editor={editor} />}
+      {picking && (
+        <MediaPicker
+          title="Add image"
+          action="Insert image"
+          entryId={entryId}
+          onClose={() => setPicking(false)}
+          onSelect={(item) => {
+            setPicking(false)
+            chain()
+              .insertContent({ type: 'image', attrs: imageAttrs(item) })
+              .run()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -364,6 +445,35 @@ function Tool({
     >
       {children}
     </button>
+  )
+}
+
+/**
+ * The selected image's alternative text, as WordPress's image block has it beside the image.
+ * What's typed is the image's at once; Enter stays in the field rather than saving the entry.
+ */
+function AltForm({ editor }: { editor: Editor }) {
+  const alt = (editor.getAttributes('image') as { alt?: string }).alt ?? ''
+  const id = `${editor.instanceId}-alt`
+  return (
+    <div className="block-editor-link">
+      <label htmlFor={id}>Alternative text</label>
+      <input
+        id={id}
+        type="text"
+        value={alt}
+        maxLength={500}
+        onChange={(event) =>
+          editor.chain().updateAttributes('image', { alt: event.target.value }).run()
+        }
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.preventDefault()
+        }}
+      />
+      <span className="description">
+        Describe what the image shows. Leave it empty if it&rsquo;s only decoration.
+      </span>
+    </div>
   )
 }
 

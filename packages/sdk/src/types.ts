@@ -548,6 +548,11 @@ export interface Entry {
   parentId: string | null
   /** Sorts entries by hand, like WordPress's `menu_order`. Lower comes first. */
   position: number
+  /**
+   * Its featured image, an image in the media library, for types with the `thumbnail` feature:
+   * WordPress's `_thumbnail_id`. `null` once the image is deleted.
+   */
+  thumbnailId: string | null
   /** When it was first published, or published privately. */
   publishedAt: Date | null
   createdAt: Date
@@ -579,6 +584,8 @@ export interface EntryFields {
   authorId: string | null
   parentId: string | null
   position: number
+  /** An image's id, for types with the `thumbnail` feature. */
+  thumbnailId: string | null
   /** Set when the entry is first published; set it to backdate one. Never in the future. */
   publishedAt: Date | null
   /** Every custom field the entry will have, defaults left out. */
@@ -736,7 +743,8 @@ export interface EntryMonth {
 export type ContentRoleLevel = 'editor' | 'author' | 'contributor'
 
 /** What a content type's entries use, like WordPress's `supports`; the edit screen shows these. */
-export type ContentFeature = 'title' | 'body' | 'excerpt' | 'author' | 'position' | 'revisions'
+export type ContentFeature =
+  'title' | 'body' | 'excerpt' | 'author' | 'position' | 'revisions' | 'thumbnail'
 
 /** A content type, as `cms.content.type()` takes it: WordPress's `register_post_type()` arguments. */
 export interface ContentTypeDefinition {
@@ -991,6 +999,10 @@ export interface EntryTemplateProps {
   termUrl(term: Term): string | null
   /** A draft or other entry shown to someone who may read it, not to visitors. */
   preview: boolean
+  /** Its featured image, when its type has them and it has one. */
+  thumbnail: MediaItem | null
+  /** The images in its body, by id, for `Blocks`; a deleted one is missing, and not shown. */
+  media: ReadonlyMap<string, MediaItem>
 }
 
 /** A list of entries: a type's archive, the latest posts, or a term's entries. */
@@ -1001,7 +1013,8 @@ export interface ArchiveTemplateProps {
   type: ContentType
   taxonomy: Taxonomy | null
   term: Term | null
-  items: { entry: Entry; url: string | null }[]
+  /** Each entry with its address and its featured image, all found in one query. */
+  items: { entry: Entry; url: string | null; thumbnail: MediaItem | null }[]
   total: number
   /** From 1. */
   page: number

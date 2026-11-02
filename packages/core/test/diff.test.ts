@@ -57,6 +57,11 @@ describe('bodyLines', () => {
       ]),
     ).toEqual(['## Title', 'Bold text', '• one', '> q', '———'])
   })
+
+  it('names images by their alternative text', () => {
+    const image = (alt: string) => ({ type: 'image', attrs: { id: 'x', src: '/a.jpg', alt } })
+    expect(bodyLines([image('A boat'), image('')])).toEqual(['[Image: A boat]', '[Image]'])
+  })
 })
 
 describe('diffRevisions', () => {

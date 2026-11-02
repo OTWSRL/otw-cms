@@ -80,6 +80,9 @@ export const entries = pgTable('cms_entries', {
   authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
   parentId: uuid('parent_id').references((): AnyPgColumn => entries.id, { onDelete: 'set null' }),
   position: integer('position').notNull().default(0),
+  thumbnailId: uuid('thumbnail_id').references((): AnyPgColumn => media.id, {
+    onDelete: 'set null',
+  }),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   trashedFrom: text('trashed_from').$type<Exclude<EntryStatus, 'trash'>>(),
   trashedAt: timestamp('trashed_at', { withTimezone: true }),

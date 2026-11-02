@@ -1,15 +1,27 @@
-import { isSafeHref, type Block } from '@otw/sdk'
+import { isSafeHref, type Block, type MediaItem } from '@otw/sdk'
 import type { ReactNode } from 'react'
+import { Image } from './image'
 
 /**
- * An entry's body as HTML: paragraphs, headings, lists, quotes, code and separators, with bold,
- * italic, struck-through, code and link formatting. React escapes the text, and a link the
+ * An entry's body as HTML: paragraphs, headings, lists, quotes, code, separators and images, with
+ * bold, italic, struck-through, code and link formatting. React escapes the text, and a link the
  * editor's schema wouldn't allow is shown as plain text, so no stored content adds markup.
  * Unknown blocks render nothing. A server component: it sends the browser no JavaScript.
+ *
+ * Images come from `media`, the files templates receive: each with its sizes in `srcset`. A file
+ * that's been deleted isn't shown. Without `media`, an image shows its stored address alone.
  */
-export function Blocks({ blocks }: { blocks: readonly Block[] }) {
-  return <>{blocks.map((block, index) => renderBlock(block, index))}</>
+export function Blocks({
+  blocks,
+  media,
+}: {
+  blocks: readonly Block[]
+  media?: ReadonlyMap<string, MediaItem>
+}) {
+  return <>{renderBlocks(blocks, media)}</>
 }
+
+type Media = ReadonlyMap<string, MediaItem> | undefined
 
 const HEADINGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const
 
@@ -24,11 +36,39 @@ function attr(block: Block, name: string): unknown {
     : undefined
 }
 
-function renderBlocks(blocks: readonly Block[]): ReactNode {
-  return blocks.map((block, index) => renderBlock(block, index))
+function renderBlocks(blocks: readonly Block[], media: Media): ReactNode {
+  return blocks.map((block, index) => renderBlock(block, index, media))
 }
 
-function renderBlock(block: Block, key: number): ReactNode {
+/** An image block, as WordPress's `core/image` renders: a figure, at the large size. */
+function renderImage(block: Block, key: number, media: Media): ReactNode {
+  const id = attr(block, 'id')
+  const alt = attr(block, 'alt')
+  const text = typeof alt === 'string' ? alt : ''
+  if (media) {
+    const item = typeof id === 'string' ? media.get(id) : undefined
+    if (!item) return null
+    return (
+      <figure key={key} className="wp-block-image">
+        <Image item={item} alt={text} />
+      </figure>
+    )
+  }
+  const src = attr(block, 'src')
+  const side = (name: string) => {
+    const value = attr(block, name)
+    return Number.isSafeInteger(value) ? (value as number) : undefined
+  }
+  if (typeof src !== 'string' || !(src.startsWith('/') || /^https?:\/\//i.test(src))) return null
+  return (
+    <figure key={key} className="wp-block-image">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={text} width={side('width')} height={side('height')} loading="lazy" />
+    </figure>
+  )
+}
+
+function renderBlock(block: Block, key: number, media: Media): ReactNode {
   switch (block.type) {
     case 'paragraph':
       return <p key={key}>{renderInline(children(block))}</p>
@@ -38,7 +78,7 @@ function renderBlock(block: Block, key: number): ReactNode {
       return <Tag key={key}>{renderInline(children(block))}</Tag>
     }
     case 'bulletList':
-      return <ul key={key}>{renderBlocks(children(block))}</ul>
+      return <ul key={key}>{renderBlocks(children(block), media)}</ul>
     case 'orderedList': {
       const start = attr(block, 'start')
       return (
@@ -46,14 +86,16 @@ function renderBlock(block: Block, key: number): ReactNode {
           key={key}
           start={Number.isSafeInteger(start) && start !== 1 ? (start as number) : undefined}
         >
-          {renderBlocks(children(block))}
+          {renderBlocks(children(block), media)}
         </ol>
       )
     }
     case 'listItem':
-      return <li key={key}>{renderBlocks(children(block))}</li>
+      return <li key={key}>{renderBlocks(children(block), media)}</li>
     case 'blockquote':
-      return <blockquote key={key}>{renderBlocks(children(block))}</blockquote>
+      return <blockquote key={key}>{renderBlocks(children(block), media)}</blockquote>
+    case 'image':
+      return renderImage(block, key, media)
     case 'codeBlock': {
       const language = attr(block, 'language')
       return (

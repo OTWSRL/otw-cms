@@ -1,6 +1,7 @@
 import type { ArchiveTemplateProps, Block, Entry, EntryTemplateProps } from '@otw/sdk'
 import { getKernel } from '../runtime/kernel'
 import { Blocks } from './blocks'
+import { Image } from './image'
 
 /** WordPress's `excerpt_length`: a generated excerpt's words. */
 const EXCERPT_WORDS = 55
@@ -44,6 +45,8 @@ export async function EntryTemplate({
   terms,
   termUrl,
   preview,
+  thumbnail,
+  media,
 }: EntryTemplateProps) {
   const dated = !type.hierarchical && entry.publishedAt
   return (
@@ -68,8 +71,14 @@ export async function EntryTemplate({
           </p>
         )}
       </header>
+      {thumbnail && (
+        <figure className="entry-thumbnail">
+          {/* The featured image is the first a visitor sees: it loads at once. */}
+          <Image item={thumbnail} priority />
+        </figure>
+      )}
       <div className="entry-content">
-        <Blocks blocks={entry.body} />
+        <Blocks blocks={entry.body} media={media} />
       </div>
       {terms.length > 0 && (
         <footer className="entry-terms">
@@ -114,8 +123,18 @@ export async function ArchiveTemplate({
       {items.length === 0 ? (
         <p className="archive-empty">Nothing has been published here yet.</p>
       ) : (
-        items.map(({ entry, url }, i) => (
+        items.map(({ entry, url, thumbnail }, i) => (
           <article key={entry.id} className="archive-item">
+            {thumbnail && (
+              <a
+                href={url ?? undefined}
+                className="archive-thumbnail"
+                tabIndex={-1}
+                aria-hidden="true"
+              >
+                <Image item={thumbnail} size="medium" alt="" />
+              </a>
+            )}
             <h2 className="entry-title">
               {url ? <a href={url}>{entry.title || '(no title)'}</a> : entry.title}
             </h2>

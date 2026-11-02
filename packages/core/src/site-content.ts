@@ -11,8 +11,10 @@ import type {
   TaxonomyName,
   Term,
   User,
+  MediaItem,
 } from '@otw/sdk'
 import { inArray, sql } from 'drizzle-orm'
+import { imageIds } from './blocks'
 import type { ContentService } from './content'
 import type { ContentRoutes } from './content-routes'
 import { entries as entriesTable } from './core-schema'
@@ -50,6 +52,8 @@ export interface SiteContentOptions {
   can(user: User, capability: CapabilityName | MetaCapabilityName, ...args: unknown[]): boolean
   setting(key: string): string | undefined
   getUsers(ids: readonly string[]): Promise<User[]>
+  /** The media library's files by id, for featured images and images in bodies. */
+  media(ids: readonly string[]): Promise<MediaItem[]>
 }
 
 function first(value: string | string[] | undefined): string | undefined {
@@ -146,11 +150,16 @@ export function createSiteContent(options: SiteContentOptions) {
     preview: boolean,
   ): Promise<ContentResolution> => {
     const routes = options.routes()
-    const [links, terms, authors] = await Promise.all([
+    const thumbnailId = type.supports.includes('thumbnail') ? entry.thumbnailId : null
+    // The featured image and every image in the body, in one query.
+    const mediaIds = [...(thumbnailId ? [thumbnailId] : []), ...imageIds(entry.body)]
+    const [links, terms, authors, files] = await Promise.all([
       content.permalinks([entry]),
       content.entryTerms([entry.id]),
       entry.authorId ? options.getUsers([entry.authorId]) : [],
+      mediaIds.length > 0 ? options.media(mediaIds) : [],
     ])
+    const media = new Map(files.map((item) => [item.id, item]))
     const publicTaxonomies = new Set<string>(
       content
         .taxonomies(type.name)
@@ -170,6 +179,8 @@ export function createSiteContent(options: SiteContentOptions) {
         terms: (terms.get(entry.id) ?? []).filter((term) => publicTaxonomies.has(term.taxonomy)),
         termUrl: (term) => routes?.termUrl(term) ?? null,
         preview,
+        thumbnail: (thumbnailId && media.get(thumbnailId)) || null,
+        media,
       },
       metadata: {
         title: entry.title || undefined,
@@ -201,7 +212,15 @@ export function createSiteContent(options: SiteContentOptions) {
       limit,
       offset: (input.page - 1) * limit,
     })
-    const links = await content.permalinks(entries)
+    const thumbnailIds = entries
+      .filter((entry) => content.getType(entry.type)?.supports.includes('thumbnail'))
+      .map((entry) => entry.thumbnailId)
+      .filter((id) => id !== null)
+    const [links, thumbnails] = await Promise.all([
+      content.permalinks(entries),
+      thumbnailIds.length > 0 ? options.media(thumbnailIds) : [],
+    ])
+    const thumbnailById = new Map(thumbnails.map((item) => [item.id, item]))
     return {
       view,
       name,
@@ -211,7 +230,11 @@ export function createSiteContent(options: SiteContentOptions) {
         type: input.type,
         taxonomy: input.taxonomy ?? null,
         term: input.term ?? null,
-        items: entries.map((entry) => ({ entry, url: links.get(entry.id) ?? null })),
+        items: entries.map((entry) => ({
+          entry,
+          url: links.get(entry.id) ?? null,
+          thumbnail: (entry.thumbnailId && thumbnailById.get(entry.thumbnailId)) || null,
+        })),
         total,
         page: input.page,
         pages: Math.max(1, Math.ceil(total / limit)),

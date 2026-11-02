@@ -2,6 +2,8 @@ import { Button, EditColumns, FormButton, Notice, Postbox } from '@otw/admin-ui'
 import { inSentence, type Kernel } from '@otw/core'
 import type { ContentType, Entry, SearchParams, Taxonomy, Term, User } from '@otw/sdk'
 import { EditorLoader } from '../editor/editor-loader'
+import { FeaturedImage } from '../featured-image'
+import type { PickedMedia } from '../media-picker'
 import { AdminScreen } from '../screen'
 import { formatDate } from './content-dates'
 import { MetaFields } from './meta-fields'
@@ -150,6 +152,25 @@ export async function ContentEditScreen({
   const locale = kernel.setting('site.locale')
   const permalink =
     entry && type.public ? (await kernel.content.permalinks([entry])).get(entry.id) : null
+  // What the Featured image box starts with: the few fields it shows, not the whole item.
+  const thumbnailItem =
+    entry?.thumbnailId && supports('thumbnail') ? await kernel.media.get(entry.thumbnailId) : null
+  const thumbnail: PickedMedia | null = thumbnailItem && {
+    id: thumbnailItem.id,
+    url: thumbnailItem.url,
+    title: thumbnailItem.title,
+    filename: thumbnailItem.filename,
+    alt: thumbnailItem.alt,
+    kind: thumbnailItem.kind,
+    width: thumbnailItem.width,
+    height: thumbnailItem.height,
+    sizes: Object.fromEntries(
+      Object.entries(thumbnailItem.sizes).map(([name, size]) => [
+        name,
+        { url: size.url, width: size.width, height: size.height },
+      ]),
+    ),
+  }
   // WordPress shows Revisions once there's something to compare: two or more.
   const revisionCount =
     entry && type.revisions > 0 ? (await kernel.content.revisions(entry.id, { limit: 1 })).total : 0
@@ -302,6 +323,7 @@ export async function ContentEditScreen({
             backupKey={entry ? entry.id : newKey}
             firstSaveKey={newKey}
             label={`${singular} content`}
+            entryId={entry?.id}
           />
           <noscript>
             <p className="description">
@@ -351,6 +373,14 @@ export async function ContentEditScreen({
   const side = (
     <>
       {publishBox}
+      {supports('thumbnail') && (
+        <Postbox id="postimagediv" title="Featured image">
+          <FeaturedImage initial={thumbnail} entryId={entry?.id} />
+          <noscript>
+            <p className="description">Choosing a featured image needs JavaScript.</p>
+          </noscript>
+        </Postbox>
+      )}
       {taxonomyBoxes}
       {(type.hierarchical || supports('position')) && (
         <Postbox id="pageparentdiv" title={`${singular} Attributes`}>

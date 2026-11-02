@@ -57,7 +57,7 @@ import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
 import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
-import { MEDIA_PATH, mediaActions, mediaUploadRoute } from './media-actions'
+import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
 import { localStorage, UPLOADS_PATH } from './media-storage'
 import { contentActions } from './content-actions'
@@ -805,6 +805,7 @@ async function boot(
   }
   for (const action of mediaActions(mediaDependencies)) registerAction(CORE, action)
   registerApi(CORE, mediaUploadRoute(mediaDependencies))
+  registerApi(CORE, mediaListRoute(mediaDependencies))
 
   /** These plugins and, transitively, the active plugins they require or optionally use. */
   const withDependencies = (ids: Iterable<string>): string[] => {
@@ -1183,6 +1184,7 @@ async function boot(
       return typeof value === 'string' ? value : undefined
     },
     getUsers: (ids) => auth.getUsers(ids),
+    media: (ids) => media.getMany(ids),
   })
 
   const registrationWarnings = [

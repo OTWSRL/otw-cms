@@ -93,6 +93,7 @@ function draftOf(type: ContentType, changes: EntryChanges, user: User): Entry {
     authorId: user.id,
     parentId: null,
     position: 0,
+    thumbnailId: null,
     publishedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -150,6 +151,9 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
       changes.excerpt = field(form, 'excerpt')
     }
     if (type.hierarchical && form.has('parent')) changes.parentId = field(form, 'parent') || null
+    if (type.supports.includes('thumbnail') && form.has('thumbnail')) {
+      changes.thumbnailId = field(form, 'thumbnail') || null
+    }
     if (type.supports.includes('position') && form.has('position')) {
       const position = Number(field(form, 'position') || 0)
       if (!Number.isSafeInteger(position))

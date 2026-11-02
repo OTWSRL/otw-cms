@@ -10,10 +10,21 @@ import { ContentError, isSafeHref } from '@otw/sdk'
 
 const LISTS = new Set(['bulletList', 'orderedList'])
 const TEXT_BLOCKS = new Set(['paragraph', 'heading'])
-const BLOCKS = new Set([...TEXT_BLOCKS, ...LISTS, 'blockquote', 'codeBlock', 'horizontalRule'])
+const BLOCKS = new Set([
+  ...TEXT_BLOCKS,
+  ...LISTS,
+  'blockquote',
+  'codeBlock',
+  'horizontalRule',
+  'image',
+])
 const MARKS = new Set(['bold', 'italic', 'strike', 'code', 'link'])
 const MAX_DEPTH = 20
 const LANGUAGE = /^[a-z0-9+#-]{1,30}$/i
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const MAX_ALT = 500
+const MAX_SRC = 2048
+const MAX_SIDE = 10_000
 function invalid(message: string): never {
   throw new ContentError('invalid_input', message)
 }
@@ -36,6 +47,7 @@ function cleanBlock(value: unknown, depth: number): Block {
   const { type } = value
   if (!BLOCKS.has(type)) invalid(`Unknown block "${type}"`)
   if (type === 'horizontalRule') return { type }
+  if (type === 'image') return cleanImage(value.attrs)
   if (type === 'paragraph') return withContent({ type }, inline(value.content, true))
   if (type === 'heading') {
     const level = isObject(value.attrs) ? value.attrs.level : undefined
@@ -60,6 +72,61 @@ function cleanBlock(value: unknown, depth: number): Block {
     return { type, attrs: { start: clean }, content: items }
   }
   return { type, content: blocks(value.content, 'A quote', depth + 1) }
+}
+
+/** A path on the site or a web address: never `javascript:` or `data:`, which an `<img>` could run or hide. */
+function isImageSource(src: string): boolean {
+  if (src.length > MAX_SRC || /[\s\p{Cc}"'<>\\]/u.test(src)) return false
+  if (src.startsWith('/')) return !src.startsWith('//')
+  try {
+    const url = new URL(src)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * An image from the media library, as WordPress's image block keeps it: the file's id, which
+ * the site uses to find its sizes, its address for the editor, its alternative text, and its
+ * size as inserted.
+ */
+function cleanImage(attrs: unknown): Block {
+  if (!isObject(attrs)) invalid('An image needs its file')
+  const { id, src, alt = '', width, height } = attrs
+  if (typeof id !== 'string' || !UUID.test(id)) {
+    invalid('An image must be a file in the media library')
+  }
+  if (typeof src !== 'string' || !isImageSource(src)) {
+    invalid("An image's address must be a path on this site or a web address")
+  }
+  if (typeof alt !== 'string') invalid('Alternative text must be text')
+  const cleanAlt = alt.replace(/\p{Cc}+/gu, ' ').trim()
+  if (cleanAlt.length > MAX_ALT) {
+    invalid(`Alternative text is limited to ${MAX_ALT} characters`)
+  }
+  const side = (value: unknown) =>
+    Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= MAX_SIDE
+      ? (value as number)
+      : null
+  return {
+    type: 'image',
+    attrs: { id: id.toLowerCase(), src, alt: cleanAlt, width: side(width), height: side(height) },
+  }
+}
+
+/** The media library files a body's images show, each once, in order. */
+export function imageIds(body: readonly Block[]): string[] {
+  const ids = new Set<string>()
+  const visit = (blocks: readonly Block[]) => {
+    for (const block of blocks) {
+      const id = isObject(block.attrs) ? block.attrs.id : undefined
+      if (block.type === 'image' && typeof id === 'string') ids.add(id)
+      if (Array.isArray(block.content)) visit(block.content as Block[])
+    }
+  }
+  visit(body)
+  return [...ids]
 }
 
 function children(value: unknown, what: string): unknown[] {
