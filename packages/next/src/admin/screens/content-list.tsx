@@ -146,6 +146,8 @@ export async function ContentListScreen({
   ])
   const authorIds = list.entries.map((entry) => entry.authorId).filter((id) => id !== null)
   const authors = new Map((await kernel.auth.getUsers(authorIds)).map((u) => [u.id, u]))
+  // View links: every entry's address on the site, for the page of them at once.
+  const links = type.public ? await kernel.content.permalinks(list.entries) : new Map()
   // Taxonomy columns: every entry's terms on the page in one query, as for the authors.
   const columnTaxonomies = kernel.content
     .taxonomies(type.name)
@@ -331,6 +333,22 @@ export async function ContentListScreen({
         >
           Trash
         </RowButton>,
+      )
+    }
+    // WordPress's View for what's live, Preview for what isn't.
+    const url = links.get(entry.id)
+    const title = entry.title || '(no title)'
+    if (url) {
+      actions.push(
+        <a key="view" href={url} rel="bookmark" aria-label={`View “${title}”`}>
+          View
+        </a>,
+      )
+    } else if (type.public && kernel.can(user, caps.readEntry, entry)) {
+      actions.push(
+        <a key="preview" href={kernel.content.previewUrl(entry)} aria-label={`Preview “${title}”`}>
+          Preview
+        </a>,
       )
     }
     for (const action of extensions.rowActions) {

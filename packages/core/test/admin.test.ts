@@ -192,7 +192,10 @@ describe('admin pages', () => {
         id: 'settings',
         label: 'Settings',
         icon: 'settings',
-        items: [{ key: 'core.general', label: 'General', url: '/admin/settings' }],
+        items: [
+          { key: 'core.general', label: 'General', url: '/admin/settings' },
+          { key: 'core.reading', label: 'Reading', url: '/admin/settings/reading' },
+        ],
       },
     ])
     expect(kernel.adminMenu((await signIn(kernel, 'support')).user)).toEqual([dashboard])

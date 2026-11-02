@@ -111,6 +111,14 @@ export interface Settings {
   'site.url': string
   /** Formats numbers and prices, such as `en-US` or `de-DE`. `SITE_LOCALE` overrides it. */
   'site.locale': string
+  /** Settings › Reading: the home page shows the latest `posts`, or a static `page`. */
+  'reading.show_on_front': string
+  /** The page the home page shows, when `reading.show_on_front` is `page`. */
+  'reading.page_on_front': string
+  /** A page whose address lists the latest posts, when the home page is a static page. */
+  'reading.page_for_posts': string
+  /** How many entries an archive page lists. */
+  'reading.posts_per_page': string
 }
 
 /** Capability name -> `true`. Admin pages and actions each require one. */

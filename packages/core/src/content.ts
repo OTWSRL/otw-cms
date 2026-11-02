@@ -29,6 +29,8 @@ import {
 } from 'drizzle-orm'
 import { cleanBlocks } from './blocks'
 import type { MetaStore } from './content-meta'
+import type { ContentRoutes } from './content-routes'
+import { permalinksOf } from './site-content'
 import { inSentence, type ContentTypeStore } from './content-types'
 import { entryTermsCondition, type createTermService } from './terms'
 import { entries, users } from './core-schema'
@@ -36,8 +38,8 @@ import type { DatabaseContext } from './database'
 import type { HookBus } from './hooks'
 import { firstFreeSlug, slugify, slugStem } from './slugs'
 
-/** `cms.content` without `type()`, `taxonomy()` and `meta()`, which only plugins call, in setup. */
-export type ContentService = Omit<ContentApi, 'type' | 'taxonomy' | 'meta'>
+/** `cms.content` without the registrations, which only plugins make, in setup. */
+export type ContentService = Omit<ContentApi, 'type' | 'taxonomy' | 'meta' | 'template'>
 
 export interface ContentServiceOptions {
   db: DatabaseContext
@@ -45,6 +47,8 @@ export interface ContentServiceOptions {
   hooks: HookBus
   terms: ReturnType<typeof createTermService>
   meta: MetaStore
+  /** Where entries live on the site, once every plugin has set up, and the static homepage. */
+  links: { routes(): ContentRoutes | null; frontPage(): string | null }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -122,6 +126,7 @@ export function createContentService({
   hooks,
   terms,
   meta,
+  links,
 }: ContentServiceOptions): ContentService {
   /** An entry as callers see it: its type's custom field defaults under what it stores. */
   const present = (row: Entry): Entry => ({ ...row, meta: meta.withDefaults(row.type, row.meta) })
@@ -373,6 +378,10 @@ export function createContentService({
     types: () => types.list(),
     getType: (name) => types.get(name),
     metaFields: (type) => meta.list(type),
+    permalinks: (list) => permalinksOf(db, links.routes(), links.frontPage(), list),
+    termUrl: (term) => links.routes()?.termUrl(term) ?? null,
+    archiveUrl: (type) => links.routes()?.archiveUrl(type) ?? null,
+    previewUrl: (entry) => `/?preview=${entry.id}`,
 
     create: (typeName, input) =>
       db.transaction(async () => {

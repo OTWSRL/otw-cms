@@ -50,6 +50,8 @@ export interface SettingField {
   label: string
   description?: string
   options?: readonly { value: string; label: string }[]
+  /** For `entry` fields: the content type whose entries it chooses from. */
+  contentType?: string
   /** Never set for secrets. */
   value?: SettingValue
   /** Secrets only: whether the environment variable is set. */
@@ -276,6 +278,7 @@ export function toField(setting: ResolvedSetting): SettingField {
     ...base,
     value,
     options: definition.type === 'select' ? definition.options : undefined,
+    contentType: definition.type === 'entry' ? definition.contentType : undefined,
   }
 }
 

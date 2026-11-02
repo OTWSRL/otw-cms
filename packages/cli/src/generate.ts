@@ -153,8 +153,11 @@ function importPath(from: string, to: string): string {
   return path.startsWith('.') ? path : `./${path}`
 }
 
-/** The lines of a site module: the plugins, with their admin entries when `admin` lists them. */
-function siteModule(config: CmsConfig, admin?: ReadonlySet<string>): string[] {
+/**
+ * The lines of a site module: the plugins, with their admin entries when `admin` lists them, and
+ * the site's own templates (`cms/templates.tsx`) when it has them.
+ */
+function siteModule(config: CmsConfig, admin?: ReadonlySet<string>, templates = false): string[] {
   const withAdmin = config.plugins.flatMap((name, i) => (admin?.has(name) ? [i] : []))
   return [
     "import { defineSite } from '@otw/next'",
@@ -162,6 +165,7 @@ function siteModule(config: CmsConfig, admin?: ReadonlySet<string>): string[] {
     ...withAdmin.map(
       (i) => `import admin${i} from ${JSON.stringify(`${config.plugins[i]}/admin`)}`,
     ),
+    ...(templates ? ["import templates from './templates'"] : []),
     '',
     'export const site = defineSite({',
     `  plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}],`,
@@ -169,6 +173,7 @@ function siteModule(config: CmsConfig, admin?: ReadonlySet<string>): string[] {
     `  packages: [${config.plugins.map((name) => JSON.stringify(name)).join(', ')}],`,
     ...(config.routes ? [`  routes: ${JSON.stringify(config.routes)},`] : []),
     ...(config.brand ? [`  brand: ${JSON.stringify(config.brand)},`] : []),
+    ...(templates ? ['  templates,'] : []),
     '})',
   ]
 }
@@ -182,6 +187,8 @@ export function managedFiles(
   config: CmsConfig,
   { srcDir }: SiteLayout,
   admin: readonly string[] = [],
+  /** Whether the site has its own templates, `cms/templates.tsx`, which only its pages need. */
+  templates = false,
 ): ManagedFile[] {
   const at = (path: string) => (srcDir ? `${srcDir}/${path}` : path)
   const site = siteModulePath({ srcDir })
@@ -200,7 +207,7 @@ export function managedFiles(
   ]
 
   return [
-    file(site, siteModule(config)),
+    file(site, siteModule(config, undefined, templates)),
     file(adminSite, [
       "// The admin's site module: the plugins and their admin entries. Only the admin and the API import it.",
       ...siteModule(config, new Set(admin)),
@@ -283,6 +290,9 @@ export async function generate({
   const config = await readConfig(configPath)
   const layout: SiteLayout = { srcDir: (await exists(join(root, 'src', 'app'))) ? 'src' : '' }
   const admin = await pluginsWithAdmin(root, config.plugins)
+  const cmsDir = join(root, layout.srcDir, 'cms')
+  const templates =
+    (await exists(join(cmsDir, 'templates.tsx'))) || (await exists(join(cmsDir, 'templates.ts')))
   const files: GenerateResult['files'] = []
   const clashing = new Set<string>()
   for (const retired of retiredFiles(layout)) {
@@ -297,7 +307,7 @@ export async function generate({
       for (const path of retired.replacedBy) clashing.add(path)
     }
   }
-  for (const managed of managedFiles(config, layout, admin)) {
+  for (const managed of managedFiles(config, layout, admin, templates)) {
     if (clashing.has(managed.path)) continue
     const target = join(root, ...managed.path.split('/'))
     const existing = await readIfExists(target)

@@ -2134,6 +2134,12 @@ body:has(> .cms-login) {
   line-height: 1.6;
 }
 
+.cms-admin .entry-permalink {
+  margin: 6px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .cms-admin .entry-body {
   margin-bottom: 20px;
 }

@@ -1,5 +1,5 @@
-import type { Kernel } from '@otw/core'
-import type { CapabilityName, SearchParams, User } from '@otw/sdk'
+import type { Kernel, SettingsPageView } from '@otw/core'
+import type { CapabilityName, ContentTypeName, SearchParams, User } from '@otw/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound } from 'next/navigation'
 import { cache, type ReactNode } from 'react'
@@ -67,8 +67,11 @@ const LOGIN_SCREENS: Readonly<
   '/admin/setup': { title: 'Set up your site', Screen: SetupScreen },
 }
 
-// Core's settings page lives at /admin/settings; plugins' at /admin/{pluginId}/....
-const GENERAL_SETTINGS = '/admin/settings'
+// Core's settings pages live under /admin/settings; plugins' at /admin/{pluginId}/....
+const CORE_SETTINGS: Readonly<Record<string, string>> = {
+  '/admin/settings': 'core.general',
+  '/admin/settings/reading': 'core.reading',
+}
 
 interface Resolved {
   kernel: Kernel
@@ -85,6 +88,30 @@ async function location({ params, searchParams }: AdminRouteProps) {
   }
 }
 
+/** For a settings page's `entry` fields: each content type's published entries, as a tree. */
+async function entryOptions(kernel: Kernel, view: SettingsPageView) {
+  const types = new Set(
+    view.sections.flatMap((section) =>
+      section.fields.flatMap((field) => (field.contentType ? [field.contentType] : [])),
+    ),
+  )
+  const options: Record<string, { value: string; label: string }[]> = {}
+  for (const type of types) {
+    if (!kernel.content.getType(type)) continue
+    const { entries, depths = [] } = await kernel.content.list({
+      type: type as ContentTypeName,
+      status: 'published',
+      orderBy: kernel.content.getType(type)?.hierarchical ? 'tree' : 'title',
+      limit: 100,
+    })
+    options[type] = entries.map((entry, i) => ({
+      value: entry.id,
+      label: `${'\u00a0\u00a0\u00a0'.repeat(depths[i] ?? 0)}${entry.title || '(no title)'}`,
+    }))
+  }
+  return options
+}
+
 /**
  * Checks access and loads the screen. Cached per request: metadata and the page both call it, and
  * a plugin page's loader must run once.
@@ -98,17 +125,21 @@ const resolveScreen = cache(async (path: string, query: string): Promise<Resolve
     return { kernel, user, title: core.title, body }
   }
 
-  const resolution =
-    path === GENERAL_SETTINGS
-      ? kernel.settingsPage('core.general', user)
-      : await kernel.resolveAdminPage(path, searchParams, user)
+  const coreSettings = Object.hasOwn(CORE_SETTINGS, path) ? CORE_SETTINGS[path] : undefined
+  const resolution = coreSettings
+    ? kernel.settingsPage(coreSettings, user)
+    : await kernel.resolveAdminPage(path, searchParams, user)
   if (resolution.kind === 'not-found') notFound()
   if (resolution.kind === 'forbidden') forbidden()
   const flash = kernel.readFlash(searchParams.flash)
   if (resolution.kind === 'settings') {
     const body = (
       <AdminScreen title={resolution.title} flash={flash}>
-        <SettingsForm view={resolution.view} saveUrl={kernel.actionUrl('core', 'save-settings')} />
+        <SettingsForm
+          view={resolution.view}
+          saveUrl={kernel.actionUrl('core', 'save-settings')}
+          entryOptions={await entryOptions(kernel, resolution.view)}
+        />
       </AdminScreen>
     )
     return { kernel, user, title: resolution.title, body }

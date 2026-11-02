@@ -22,6 +22,7 @@ export interface ResolvedSetting extends DeclaredSetting {
 
 type Parsed = { ok: true; value: SettingValue | undefined } | { ok: false; error: string }
 
+const ENTRY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DEFAULT_MAX_LENGTH = 500
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/
 const TRUE = new Set(['1', 'true', 'yes', 'on'])
@@ -50,6 +51,9 @@ export function validateSettingDefinitions(
     if (field.env !== undefined && !ENV_NAME.test(field.env)) {
       errors.push(`setting "${key}" has an invalid env name "${field.env}"`)
     }
+    if (field.type === 'entry' && typeof field.contentType !== 'string') {
+      errors.push(`setting "${key}" needs the content type its entries are chosen from`)
+    }
     if (field.type === 'select') {
       if (field.options.length === 0) errors.push(`setting "${key}" needs at least one option`)
       if (field.default !== undefined && !field.options.some((o) => o.value === field.default)) {
@@ -72,6 +76,11 @@ function check(definition: SettingDefinition, value: SettingValue): Parsed {
         : { ok: false, error: 'Choose one of the options' }
     case 'secret':
       return typeof value === 'string' ? { ok: true, value } : { ok: false, error: 'Must be text' }
+    // An id; whether it's still an entry is checked where it's used, which falls back without it.
+    case 'entry':
+      return typeof value === 'string' && ENTRY_ID.test(value)
+        ? { ok: true, value: value.toLowerCase() }
+        : { ok: false, error: 'Choose one of the entries' }
     case 'text': {
       if (typeof value !== 'string') return { ok: false, error: 'Must be text' }
       const max = definition.maxLength ?? DEFAULT_MAX_LENGTH

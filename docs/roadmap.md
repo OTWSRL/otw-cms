@@ -25,7 +25,8 @@ and the API routes load, so none of it reaches the site's visitors (Plugin Handb
 screens).
 
 Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
-screens, are done, and so is 7c, taxonomies and custom fields.
+screens, are done, and so are 7c, taxonomies and custom fields, and the site pages of 7d;
+revisions are next.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -354,6 +355,25 @@ source.
   `rowAction` and `bulkAction` from their admin entry, for one type, several or `'*'`.
 - Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
   which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
+
+### 7d. Site pages (done) and revisions
+
+- **Routes** after plugins' own, as WordPress orders its rewrite rules: archives, terms, entries
+  under a prefix, then pages by path and posts by slug ("Post name"). Plugin types at
+  `/{name}/:slug`, archives at `/{plural}` (`hasArchive`), terms at `/{taxonomy}/:slug`. Sites
+  move them with `routes` under `{type}.single`, `{type}.archive` and `{taxonomy}.term`, suffixed
+  so they can't clash with a plugin's page route of the same name.
+- **Visibility**: published for everyone, private for `read_private_`, drafts only in preview
+  (`/?preview={id}`, checked against `read_`, noindex, a 404 for anyone else); the rest 404s.
+- **Settings › Reading**: latest posts or a static homepage with a posts page, through a new
+  `entry` setting type (a dropdown of a type's published entries), and posts per page.
+- **Templates**: defaults in `@otw/next/site` (`EntryTemplate`, `ArchiveTemplate`, `Blocks`,
+  `excerptOf`); plugins' by priority (`cms.content.template()`); the site's own in
+  `src/cms/templates.tsx`, which `cms generate` adds to the site module and never to the
+  admin's. Authors show by name, never by email address.
+- **Links**: `permalinks()` builds a page of addresses with one recursive query for pages'
+  ancestors; an entry under a draft has none. The admin's list and edit screen show View or
+  Preview, and the permalink.
 
 ### 7c. Taxonomies and custom fields (done)
 

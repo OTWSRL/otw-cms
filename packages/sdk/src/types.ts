@@ -157,14 +157,25 @@ export interface SecretSetting extends SettingFieldBase {
   env: string
 }
 
+/**
+ * An entry of a content type, by id, chosen from a dropdown of its published entries: WordPress's
+ * page pickers, such as Settings › Reading's homepage. Empty means none.
+ */
+export interface EntrySetting extends SettingFieldBase {
+  type: 'entry'
+  contentType: ContentTypeName
+  default?: string
+}
+
 /** One field in a plugin's `settings`. */
-export type SettingDefinition = TextSetting | BooleanSetting | SelectSetting | SecretSetting
+export type SettingDefinition =
+  TextSetting | BooleanSetting | SelectSetting | SecretSetting | EntrySetting
 
 /** The fields that can hold a value of type `V`: a checkbox for booleans, the rest for strings. */
 export type SettingDefinitionFor<V> = [V] extends [boolean]
   ? BooleanSetting
   : [V] extends [string]
-    ? TextSetting | SelectSetting | SecretSetting
+    ? TextSetting | SelectSetting | SecretSetting | EntrySetting
     : never
 
 /** Keys must start with the plugin's id, e.g. `commerce.currency`. */
@@ -733,6 +744,11 @@ export interface ContentTypeDefinition {
    */
   showInMenu?: boolean
   /**
+   * Its published entries are listed at an archive page, `/{plural}`, like WordPress's
+   * `has_archive`. Defaults to `false`. Posts are listed on the home page or the posts page.
+   */
+  hasArchive?: boolean
+  /**
    * Which roles get its capabilities, and at what level. Defaults to WordPress's, as for posts:
    * `{ editor: 'editor', author: 'author', contributor: 'contributor' }`. Administrators have
    * every capability. Like other grants, nothing is stored: they go when the plugin does.
@@ -840,6 +856,8 @@ export interface ContentType {
   /** Qualified, such as `lms.course`. */
   name: ContentTypeName
   pluginId: string
+  /** The plural in its capability names and its archive's address, such as `courses`. */
+  plural: string
   labels: ContentTypeDefinition['labels']
   description: string
   public: boolean
@@ -847,6 +865,7 @@ export interface ContentType {
   supports: readonly ContentFeature[]
   showUi: boolean
   showInMenu: boolean
+  hasArchive: boolean
   /**
    * Its list screen, such as `/admin/posts` or `/admin/lms/courses`, when it has screens. Add New
    * is `${adminPath}/new` and an entry's edit screen `${adminPath}/${id}`.
@@ -930,6 +949,64 @@ export type MetaDefinitionFor<V> = [V] extends [boolean]
       : [V] extends [readonly string[]]
         ? StringsMetaDefinition | JsonMetaDefinition<V>
         : JsonMetaDefinition<V>
+
+/** What every template's page shows: the entry or entries, and where they live. */
+export interface EntryTemplateProps {
+  entry: Entry
+  type: ContentType
+  /** Its address on the site; `null` for a draft, shown by preview. */
+  url: string | null
+  author: { id: string; name: string } | null
+  /** Its terms in every public taxonomy of its type. */
+  terms: Term[]
+  termUrl(term: Term): string | null
+  /** A draft or other entry shown to someone who may read it, not to visitors. */
+  preview: boolean
+}
+
+/** A list of entries: a type's archive, the latest posts, or a term's entries. */
+export interface ArchiveTemplateProps {
+  title: string
+  description: string
+  /** Whose entries: the type, and for a term's archive, the taxonomy and term. */
+  type: ContentType
+  taxonomy: Taxonomy | null
+  term: Term | null
+  items: { entry: Entry; url: string | null }[]
+  total: number
+  /** From 1. */
+  page: number
+  pages: number
+  pageUrl(page: number): string
+}
+
+/** Which page a template shows: an entry, a type's archive, or a term's. */
+export type ContentView = 'single' | 'archive' | 'term'
+
+/**
+ * A plugin's template for its type's or taxonomy's pages, in place of the default, as WordPress's
+ * `template_include` lets plugins choose. The highest `priority` wins; a site's own templates
+ * (`src/cms/templates.tsx`) win over all.
+ */
+export type ContentTemplate =
+  | {
+      view: 'single'
+      for: ContentTypeName
+      component: (props: EntryTemplateProps) => ReactNode | Promise<ReactNode>
+      priority?: number
+    }
+  | {
+      view: 'archive'
+      for: ContentTypeName
+      component: (props: ArchiveTemplateProps) => ReactNode | Promise<ReactNode>
+      priority?: number
+    }
+  | {
+      view: 'term'
+      for: TaxonomyName
+      component: (props: ArchiveTemplateProps) => ReactNode | Promise<ReactNode>
+      priority?: number
+    }
 
 /** A registered custom field. */
 export interface MetaField {
@@ -1083,6 +1160,20 @@ export interface ContentApi {
   meta<K extends EntryMetaKey>(key: K, definition: MetaDefinitionFor<EntryMeta[K]>): void
   /** The custom fields registered for a content type, or every one. */
   metaFields(type?: string): MetaField[]
+  /** Replaces the default template for a type's or taxonomy's pages. Register it in `setup()`. */
+  template(template: ContentTemplate): void
+  /**
+   * Entries' addresses on the site, like `get_permalink()`, for a page of them at once: a page's
+   * path takes its ancestors' slugs. `null` for entries that aren't published (or published
+   * privately), or whose type has no pages.
+   */
+  permalinks(entries: readonly Entry[]): Promise<Map<string, string | null>>
+  /** A term's archive on the site, or `null` when its taxonomy isn't public. */
+  termUrl(term: Term): string | null
+  /** A type's archive on the site, or `null` when it has none. */
+  archiveUrl(type: ContentTypeName): string | null
+  /** Where an entry's preview shows it, saved but unpublished, to those who may read it. */
+  previewUrl(entry: Entry): string
   /** Adds a term, like `wp_insert_term()`. Names are unique among a term's siblings. */
   createTerm(taxonomy: TaxonomyName, term: NewTerm): Promise<Term>
   /** Changes a term, like `wp_update_term()`. The default term keeps its slug. */

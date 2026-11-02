@@ -244,6 +244,7 @@ function describeType(
   return {
     name: qualified as ContentTypeName,
     pluginId,
+    plural,
     labels: { singular: singular!.trim(), plural: pluralLabel!.trim() },
     description: definition.description ?? '',
     public: isPublic,
@@ -251,6 +252,7 @@ function describeType(
     supports: [...new Set(supports)],
     showUi,
     showInMenu: showUi && (definition.showInMenu ?? true),
+    hasArchive: isPublic && (definition.hasArchive ?? false),
     adminPath: showUi ? `${base}/${plural}` : null,
     capabilities: contentCapabilities(pluginId, name, plural),
   }

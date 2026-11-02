@@ -116,6 +116,15 @@ export const site = defineSite({
     )
   })
 
+  it("imports the site's own templates into the site's module, not the admin's", () => {
+    const [site, admin] = managedFiles({ plugins: [] }, { srcDir: 'src' }, [], true)
+    expect(site!.content).toContain(
+      "import { defineSite } from '@otw/next'\nimport templates from './templates'\n",
+    )
+    expect(site!.content).toContain('  packages: [],\n  templates,\n})')
+    expect(admin!.content).not.toContain('templates')
+  })
+
   it("gives the admin the plugins' admin entries, in a site module of its own", () => {
     const [, admin] = managedFiles(config, { srcDir: 'src' }, ['@otw/plugin-commerce-stripe'])
     expect(admin).toEqual({
@@ -205,6 +214,15 @@ describe('generate', () => {
 
     await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: [] }))
     expect((await statuses())['src/cms/site.generated.ts']).toBe('written')
+  })
+
+  it('finds the site’s own templates, beside the site module', async () => {
+    await generate({ root })
+    const site = join(root, 'src/cms/site.generated.ts')
+    expect(await readFile(site, 'utf8')).not.toContain('templates')
+    await writeFile(join(root, 'src/cms/templates.tsx'), 'export default {}\n')
+    expect((await statuses())['src/cms/site.generated.ts']).toBe('written')
+    expect(await readFile(site, 'utf8')).toContain("import templates from './templates'")
   })
 
   /** Installs a package with these exports in `node_modules` under `dir`. */

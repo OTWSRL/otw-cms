@@ -1,1 +1,1 @@
-export { defineSite, type Site } from './site-registry'
+export { defineSite, type Site, type SiteTemplates } from './site-registry'

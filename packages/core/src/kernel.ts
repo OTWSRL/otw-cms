@@ -6,7 +6,9 @@ import type {
   ApiRoute,
   CapabilityArgs,
   CapabilityName,
+  ContentTemplate,
   ContentTypeDefinition,
+  ContentView,
   Database,
   TaxonomyDefinition,
   FilterContext,
@@ -54,6 +56,9 @@ import { createContentService, type ContentService } from './content'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
 import { MetaStore } from './content-meta'
+import { ContentRoutes } from './content-routes'
+import { TemplateStore } from './content-templates'
+import { createSiteContent, type ContentResolution } from './site-content'
 import { ContentTypeStore } from './content-types'
 import { TaxonomyStore } from './taxonomies'
 import { createTermService } from './terms'
@@ -238,6 +243,17 @@ export interface Kernel {
   adminMenu(user: User): AdminMenuSection[]
   /** The columns, meta boxes, row actions and bulk actions plugins add to a content type's screens. */
   contentScreens(type: string): ContentScreenExtensions
+  /**
+   * The content at a site path, after plugins' routes: a preview, the homepage, an archive, a
+   * page, a post. `null` when there's none this user may see.
+   */
+  resolveContent(
+    pathname: string,
+    searchParams: SearchParams,
+    user: User | null,
+  ): Promise<ContentResolution | null>
+  /** A plugin's template for a view of a type or taxonomy, if one replaces the default. */
+  contentTemplate(view: ContentView, name: string): ContentTemplate['component'] | undefined
   adminUrl(name: string, params?: Record<string, string>): string
   actionUrl(pluginId: string, name: string): string
   readFlash(value: string | string[] | undefined): Flash | null
@@ -429,12 +445,18 @@ async function boot(
   const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
   const taxonomies = new TaxonomyStore(assertOpen, stores.capabilities)
   const metaFields = new MetaStore(assertOpen)
+  const templates = new TemplateStore(assertOpen)
+  // Where entries live on the site, built once every plugin has registered its types.
+  let contentRoutes: ContentRoutes | null = null
+  const frontPage = () =>
+    values['reading.show_on_front'] === 'page' ? (values['reading.page_on_front'] ?? null) : null
   const content = createContentService({
     db,
     types: contentTypes,
     hooks: stores.hooks,
     terms: createTermService({ db, taxonomies, hooks: stores.hooks }),
     meta: metaFields,
+    links: { routes: () => contentRoutes, frontPage: () => frontPage() || null },
   })
   const contentScreens = new ContentScreenStore(assertOpen)
   const typesInMenu = new Map<string, number>()
@@ -871,6 +893,14 @@ async function boot(
           }
           registerTaxonomy(plugin.id, name, definition)
         },
+        template: (template) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Register templates in setup(): they render the site's pages, where the admin entry isn't loaded`,
+            )
+          }
+          templates.register(plugin.id, template)
+        },
         meta: (key, definition) => {
           if (entry === 'admin') {
             throw new Error(
@@ -1039,6 +1069,24 @@ async function boot(
     icon: (pluginId) => installed.get(pluginId)?.icon ?? 'admin',
   })
 
+  contentRoutes = new ContentRoutes({
+    types: contentTypes.list(),
+    taxonomies: taxonomies.list(),
+    overrides: options.routes ?? {},
+    used: (key) => overridesUsed.add(key),
+  })
+  const resolveContent = createSiteContent({
+    db,
+    content,
+    routes: () => contentRoutes,
+    can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
+    setting: (key) => {
+      const value = (values as Record<string, unknown>)[key]
+      return typeof value === 'string' ? value : undefined
+    },
+    getUsers: (ids) => auth.getUsers(ids),
+  })
+
   const registrationWarnings = [
     ...unusedOverrideWarnings(options.routes, overridesUsed),
     ...contentScreens
@@ -1079,6 +1127,8 @@ async function boot(
     content,
     contentTypes,
     contentScreens,
+    templates,
+    resolveContent,
   })
 }
 
@@ -1116,6 +1166,8 @@ function buildKernel(input: {
   content: ContentService
   contentTypes: ContentTypeStore
   contentScreens: ContentScreenStore
+  templates: TemplateStore
+  resolveContent: ReturnType<typeof createSiteContent>
   origins: OriginPolicy
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
@@ -1307,6 +1359,9 @@ function buildKernel(input: {
       stores.menu.build(user, (u, capability) => capabilities.can(u, capability)),
 
     contentScreens: (type) => input.contentScreens.for(type),
+    resolveContent: (pathname, searchParams, user) =>
+      input.resolveContent(pathname, searchParams, user),
+    contentTemplate: (view, name) => input.templates.get(view, name),
     adminUrl: (name, params) => stores.adminPages.url(name, params),
     actionUrl: (pluginId, name) => actionPath(pluginId, name),
     readFlash: (value) => prepared.flash.decode(value),

@@ -148,16 +148,31 @@ export async function ContentEditScreen({
       ))
   const newKey = `new:${type.name}`
   const locale = kernel.setting('site.locale')
+  const permalink =
+    entry && type.public ? (await kernel.content.permalinks([entry])).get(entry.id) : null
 
   const publishBox = (
     <Postbox id="submitdiv" title="Publish">
       <div className="submitbox">
         <div className="minor-publishing">
-          {!published && (
+          {(!published || (entry && type.public)) && (
             <div className="minor-publishing-actions">
-              <Button type="submit" name="intent" value="save">
-                Save Draft
-              </Button>
+              {!published && (
+                <Button type="submit" name="intent" value="save">
+                  Save Draft
+                </Button>
+              )}{' '}
+              {/* The saved entry: save first to preview changes, as there's no autosave yet. */}
+              {entry && type.public && (
+                <a
+                  className="button"
+                  href={permalink ?? kernel.content.previewUrl(entry)}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  {permalink ? `View ${singular}` : 'Preview'}
+                </a>
+              )}
             </div>
           )}
           <div className="misc-publishing-actions">
@@ -258,6 +273,11 @@ export async function ContentEditScreen({
           autoComplete="off"
           spellCheck
         />
+        {permalink && (
+          <p className="entry-permalink">
+            Permalink: <a href={permalink}>{permalink}</a>
+          </p>
+        )}
       </div>
       {supports('body') && (
         <div className="entry-body">

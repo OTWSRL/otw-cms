@@ -47,6 +47,37 @@ const coreSettings: SettingDefinitions = {
     env: 'SITE_URL',
     validate: validateOrigin,
   },
+  'reading.show_on_front': {
+    type: 'select',
+    label: 'Your homepage displays',
+    options: [
+      { value: 'posts', label: 'Your latest posts' },
+      { value: 'page', label: 'A static page (choose below)' },
+    ],
+    default: 'posts',
+  },
+  'reading.page_on_front': {
+    type: 'entry',
+    contentType: 'core.page',
+    label: 'Homepage',
+  },
+  'reading.page_for_posts': {
+    type: 'entry',
+    contentType: 'core.page',
+    label: 'Posts page',
+    description: 'Lists the latest posts, while the homepage is a static page.',
+  },
+  'reading.posts_per_page': {
+    type: 'text',
+    label: 'Blog pages show at most',
+    description: 'Posts, or entries of any archive, on each page of a list.',
+    default: '10',
+    maxLength: 3,
+    validate: (value) =>
+      /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 100
+        ? null
+        : 'Use a whole number from 1 to 100',
+  },
   'site.locale': {
     type: 'text',
     label: 'Locale',
@@ -133,6 +164,28 @@ export function registerCoreSettings(layout: SettingsLayoutStore): void {
     page: 'core.general',
     title: 'Site',
     fields: ['site.title', 'site.url', 'site.locale'],
+  })
+  // WordPress's Settings › Reading.
+  layout.page(
+    CORE,
+    {
+      name: 'reading',
+      path: '/reading',
+      title: 'Reading Settings',
+      menu: { label: 'Reading', order: 1 },
+    },
+    `${ADMIN_PREFIX}/settings/reading`,
+  )
+  layout.section(CORE, {
+    name: 'reading',
+    page: 'core.reading',
+    title: 'Reading',
+    fields: [
+      'reading.show_on_front',
+      'reading.page_on_front',
+      'reading.page_for_posts',
+      'reading.posts_per_page',
+    ],
   })
 }
 

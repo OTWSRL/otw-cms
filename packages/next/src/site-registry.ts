@@ -1,5 +1,23 @@
 import type { Brand } from '@otw/core'
-import type { AdminDefinition, PluginDefinition } from '@otw/sdk'
+import type {
+  AdminDefinition,
+  ArchiveTemplateProps,
+  EntryTemplateProps,
+  PluginDefinition,
+} from '@otw/sdk'
+import type { ReactNode } from 'react'
+
+type Template<P> = (props: P) => ReactNode | Promise<ReactNode>
+
+/**
+ * A site's own templates, from `src/cms/templates.tsx`, like a theme's: by view, then by content
+ * type or taxonomy name, or `*` for every one. They win over plugins' templates and the defaults.
+ */
+export interface SiteTemplates {
+  single?: Readonly<Record<string, Template<EntryTemplateProps>>>
+  archive?: Readonly<Record<string, Template<ArchiveTemplateProps>>>
+  term?: Readonly<Record<string, Template<ArchiveTemplateProps>>>
+}
 
 /** What a site gives the CMS. `cms generate` writes it to `src/cms/site.generated.ts`. */
 export interface Site {
@@ -17,6 +35,8 @@ export interface Site {
   routes?: Readonly<Record<string, string>>
   /** The name the admin shows for the CMS, from `cms.config.json`. */
   brand?: Brand
+  /** The site's own templates, when it has `src/cms/templates.tsx`. */
+  templates?: SiteTemplates
 }
 
 // Module-scoped, not global: Next compiles server components and route handlers separately, and

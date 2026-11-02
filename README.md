@@ -413,6 +413,17 @@ post types in LearnDash, LifterLMS and Tutor.
   `list({ meta })`, so they load with the entry and save with it. A meta box with `fields`
   renders and saves them, like a settings section; a field's `capability` guards it on screen.
   Values a deactivated plugin's fields hold are kept.
+- **On the site.** The catch-all route serves public types' entries after plugins' routes, as
+  WordPress resolves "Post name" permalinks: pages at their path, then posts at `/:slug`, a
+  plugin's type at `/{name}/:slug` (and `/{plural}` with `hasArchive`), terms at
+  `/category/:slug` and the like. A site moves them with `routes` (`core.post.single`,
+  `lms.course.archive`, `core.category.term`). Published entries are public, private ones for
+  those who may read them, and drafts only in preview (`/?preview={id}`, `read_` checked,
+  noindex); the rest is a 404. Settings › Reading makes the home page the latest posts or a
+  static page, with a posts page (an `entry` setting: a dropdown of pages). Templates: the
+  site's `src/cms/templates.tsx` wins over a plugin's `cms.content.template()`, which wins over
+  the defaults in `@otw/next/site`. `permalinks(entries)` batches a page of addresses; the
+  admin shows View and Preview links.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
   links included, and `Blocks` from `@otw/next/site` renders them on the site with no

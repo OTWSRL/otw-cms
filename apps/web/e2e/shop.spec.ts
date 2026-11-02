@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
 
 test('a shopper finds the shop through the plugin slot and places an order', async ({ page }) => {
+  // The home page is the CMS's: the latest posts, as Settings › Reading has it by default.
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Your site is running' })).toBeVisible()
+  await expect(page.locator('main .archive')).toBeVisible()
 
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Shop' }).click()
   await expect(page).toHaveURL('/shop')
