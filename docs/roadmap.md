@@ -526,6 +526,38 @@ plugins add (`show_user_profile`), user meta, and a mail transport with filters 
   plugins' sections through the `account.sections` slot. Commerce lists the orders placed with
   the account's address (`listOrders({ email })`), once the address is proven.
 
+## Admin speed (done)
+
+Measured before milestone 9 on a production build with PGlite, 1,500 posts, 300 pages and 441
+users: the server's time to first byte (median of seven) and what the browser waits for.
+
+| What                                | Before        | After       |
+| ----------------------------------- | ------------- | ----------- |
+| Users                               | 38 ms, 1.1 MB | 7 ms, 85 KB |
+| Posts, searched                     | 79 ms         | 20 ms       |
+| Edit Page                           | 23 ms         | 11 ms       |
+| The editor usable, after the screen | 320 ms        | 60 ms       |
+| Update, until the editor is usable  | 365 ms        | 120 ms      |
+| Other screens                       | 4–22 ms       | unchanged   |
+
+- **The editor** loads its chunk in an effect. `next/dynamic` suspends, and React 19 holds a
+  suspended boundary's content for 300 ms after its fallback shows.
+- **Users** are paged (20) and searched in SQL, every word in the email or name
+  (`auth.findUsers()`), with the role counts from one grouped query (`countUsersByRole()`).
+- **Search** (`content.list({ search })`) matches words and the words they begin, in any case,
+  against `cms_entries.search_vector`: a stored `tsvector` of the title, excerpt and body text,
+  GIN-indexed (migration core/0010_entry_search, which rewrites the table once). Stored, not an
+  expression index: with parameters, Postgres may walk entries by date and would compute every
+  entry's words. The column is left out of the Drizzle schema, so entries never carry it.
+- **The Parent dropdown** is `content.outline()`, one recursive query of ids, titles and depths.
+- **The update count** reuses `cms serve`'s status for five seconds, on `globalThis` so route
+  handlers (where update actions run) and screens share it; never while an update runs, cleared
+  after every action, and given up after three seconds.
+- **Feedback**: a bar along the top after 150 ms of any navigation or form post.
+- Not done: saving without reloading the screen (Update takes about 120 ms already), an author
+  picker and a searchable Parent box for sites with thousands of authors or pages, and timings
+  against a Postgres server over the network.
+
 ## 9. LMS plugin
 
 Courses and lessons as content types, enrollment on `commerce.order.paid`, an instructor role

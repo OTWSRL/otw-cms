@@ -316,8 +316,9 @@ Rules the kernel enforces or relies on:
   with `core.read`, WordPress's `read`. Plugins add roles, declare capabilities (`lms.grade`), and
   `grant()` or `revoke()` them on any role. Nothing is stored: roles and grants are rebuilt on
   every boot from the active plugins, so deactivating a plugin removes what it added. Users ›
-  All Users filters by role and changes the role of the ticked users at once (all or none, and
-  never the last administrator); Add User and Roles are their own screens, as in WordPress.
+  All Users lists 20 to a page, filters by role, searches email and name, and changes the role of
+  the ticked users at once (all or none, and never the last administrator); Add User and Roles
+  are their own screens, as in WordPress.
 - **Meta capabilities** map an object to the capabilities it requires, like `map_meta_cap`:
   `can(user, 'commerce.mark_order_paid', order)`. A map returns the required capabilities, or
   `false` to deny everyone, administrators included. Other plugins adjust a mapping with
@@ -358,6 +359,14 @@ Rules the kernel enforces or relies on:
   environment variable (shown read-only), then database, then default. `secret` fields come from
   the environment only and the admin only says whether they are set. Invalid stored or env values
   are ignored with a warning instead of breaking boot.
+- **Speed.** Measured on a production build with 1,500 posts, 300 pages and 441 users, every
+  screen answers in under 25 ms on the server. Lists are paged in SQL, Users included. Searches
+  read a GIN index of entries' words (`search_vector`, kept by Postgres on write). The Parent
+  dropdown is one recursive query (`content.outline()`). The menu's update count reuses
+  `cms serve`'s status for five seconds, across the server's bundles. The block editor's chunk
+  loads in an effect, not through `next/dynamic`, whose Suspense boundary React 19 holds for
+  300 ms, so the editor is usable about 60 ms after the screen. A bar along the top shows any
+  navigation that takes over 150 ms. `docs/roadmap.md` has the numbers before and after.
 - **Settings pages** follow WordPress's Settings API. Core has Settings › General with a Site
   section. Plugins add pages (`settingsPage`), sections on any page (`settingsSection`) and fields
   in any section (`settingsFields`), but place only their own settings. Commerce has Shop and

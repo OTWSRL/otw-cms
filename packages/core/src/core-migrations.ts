@@ -244,4 +244,22 @@ export const coreMigrations: Migration[] = [
       await db.execute(sql`ALTER TABLE cms_users ADD COLUMN meta jsonb NOT NULL DEFAULT '{}'`)
     },
   },
+  {
+    id: '0010_entry_search',
+    up: async (db) => {
+      // The admin's search: each entry's words, worked out when it's written. Stored, so a
+      // search never re-reads entries' text, whichever plan Postgres picks: with the query's
+      // values as parameters it can't tell how many match, and may walk entries by date. Not in
+      // the Drizzle schema, so it never shows in entries.
+      await db.execute(sql`
+        ALTER TABLE cms_entries ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (
+          to_tsvector('simple', title || ' ' || excerpt || ' '
+            || jsonb_path_query_array(body, 'lax $.**.text')::text)
+        ) STORED
+      `)
+      await db.execute(
+        sql`CREATE INDEX cms_entries_search_idx ON cms_entries USING gin (search_vector)`,
+      )
+    },
+  },
 ]

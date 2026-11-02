@@ -82,6 +82,10 @@ test('an administrator writes, formats and publishes a post, and finds it in the
   await page.getByRole('searchbox', { name: 'Search posts' }).fill('nine')
   await page.getByRole('button', { name: 'Search Posts' }).click()
   await expect(page.getByRole('row', { name: /Spring opening hours/ })).toBeVisible()
+  // Words as they begin, in any case.
+  await page.getByRole('searchbox', { name: 'Search posts' }).fill('OPEN')
+  await page.getByRole('button', { name: 'Search Posts' }).click()
+  await expect(page.getByRole('row', { name: /Spring opening hours/ })).toBeVisible()
   await page.getByRole('searchbox', { name: 'Search posts' }).fill('winter')
   await page.getByRole('button', { name: 'Search Posts' }).click()
   await expect(page.getByText('No posts found.')).toBeVisible()

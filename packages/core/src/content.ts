@@ -18,12 +18,10 @@ import {
   eq,
   getTableColumns,
   gte,
-  ilike,
   inArray,
   isNull,
   lt,
   notInArray,
-  or,
   sql,
   type SQL,
 } from 'drizzle-orm'
@@ -74,8 +72,9 @@ const MAX_TITLE = 500
 const MAX_EXCERPT = 10_000
 const MAX_BODY_BYTES = 2_000_000
 const MAX_POSITION = 2_147_483_647
-const MAX_SEARCH_WORDS = 10
 const DEFAULT_LIMIT = 20
+/** A Parent dropdown's entries, at most: far more than a dropdown is good for. */
+const MAX_OUTLINE = 5_000
 const MAX_LIMIT = 100
 /** Two saves can pick the same free slug; the unique index stops the second, which tries again. */
 const SLUG_ATTEMPTS = 5
@@ -533,6 +532,33 @@ export function createContentService({
       return presentOrNull(row)
     },
 
+    async outline(type, { exclude, limit = MAX_OUTLINE } = {}) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_OUTLINE) {
+        invalid(`The limit must be 1 to ${MAX_OUTLINE}`)
+      }
+      const skip = exclude !== undefined && UUID.test(exclude) ? exclude : null
+      // listTree's order, without the trash, and never descending into the excluded entry.
+      const result = await db.current.execute(sql`
+        WITH RECURSIVE ranked AS (
+          SELECT id, parent_id, title,
+            row_number() OVER (PARTITION BY parent_id ORDER BY position, lower(title), id) AS rank
+          FROM cms_entries WHERE type = ${type} AND status <> 'trash'
+        ), tree AS (
+          SELECT id, title, ARRAY[rank] AS path, ARRAY[id] AS line FROM ranked
+            WHERE (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM ranked))
+              AND id IS DISTINCT FROM ${skip}::uuid
+          UNION ALL
+          SELECT r.id, r.title, t.path || r.rank, t.line || r.id FROM ranked r
+            JOIN tree t ON r.parent_id = t.id
+            WHERE NOT r.id = ANY (t.line) AND r.id IS DISTINCT FROM ${skip}::uuid
+        )
+        SELECT id, title, cardinality(path) - 1 AS depth FROM tree ORDER BY path LIMIT ${limit}
+      `)
+      return (rowsOf(result) as { id: string; title: string; depth: number | string }[]).map(
+        (row) => ({ id: row.id, title: row.title, depth: Number(row.depth) }),
+      )
+    },
+
     async list(query) {
       const { where, limit, offset, orderBy, tree } = listQuery(query)
       if (where === null)
@@ -747,27 +773,27 @@ function checkStatuses(statuses: readonly EntryStatus[]): void {
   if (unknown.length > 0) invalid(`Unknown status "${String(unknown[0])}"`)
 }
 
-/** `%`, `_` and `\\` match themselves in a LIKE pattern. */
-function likeTerm(term: string): string {
-  return `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
-}
+/**
+ * An entry's words, title, excerpt and the body's text: a column the database keeps from them
+ * (migration core/0010_entry_search), indexed, and left out of the schema so entries never carry
+ * it.
+ */
+const SEARCH_VECTOR = sql`"cms_entries"."search_vector"`
+const MAX_SEARCH_LENGTH = 200
 
-/** Every word must be in the title, the excerpt or the body's text, as WordPress searches. */
+/**
+ * Every word of the search must start a word of the title, the excerpt or the body's text:
+ * `photo` finds "photography". Postgres splits the search as it split the entries, so
+ * `example.com` and `ed@example` match as they were written, and the index finds them without
+ * reading every entry, where WordPress's LIKE reads them all. A search with no words finds
+ * nothing.
+ */
 function searchCondition(search: string): SQL | undefined {
   if (typeof search !== 'string') invalid('Search for text')
-  const words = search.trim().split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_WORDS)
-  if (words.length === 0) return undefined
-  const text = sql`jsonb_path_query_array(${entries.body}, 'lax $.**.text')::text`
-  return and(
-    ...words.map((word) => {
-      const pattern = likeTerm(word)
-      return or(
-        ilike(entries.title, pattern),
-        ilike(entries.excerpt, pattern),
-        sql`${text} ILIKE ${pattern}`,
-      )
-    }),
-  )
+  const text = search.trim().slice(0, MAX_SEARCH_LENGTH)
+  if (text === '') return undefined
+  // Each word of the search, quoted, as a prefix: 'photo':* & 'ed@example':*.
+  return sql`${SEARCH_VECTOR} @@ to_tsquery('simple', (SELECT string_agg(quote_literal(lexeme) || ':*', ' & ') FROM unnest(to_tsvector('simple', ${text}))))`
 }
 
 function dateBound(value: unknown, what: string): Date {

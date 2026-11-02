@@ -514,7 +514,7 @@ describe('list', () => {
 describe('list, for the admin', () => {
   const words = (body: string) => [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
 
-  it('searches titles, excerpts and body text, every word, with LIKE wildcards taken literally', async () => {
+  it('searches titles, excerpts and body text for every word, and words they begin', async () => {
     const { content } = await site()
     await content.create('core.post', { title: 'Baking bread', body: words('flour and water') })
     await content.create('core.post', { title: 'Cakes', excerpt: 'Flour, sugar' })
@@ -524,13 +524,16 @@ describe('list, for the admin', () => {
       (await content.list({ type: 'core.post', search, orderBy: 'title' })).entries.map(
         (entry) => entry.title,
       )
+    // "flour" begins "flourish"; the start of a word is enough.
     expect(await titles('FLOUR')).toEqual(['Baking bread', 'Cakes', 'Pasta'])
     expect(await titles('flour water')).toEqual(['Baking bread'])
     expect(await titles('100%')).toEqual(['100% rye'])
-    expect(await titles('%')).toEqual(['100% rye'])
-    expect(await titles('r_dough')).toEqual(['100% rye'])
-    expect(await titles('r_d')).toEqual(['100% rye'])
-    expect(await titles('_')).toEqual(['100% rye'])
+    expect(await titles('sour_dough')).toEqual(['100% rye'])
+    expect(await titles('dough')).toEqual(['100% rye'])
+    // Not text inside a word, and a search with no words finds nothing.
+    expect(await titles('lour')).toEqual([])
+    expect(await titles('%')).toEqual([])
+    expect(await titles("'); DROP TABLE cms_entries; --")).toEqual([])
     expect(await titles('   ')).toHaveLength(4)
   })
 

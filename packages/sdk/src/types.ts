@@ -1268,6 +1268,15 @@ export interface ContentApi {
    * `types` says which content types have it. Declare its value's type in `EntryMeta`.
    */
   meta<K extends EntryMetaKey>(key: K, definition: MetaDefinitionFor<EntryMeta[K]>): void
+  /**
+   * A hierarchical type's entries (all but the trash) as a tree, for a Parent dropdown, like the
+   * pages `wp_dropdown_pages()` lists: each one's id, title and depth, in one query. `exclude`
+   * leaves out an entry and its descendants, which can't be its parent. At most `limit` (5,000).
+   */
+  outline(
+    type: ContentTypeName,
+    options?: { exclude?: string; limit?: number },
+  ): Promise<{ id: string; title: string; depth: number }[]>
   /** The custom fields registered for a content type, or every one. */
   metaFields(type?: string): MetaField[]
   /** Replaces the default template for a type's or taxonomy's pages. Register it in `setup()`. */

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { User } from '@otw/sdk'
-import { and, asc, count, eq, gt, inArray, lt, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 import { ADMINISTRATOR } from './capabilities'
 import { loginFailures, sessions, users } from './core-schema'
 import type { DatabaseContext } from './database'
@@ -55,6 +55,13 @@ export interface AuthService {
   hasUsers(): Promise<boolean>
   /** Every user by email, or only those with one of `roles`, such as an Author dropdown's. */
   listUsers(options?: { roles?: readonly string[] }): Promise<User[]>
+  /**
+   * A page of users by email, as users.php lists them: one role's, and those whose email or
+   * name has every word of `search`, with how many match.
+   */
+  findUsers(query?: UserQuery): Promise<{ users: User[]; total: number }>
+  /** How many users each role has, in one query: the list's role views. */
+  countUsersByRole(): Promise<Record<string, number>>
   /** These users, for showing who wrote a page of entries; ids that aren't users are left out. */
   getUsers(ids: readonly string[]): Promise<User[]>
   /** Refuses to demote the last administrator. */
@@ -73,6 +80,21 @@ export interface AuthService {
   createSession(userId: string): Promise<string>
   userForSession(token: string | null | undefined): Promise<User | null>
   signOut(token: string | null | undefined): Promise<void>
+}
+
+export interface UserQuery {
+  role?: string
+  search?: string
+  /** 1 to 100; defaults to 20, as WordPress's users screen shows. */
+  limit?: number
+  offset?: number
+}
+
+const MAX_USER_PAGE = 100
+const MAX_SEARCH_WORDS = 10
+
+function likeTerm(term: string): string {
+  return `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
 }
 
 export interface AuthServiceOptions {
@@ -178,6 +200,12 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
     return row
   }
 
+  /** How many match, for a page past the last: its window count has no row to ride on. */
+  const countWhere = async (where: SQL | undefined) => {
+    const [row] = await db.current.select({ total: count() }).from(users).where(where)
+    return row?.total ?? 0
+  }
+
   const service: AuthService = {
     async createUser(input) {
       return insertUser(await validated(input))
@@ -207,6 +235,41 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
         .from(users)
         .where(roles ? inArray(users.role, [...roles]) : undefined)
         .orderBy(asc(users.email))
+    },
+
+    async findUsers({ role, search = '', limit = 20, offset = 0 } = {}) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_USER_PAGE) {
+        throw new AuthError('invalid_input', `Show 1 to ${MAX_USER_PAGE} users at a time.`)
+      }
+      if (!Number.isSafeInteger(offset) || offset < 0) {
+        throw new AuthError('invalid_input', 'The offset must be 0 or more.')
+      }
+      const words = search.trim().split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_WORDS)
+      const where = and(
+        role === undefined ? undefined : eq(users.role, role),
+        ...words.map((word) =>
+          or(ilike(users.email, likeTerm(word)), ilike(users.name, likeTerm(word))),
+        ),
+      )
+      const rows = await db.current
+        .select({ ...userColumns, total: sql<number>`count(*) over ()`.mapWith(Number) })
+        .from(users)
+        .where(where)
+        .orderBy(asc(users.email))
+        .limit(limit)
+        .offset(offset)
+      return {
+        users: rows.map(({ total: _total, ...user }) => user),
+        total: rows[0]?.total ?? (offset > 0 ? await countWhere(where) : 0),
+      }
+    },
+
+    async countUsersByRole() {
+      const rows = await db.current
+        .select({ role: users.role, total: count() })
+        .from(users)
+        .groupBy(users.role)
+      return Object.fromEntries(rows.map((row) => [row.role, row.total]))
     },
 
     async getUsers(ids) {

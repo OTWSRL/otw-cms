@@ -14,6 +14,7 @@ import {
   type MouseEvent,
 } from 'react'
 import { MENU_COOKIE, type MenuPreference } from './admin-menu-preference'
+import { cancelNavigationProgress, NavigationProgress } from './navigation-progress'
 
 interface Frame {
   menuOpen: boolean
@@ -77,6 +78,7 @@ export function AdminFrame({
           if (event.key === 'Escape' && menuOpen) setMenuOpen(false)
         }}
       >
+        <NavigationProgress />
         {children}
       </div>
     </FrameContext.Provider>
@@ -207,7 +209,9 @@ export function AdminMenu({
                     aria-current={isCurrent && !hasSubmenu ? 'page' : undefined}
                     onClick={(event) => {
                       if (hasSubmenu && !isCurrent && opened !== section.id && opensOnTap(event)) {
+                        // Opens the flyout rather than going anywhere.
                         event.preventDefault()
+                        cancelNavigationProgress()
                         setOpened(section.id)
                         return
                       }

@@ -1212,6 +1212,17 @@ body:has(> .cms-login) {
   margin-left: auto;
 }
 
+/* "2 of 6" on the buttons' middle, not the text's baseline below it. */
+.cms-admin .pagination-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cms-admin .paging-input {
+  margin: 0 4px;
+}
+
 .cms-admin .tablenav-pages .button {
   min-width: 32px;
   padding: 0 4px;
@@ -2369,6 +2380,40 @@ body:has(> .cms-login) {
 @media (max-width: 850px) {
   .cms-admin .col-wrap {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The bar along the top while the next screen loads; only after a moment, so fast ones don't flash. */
+.cms-admin .nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100000;
+  width: 0;
+  height: 3px;
+  background: var(--wp-highlight);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cms-admin .nav-progress[data-state='showing'] {
+  width: 80%;
+  opacity: 1;
+  transition: width 4s cubic-bezier(0.1, 0.7, 0.2, 1);
+}
+
+.cms-admin .nav-progress[data-state='done'] {
+  width: 100%;
+  opacity: 0;
+  transition:
+    width 0.15s ease-out,
+    opacity 0.3s ease-out 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cms-admin .nav-progress[data-state='showing'] {
+    width: 100%;
+    transition: none;
   }
 }
 

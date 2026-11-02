@@ -185,6 +185,9 @@ test('administrators edit their profile, and someone else’s account', async ({
   await expect(page.getByRole('button', { name: 'Howdy, Ada A. Admin' })).toBeVisible()
 
   await page.goto('/admin/users')
+  await page.getByRole('searchbox', { name: 'Search Users' }).fill(`CLEO ${run}`)
+  await page.getByRole('button', { name: 'Search Users' }).click()
+  await expect(page.locator('.displaying-num').first()).toHaveText('1 item')
   await page.getByRole('link', { name: `Edit ${CLEO.email}` }).click()
   await expect(page.getByRole('heading', { name: 'Edit User Cleo S.' })).toBeVisible()
   await page.getByRole('button', { name: 'Send Reset Link' }).click()

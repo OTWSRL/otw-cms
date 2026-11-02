@@ -7,6 +7,25 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** How long the admin reuses the supervisor's status: the menu's update count asks on every screen. */
+export const STATUS_CACHE_MS = 5_000
+/** The status is for a badge: a supervisor that's slow to answer mustn't hold up every screen. */
+const STATUS_TIMEOUT_MS = 3_000
+
+interface CachedStatus {
+  at: number
+  overview: Promise<UpdateOverview>
+}
+
+/**
+ * The last status per supervisor, on globalThis: Next bundles route handlers and server components
+ * apart, each with its own kernel, and an update started from a form (a route handler) must clear
+ * the status the admin's screens (server components) show next.
+ */
+const globalForUpdates = globalThis as typeof globalThis & {
+  __cmsUpdateStatus?: Map<string, CachedStatus>
+}
+
 /**
  * The `cms serve` supervisor that started this release. It passed its address and a token in
  * the environment; nothing else can call it.
@@ -15,6 +34,10 @@ export function supervisorUpdates(
   url: string,
   token: string,
   fetchImpl: Fetch = fetch,
+  {
+    now = Date.now,
+    statuses = (globalForUpdates.__cmsUpdateStatus ??= new Map()),
+  }: { now?: () => number; statuses?: Map<string, CachedStatus> } = {},
 ): UpdateService {
   const call = async (method: string, path: string, body?: unknown, timeoutMs = 10_000) => {
     let response: Response
@@ -32,15 +55,39 @@ export function supervisorUpdates(
     if (!response.ok) throw new ActionError(data.error ?? `cms serve answered ${response.status}.`)
     return data
   }
-  const notice = async (method: string, path: string, body?: unknown, timeoutMs?: number) =>
-    (await call(method, path, body, timeoutMs)).notice ?? 'Done.'
+  /**
+   * The last status, reused for a few seconds and shared by requests asking at once. Not while an
+   * update runs, whose steps the Updates screen shows as they happen, and forgotten after anything
+   * that changes it.
+   */
+  const forget = () => {
+    statuses.delete(url)
+  }
+  const notice = async (method: string, path: string, body?: unknown, timeoutMs?: number) => {
+    try {
+      return (await call(method, path, body, timeoutMs)).notice ?? 'Done.'
+    } finally {
+      forget()
+    }
+  }
   return {
-    async overview() {
-      try {
-        return (await call('GET', '/status')) as UpdateOverview
-      } catch (error) {
-        return { channel: 'unavailable', reason: describe(error) }
-      }
+    overview() {
+      const at = now()
+      const cached = statuses.get(url)
+      if (cached && at - cached.at < STATUS_CACHE_MS) return cached.overview
+      const overview = call('GET', '/status', undefined, STATUS_TIMEOUT_MS).then(
+        (status) => status as UpdateOverview,
+        (error: unknown): UpdateOverview => ({ channel: 'unavailable', reason: describe(error) }),
+      )
+      const entry = { at, overview }
+      statuses.set(url, entry)
+      void overview.then((status) => {
+        const running = status.channel === 'serve' && status.job?.status === 'running'
+        if (running && statuses.get(url) === entry) {
+          forget()
+        }
+      })
+      return overview
     },
     // Looking up every package can take a while on a slow registry.
     check: () => notice('POST', '/check', undefined, 120_000),

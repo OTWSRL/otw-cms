@@ -23,7 +23,7 @@ describe('supervisorUpdates', () => {
       [`PUT ${URL}/auto-update`]: [200, { notice: 'Saved.' }],
       [`GET ${URL}/status`]: [200, { channel: 'serve', releases: [] }],
     })
-    const service = supervisorUpdates(URL, 'secret', fetchImpl)
+    const service = supervisorUpdates(URL, 'secret', fetchImpl, { statuses: new Map() })
     expect(await service.update({ packages: ['@acme/forum'] })).toBe('Updating.')
     expect(await service.setAutoUpdate('patch')).toBe('Saved.')
     expect(await service.overview()).toEqual({ channel: 'serve', releases: [] })
@@ -38,14 +38,90 @@ describe('supervisorUpdates', () => {
     const service = supervisorUpdates(URL, 'secret', fetchImpl)
     await expect(service.rollback('r1')).rejects.toThrow('An update is already running.')
 
-    const down = supervisorUpdates(URL, 'secret', (async () => {
-      throw new TypeError('fetch failed')
-    }) as unknown as typeof fetch)
+    const down = supervisorUpdates(
+      URL,
+      'secret',
+      (async () => {
+        throw new TypeError('fetch failed')
+      }) as unknown as typeof fetch,
+      { statuses: new Map() },
+    )
     expect(await down.overview()).toEqual({
       channel: 'unavailable',
       reason: "Couldn't reach cms serve: fetch failed",
     })
     await expect(down.check()).rejects.toThrow("Couldn't reach cms serve: fetch failed")
+  })
+})
+
+describe('the supervisor’s status', () => {
+  const URL = 'http://127.0.0.1:5000'
+  const status = (job: string | null) => ({
+    channel: 'serve',
+    releases: [],
+    job: job ? { id: 'j', kind: 'update', status: job } : null,
+  })
+
+  it('is reused for a few seconds, shared while in flight, and asked again after', async () => {
+    let clock = 0
+    const { calls, fetchImpl } = fake({ [`GET ${URL}/status`]: [200, status(null)] })
+    const service = supervisorUpdates(URL, 'secret', fetchImpl, {
+      now: () => clock,
+      statuses: new Map(),
+    })
+    await Promise.all([service.overview(), service.overview(), service.overview()])
+    expect(calls).toHaveLength(1)
+    clock = 4_999
+    await service.overview()
+    expect(calls).toHaveLength(1)
+    clock = 5_000
+    await service.overview()
+    expect(calls).toHaveLength(2)
+  })
+
+  it('is asked afresh while an update runs, and after an update action', async () => {
+    const { calls, fetchImpl } = fake({
+      [`GET ${URL}/status`]: [200, status('running')],
+      [`POST ${URL}/check`]: [200, { notice: 'Checking.' }],
+    })
+    const service = supervisorUpdates(URL, 'secret', fetchImpl, {
+      now: () => 0,
+      statuses: new Map(),
+    })
+    await service.overview()
+    await service.overview()
+    expect(calls.filter((call) => call.url.endsWith('/status'))).toHaveLength(2)
+
+    const idle = fake({
+      [`GET ${URL}/status`]: [200, status(null)],
+      [`POST ${URL}/check`]: [200, { notice: 'Checking.' }],
+    })
+    const quiet = supervisorUpdates(URL, 'secret', idle.fetchImpl, {
+      now: () => 0,
+      statuses: new Map(),
+    })
+    await quiet.overview()
+    await quiet.check()
+    await quiet.overview()
+    expect(idle.calls.filter((call) => call.url.endsWith('/status'))).toHaveLength(2)
+  })
+
+  it('is one for the whole server, so an action in a route handler reaches the admin’s screens', async () => {
+    // Next bundles route handlers and server components apart, each with its own kernel and
+    // update service: here, two services for one supervisor.
+    const SHARED = 'http://127.0.0.1:5001'
+    const { calls, fetchImpl } = fake({
+      [`GET ${SHARED}/status`]: [200, status(null)],
+      [`POST ${SHARED}/check`]: [200, { notice: 'Checking.' }],
+    })
+    const screens = supervisorUpdates(SHARED, 'secret', fetchImpl, { now: () => 0 })
+    const actions = supervisorUpdates(SHARED, 'secret', fetchImpl, { now: () => 0 })
+    await screens.overview()
+    await actions.overview()
+    expect(calls).toHaveLength(1)
+    await actions.check()
+    await screens.overview()
+    expect(calls.filter((call) => call.url.endsWith('/status'))).toHaveLength(2)
   })
 })
 

@@ -1,6 +1,14 @@
 import { Button, EditColumns, FormButton, Notice, Postbox } from '@otw/admin-ui'
 import { inSentence, type Kernel } from '@otw/core'
-import type { ContentType, Entry, SearchParams, Taxonomy, Term, User } from '@otw/sdk'
+import type {
+  ContentType,
+  ContentTypeName,
+  Entry,
+  SearchParams,
+  Taxonomy,
+  Term,
+  User,
+} from '@otw/sdk'
 import { EditorLoader } from '../editor/editor-loader'
 import { FeaturedImage } from '../featured-image'
 import type { PickedMedia } from '../media-picker'
@@ -9,26 +17,10 @@ import { formatDate } from './content-dates'
 import { MetaFields } from './meta-fields'
 
 /** A parent dropdown lists at most this many entries, as a page of 100 at a time. */
-const MAX_PARENTS = 1000
-const PAGE = 100
 
 /** The type's other entries in tree order, for the Parent dropdown, without `entry`'s own branch. */
-async function parentChoices(kernel: Kernel, type: ContentType, entry: Entry | null) {
-  const choices: { entry: Entry; depth: number }[] = []
-  for (let offset = 0; offset < MAX_PARENTS; offset += PAGE) {
-    const page = await kernel.content.list({
-      type: type.name,
-      orderBy: 'tree',
-      limit: PAGE,
-      offset,
-    })
-    page.entries.forEach((item, i) => choices.push({ entry: item, depth: page.depths?.[i] ?? 0 }))
-    if (offset + PAGE >= page.total) break
-  }
-  const self = choices.findIndex((choice) => choice.entry.id === entry?.id)
-  if (self < 0) return choices
-  const end = choices.findIndex((choice, i) => i > self && choice.depth <= choices[self]!.depth)
-  return [...choices.slice(0, self), ...(end < 0 ? [] : choices.slice(end))]
+function parentChoices(kernel: Kernel, type: ContentType, entry: Entry | null) {
+  return kernel.content.outline(type.name as ContentTypeName, { exclude: entry?.id })
 }
 
 /** Who may be named as the author: users whose role may write entries of the type. */
@@ -389,9 +381,9 @@ export async function ContentEditScreen({
               <label htmlFor="parent">Parent</label>
               <select id="parent" name="parent" defaultValue={entry?.parentId ?? ''}>
                 <option value="">(no parent)</option>
-                {parents.map(({ entry: parent, depth }) => (
+                {parents.map((parent) => (
                   <option key={parent.id} value={parent.id}>
-                    {'   '.repeat(depth)}
+                    {'   '.repeat(parent.depth)}
                     {parent.title || '(no title)'}
                   </option>
                 ))}
