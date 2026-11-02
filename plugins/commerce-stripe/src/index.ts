@@ -1,12 +1,6 @@
 import { definePlugin, type PluginDefinition } from '@otw/sdk'
 import Stripe from 'stripe'
-import {
-  dashboardUrl,
-  registerOrderPanel,
-  registerSettings,
-  registerSetupNotice,
-  type MissingSetting,
-} from './admin'
+import { missingSettings } from './config'
 import { createStripeGateway, type StripeClient } from './gateway'
 import { createWebhookHandler } from './webhook'
 
@@ -64,18 +58,12 @@ export function createStripePlugin(options: StripePluginOptions = {}): PluginDef
     setup(cms) {
       const secretKey = cms.settings.get('commerce-stripe.secretKey')
       const webhookSecret = cms.settings.get('commerce-stripe.webhookSecret')
-      registerSettings(cms)
-      // Orders paid through Stripe keep their panel even if the keys are later removed.
-      registerOrderPanel(cms, dashboardUrl(secretKey))
-
-      const missing: MissingSetting[] = []
-      if (!secretKey && !options.client) missing.push('secretKey')
-      if (!webhookSecret) missing.push('webhookSecret')
+      const missing = missingSettings(cms, Boolean(options.client))
       // The webhook check repeats `missing` so TypeScript narrows the secret below.
       if (!webhookSecret || missing.length > 0) {
         // Active but unconfigured is normal right after install; stay out of checkout until set up.
+        // The admin entry tells the people who can fix it.
         cms.logger.warn('Stripe is not configured; card payments are disabled', { missing })
-        registerSetupNotice(cms, missing)
         return
       }
 

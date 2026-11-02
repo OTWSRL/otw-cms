@@ -1,5 +1,5 @@
 import { access, mkdir, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
-import { dirname, join, posix, relative, sep } from 'node:path'
+import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Brand } from '@otw/core'
 
 export interface CmsConfig {
@@ -135,6 +135,7 @@ export interface SiteLayout {
 }
 
 const SITE_MODULE = 'cms/site.generated.ts'
+const ADMIN_MODULE = 'cms/admin.generated.ts'
 
 /** Where the generated site module lives, relative to the site's root. */
 export function siteModulePath({ srcDir }: SiteLayout): string {
@@ -152,16 +153,46 @@ function importPath(from: string, to: string): string {
   return path.startsWith('.') ? path : `./${path}`
 }
 
+/** The lines of a site module: the plugins, with their admin entries when `admin` lists them. */
+function siteModule(config: CmsConfig, admin?: ReadonlySet<string>): string[] {
+  const withAdmin = config.plugins.flatMap((name, i) => (admin?.has(name) ? [i] : []))
+  return [
+    "import { defineSite } from '@otw/next'",
+    ...config.plugins.map((name, i) => `import plugin${i} from ${JSON.stringify(name)}`),
+    ...withAdmin.map(
+      (i) => `import admin${i} from ${JSON.stringify(`${config.plugins[i]}/admin`)}`,
+    ),
+    '',
+    'export const site = defineSite({',
+    `  plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}],`,
+    ...(admin ? [`  admin: [${withAdmin.map((i) => `admin${i}`).join(', ')}],`] : []),
+    `  packages: [${config.plugins.map((name) => JSON.stringify(name)).join(', ')}],`,
+    ...(config.routes ? [`  routes: ${JSON.stringify(config.routes)},`] : []),
+    ...(config.brand ? [`  brand: ${JSON.stringify(config.brand)},`] : []),
+    '})',
+  ]
+}
+
 /**
  * Everything the CMS needs in the site's app directory. The admin is one catch-all route, so new
- * core screens need no new files; these only change when the routing itself does.
+ * core screens need no new files; these only change when the routing itself does. `admin` names
+ * the plugins whose packages have an admin entry (`./admin`).
  */
-export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): ManagedFile[] {
+export function managedFiles(
+  config: CmsConfig,
+  { srcDir }: SiteLayout,
+  admin: readonly string[] = [],
+): ManagedFile[] {
   const at = (path: string) => (srcDir ? `${srcDir}/${path}` : path)
   const site = siteModulePath({ srcDir })
-  // Every route imports the site module, which registers the installed plugins for its bundle.
-  const route = (path: string, lines: readonly string[], replaceable = false) =>
-    file(at(path), [`import '${importPath(at(path), site)}'`, ...lines], replaceable)
+  const adminSite = srcDir ? `${srcDir}/${ADMIN_MODULE}` : ADMIN_MODULE
+  // Every route imports a site module, which registers the installed plugins for its bundle. The
+  // admin's adds their admin entries, which the storefront's routes must never import: Next.js
+  // sends every client component a route imports to its visitors.
+  const route = (path: string, lines: readonly string[], replaceable = false, module = site) =>
+    file(at(path), [`import '${importPath(at(path), module)}'`, ...lines], replaceable)
+  const adminRoute = (path: string, lines: readonly string[]) =>
+    route(path, lines, false, adminSite)
   const dynamic = "export const dynamic = 'force-dynamic'"
   const storefront = [
     "export { SitePage as default, generateSiteMetadata as generateMetadata } from '@otw/next/site'",
@@ -169,22 +200,16 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
   ]
 
   return [
-    file(site, [
-      "import { defineSite } from '@otw/next'",
-      ...config.plugins.map((name, i) => `import plugin${i} from ${JSON.stringify(name)}`),
-      '',
-      'export const site = defineSite({',
-      `  plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}],`,
-      `  packages: [${config.plugins.map((name) => JSON.stringify(name)).join(', ')}],`,
-      ...(config.routes ? [`  routes: ${JSON.stringify(config.routes)},`] : []),
-      ...(config.brand ? [`  brand: ${JSON.stringify(config.brand)},`] : []),
-      '})',
+    file(site, siteModule(config)),
+    file(adminSite, [
+      "// The admin's site module: the plugins and their admin entries. Only the admin and the API import it.",
+      ...siteModule(config, new Set(admin)),
     ]),
-    route('app/(cms)/layout.tsx', [
+    adminRoute('app/(cms)/layout.tsx', [
       "export { AdminRootLayout as default } from '@otw/next/admin'",
       dynamic,
     ]),
-    route('app/(cms)/admin/[[...segments]]/page.tsx', [
+    adminRoute('app/(cms)/admin/[[...segments]]/page.tsx', [
       "export { AdminPage as default, generateAdminMetadata as generateMetadata } from '@otw/next/admin'",
       dynamic,
     ]),
@@ -194,7 +219,7 @@ export function managedFiles(config: CmsConfig, { srcDir }: SiteLayout): Managed
     file(at('app/(cms)/admin/not-found.tsx'), [
       "export { AdminNotFound as default } from '@otw/next/admin'",
     ]),
-    route('app/(cms)/api/p/[...path]/route.ts', [
+    adminRoute('app/(cms)/api/p/[...path]/route.ts', [
       "export { DELETE, GET, PATCH, POST, PUT } from '@otw/next/api'",
       dynamic,
     ]),
@@ -257,6 +282,7 @@ export async function generate({
 }): Promise<GenerateResult> {
   const config = await readConfig(configPath)
   const layout: SiteLayout = { srcDir: (await exists(join(root, 'src', 'app'))) ? 'src' : '' }
+  const admin = await pluginsWithAdmin(root, config.plugins)
   const files: GenerateResult['files'] = []
   const clashing = new Set<string>()
   for (const retired of retiredFiles(layout)) {
@@ -271,7 +297,7 @@ export async function generate({
       for (const path of retired.replacedBy) clashing.add(path)
     }
   }
-  for (const managed of managedFiles(config, layout)) {
+  for (const managed of managedFiles(config, layout, admin)) {
     if (clashing.has(managed.path)) continue
     const target = join(root, ...managed.path.split('/'))
     const existing = await readIfExists(target)
@@ -286,6 +312,28 @@ export async function generate({
     }
   }
   return { files }
+}
+
+/**
+ * The plugins whose package exports an admin entry (`./admin`), found as Node resolves packages:
+ * in `node_modules` here or in a folder above, where workspaces install them.
+ */
+async function pluginsWithAdmin(root: string, plugins: readonly string[]): Promise<string[]> {
+  const found: string[] = []
+  for (const name of plugins) {
+    const manifest = await packageManifest(root, name)
+    const exports = manifest?.exports
+    if (exports && typeof exports === 'object' && './admin' in exports) found.push(name)
+  }
+  return found
+}
+
+async function packageManifest(root: string, name: string): Promise<{ exports?: unknown } | null> {
+  for (let dir = resolve(root); ; dir = dirname(dir)) {
+    const text = await readIfExists(join(dir, 'node_modules', ...name.split('/'), 'package.json'))
+    if (text !== null) return JSON.parse(text) as { exports?: unknown }
+    if (dirname(dir) === dir) return null
+  }
 }
 
 /** Deletes a route file, and its folder unless the site put something else there. */

@@ -1,9 +1,9 @@
 /** Raised when one plugin breaks during boot, so the kernel can boot again without it. */
 export class PluginBootError extends Error {
   readonly pluginId: string
-  readonly phase: 'migrate' | 'setup'
+  readonly phase: 'migrate' | 'setup' | 'admin setup'
 
-  constructor(pluginId: string, phase: 'migrate' | 'setup', cause: unknown) {
+  constructor(pluginId: string, phase: 'migrate' | 'setup' | 'admin setup', cause: unknown) {
     super(`Plugin "${pluginId}" failed during ${phase}: ${describe(cause)}`, { cause })
     this.name = 'PluginBootError'
     this.pluginId = pluginId

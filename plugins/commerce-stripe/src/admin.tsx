@@ -1,25 +1,36 @@
 import { Notice, Postbox } from '@otw/admin-ui'
 import type { Order } from '@otw/plugin-commerce'
-import type { PluginContext } from '@otw/sdk'
+import { defineAdmin, type AdminDefinition, type PluginContext } from '@otw/sdk'
 import { Fragment } from 'react'
+import { ENV_NAMES, missingSettings, type MissingSetting } from './config'
 import { GATEWAY_ID } from './gateway'
+import stripe, { type StripePluginOptions } from './index'
 
-const ENV_NAMES = {
-  secretKey: 'STRIPE_SECRET_KEY',
-  webhookSecret: 'STRIPE_WEBHOOK_SECRET',
-} as const
+/**
+ * Stripe's admin entry, with the options the plugin was given, such as a client in tests. The
+ * package's `./admin` export is `createStripeAdmin()`.
+ */
+export function createStripeAdmin(options: StripePluginOptions = {}): AdminDefinition {
+  return defineAdmin(stripe, (cms) => {
+    registerSettings(cms)
+    // Orders paid through Stripe keep their panel even if the keys are later removed.
+    registerOrderPanel(cms, dashboardUrl(cms.settings.get('commerce-stripe.secretKey')))
+    const missing = missingSettings(cms, Boolean(options.client))
+    if (missing.length > 0) registerSetupNotice(cms, missing)
+  })
+}
 
-export type MissingSetting = keyof typeof ENV_NAMES
+export default createStripeAdmin()
 
 /** Test keys (`sk_test_…`, `rk_test_…`) belong to the dashboard's test mode. */
-export function dashboardUrl(secretKey: string | undefined): string {
+function dashboardUrl(secretKey: string | undefined): string {
   return secretKey?.includes('_test_')
     ? 'https://dashboard.stripe.com/test'
     : 'https://dashboard.stripe.com'
 }
 
 /** Stripe's section on Commerce's Payments page, like a gateway tab in WooCommerce. */
-export function registerSettings(cms: PluginContext): void {
+function registerSettings(cms: PluginContext): void {
   cms.admin.settingsSection({
     name: 'stripe',
     page: 'commerce.payments',
@@ -34,7 +45,7 @@ export function registerSettings(cms: PluginContext): void {
 }
 
 /** Tells the people who run the site why cards aren't offered, on every admin screen. */
-export function registerSetupNotice(cms: PluginContext, missing: readonly MissingSetting[]): void {
+function registerSetupNotice(cms: PluginContext, missing: readonly MissingSetting[]): void {
   cms.slots.fill('admin.notices', {
     component: ({ user }) =>
       cms.auth.can(user, 'core.manage_settings') ? (
@@ -55,7 +66,7 @@ export function registerSetupNotice(cms: PluginContext, missing: readonly Missin
   })
 }
 
-export function registerOrderPanel(cms: PluginContext, dashboard: string): void {
+function registerOrderPanel(cms: PluginContext, dashboard: string): void {
   cms.slots.fill('commerce.admin.order', {
     component: ({ order }) => <StripePanel order={order} dashboard={dashboard} />,
   })

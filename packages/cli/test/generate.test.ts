@@ -116,10 +116,32 @@ export const site = defineSite({
     )
   })
 
-  it('mounts the admin, the API and the storefront, each importing the site', () => {
+  it("gives the admin the plugins' admin entries, in a site module of its own", () => {
+    const [, admin] = managedFiles(config, { srcDir: 'src' }, ['@otw/plugin-commerce-stripe'])
+    expect(admin).toEqual({
+      path: 'src/cms/admin.generated.ts',
+      content: `${MARKER}
+// The admin's site module: the plugins and their admin entries. Only the admin and the API import it.
+import { defineSite } from '@otw/next'
+import plugin0 from "@otw/plugin-commerce"
+import plugin1 from "@otw/plugin-commerce-stripe"
+import admin1 from "@otw/plugin-commerce-stripe/admin"
+
+export const site = defineSite({
+  plugins: [plugin0, plugin1],
+  admin: [admin1],
+  packages: ["@otw/plugin-commerce", "@otw/plugin-commerce-stripe"],
+})
+`,
+    })
+    expect(managedFiles(config, { srcDir: 'src' })[1]!.content).toContain('  admin: [],')
+  })
+
+  it("mounts the admin and the API on the admin's site module, the storefront on the site's", () => {
     const files = managedFiles(config, { srcDir: 'src' })
     expect(files.map((managed) => managed.path)).toEqual([
       'src/cms/site.generated.ts',
+      'src/cms/admin.generated.ts',
       'src/app/(cms)/layout.tsx',
       'src/app/(cms)/admin/[[...segments]]/page.tsx',
       'src/app/(cms)/admin/forbidden.tsx',
@@ -131,18 +153,28 @@ export const site = defineSite({
     ])
     const admin = files.find((managed) => managed.path.endsWith('[[...segments]]/page.tsx'))!
     expect(admin.content).toBe(`${MARKER}
-import '../../../../cms/site.generated'
+import '../../../../cms/admin.generated'
 export { AdminPage as default, generateAdminMetadata as generateMetadata } from '@otw/next/admin'
 export const dynamic = 'force-dynamic'
 `)
+    const imports = (path: string) => files.find((managed) => managed.path === path)!.content
+    expect(imports('src/app/(cms)/layout.tsx')).toContain("import '../../cms/admin.generated'")
+    expect(imports('src/app/(cms)/api/p/[...path]/route.ts')).toContain(
+      "import '../../../../../cms/admin.generated'",
+    )
+    expect(imports('src/app/(site)/page.tsx')).toContain("import '../../cms/site.generated'")
+    expect(imports('src/app/(site)/[...slug]/page.tsx')).toContain(
+      "import '../../../cms/site.generated'",
+    )
     for (const managed of files) expect(managed.content.startsWith(`${MARKER}\n`)).toBe(true)
   })
 
   it('works without a src directory', () => {
     const files = managedFiles(config, { srcDir: '' })
     expect(files[0]!.path).toBe('cms/site.generated.ts')
-    expect(files[1]).toMatchObject({ path: 'app/(cms)/layout.tsx' })
-    expect(files[1]!.content).toContain("import '../../cms/site.generated'")
+    expect(files[1]!.path).toBe('cms/admin.generated.ts')
+    expect(files[2]).toMatchObject({ path: 'app/(cms)/layout.tsx' })
+    expect(files[2]!.content).toContain("import '../../cms/admin.generated'")
   })
 })
 
@@ -163,16 +195,46 @@ describe('generate', () => {
     Object.fromEntries((await generate({ root })).files.map((f) => [f.path, f.status]))
 
   it('writes every file, then leaves them alone until something changes', async () => {
-    expect(Object.values(await statuses())).toEqual(Array(9).fill('written'))
+    expect(Object.values(await statuses())).toEqual(Array(10).fill('written'))
     const site = join(root, 'src/cms/site.generated.ts')
     expect(await readFile(site, 'utf8')).toContain('import plugin0 from "@acme/lms"')
     const written = (await stat(site)).mtimeMs
 
-    expect(Object.values(await statuses())).toEqual(Array(9).fill('unchanged'))
+    expect(Object.values(await statuses())).toEqual(Array(10).fill('unchanged'))
     expect((await stat(site)).mtimeMs).toBe(written)
 
     await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: [] }))
     expect((await statuses())['src/cms/site.generated.ts']).toBe('written')
+  })
+
+  /** Installs a package with these exports in `node_modules` under `dir`. */
+  async function install(dir: string, name: string, exports: unknown) {
+    const at = join(dir, 'node_modules', ...name.split('/'))
+    await mkdir(at, { recursive: true })
+    await writeFile(join(at, 'package.json'), JSON.stringify({ name, exports }))
+  }
+
+  it("finds each plugin's admin entry in its package's exports", async () => {
+    const plugins = ['@acme/lms', '@acme/quiz', '@acme/not-installed']
+    await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins }))
+    await install(root, '@acme/lms', { '.': './src/index.ts', './admin': './src/admin.tsx' })
+    await install(root, '@acme/quiz', { '.': './src/index.ts' })
+    await generate({ root })
+    const admin = await readFile(join(root, 'src/cms/admin.generated.ts'), 'utf8')
+    expect(admin).toContain('import admin0 from "@acme/lms/admin"')
+    expect(admin).toContain('  admin: [admin0],')
+    expect(admin).not.toContain('@acme/quiz/admin')
+  })
+
+  it('finds packages a workspace installs in a parent folder', async () => {
+    const site = join(root, 'apps', 'web')
+    await mkdir(join(site, 'src', 'app'), { recursive: true })
+    await writeFile(join(site, 'cms.config.json'), JSON.stringify({ plugins: ['@acme/lms'] }))
+    await install(root, '@acme/lms', { '.': './src/index.ts', './admin': './src/admin.tsx' })
+    await generate({ root: site })
+    expect(await readFile(join(site, 'src/cms/admin.generated.ts'), 'utf8')).toContain(
+      '  admin: [admin0],',
+    )
   })
 
   it('overwrites edits to a managed file, but keeps a file without the marker', async () => {

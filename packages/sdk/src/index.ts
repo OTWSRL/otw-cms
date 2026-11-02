@@ -1,4 +1,4 @@
-import type { PluginDefinition, User } from './types'
+import type { AdminDefinition, PluginContext, PluginDefinition, User } from './types'
 
 export type * from './types'
 export type { AdminIcon, AdminIconName } from './admin-icons'
@@ -10,6 +10,22 @@ export { HttpError } from './http-error'
 /** Identity helper for type inference. The kernel validates the definition when it loads. */
 export function definePlugin(definition: PluginDefinition): PluginDefinition {
   return definition
+}
+
+/**
+ * A plugin's admin entry, the default export of its package's `./admin` module: admin pages,
+ * actions, settings screens and admin slot fills, which only the admin loads.
+ *
+ *   import shop from './index'
+ *   export default defineAdmin(shop, (cms) => {
+ *     cms.admin.page({ name: 'orders', path: '/orders', ... })
+ *   })
+ */
+export function defineAdmin(
+  plugin: PluginDefinition,
+  setup: (cms: PluginContext) => void | Promise<void>,
+): AdminDefinition {
+  return { plugin, setup }
 }
 
 /*

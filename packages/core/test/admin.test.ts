@@ -1,4 +1,4 @@
-import { ActionError, ForbiddenError, type PluginContext, type PluginDefinition } from '@otw/sdk'
+import { ActionError, defineAdmin, ForbiddenError, type PluginContext } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, formPost, ORIGIN, plugin, redirectOf, signIn } from './helpers'
 
@@ -9,73 +9,76 @@ declare module '@otw/sdk' {
   }
 }
 
-function shopPlugin(log: string[] = []): PluginDefinition {
-  return plugin('shop', {
+/** The shop as the admin loads it: its main entry, with its roles, and its admin entry. */
+function shopSite(log: string[] = []) {
+  const shop = plugin('shop', {
     name: 'Shop',
     setup(cms) {
       cms.auth.capability('shop.manage', { label: 'Manage the shop', roles: ['shop_manager'] })
       cms.auth.role('shop_manager', { label: 'Shop manager', capabilities: ['core.access_admin'] })
       cms.auth.role('support', { label: 'Support', capabilities: ['core.access_admin'] })
-
-      cms.admin.page({
-        name: 'orders',
-        path: '/orders',
-        title: 'Orders',
-        capability: 'shop.manage',
-        menu: { label: 'Orders', order: 20 },
-        load: () => ['A-1'],
-        component: ({ data }) => data.join(','),
-      })
-      cms.admin.page({
-        name: 'products',
-        path: '/products',
-        title: 'Products',
-        capability: 'shop.manage',
-        menu: { label: 'Products', order: 10 },
-        component: () => 'products',
-      })
-      cms.admin.page({
-        name: 'order',
-        path: '/orders/:id',
-        capability: 'shop.manage',
-        load: ({ params }) => {
-          if (params.id === 'locked') throw new ForbiddenError()
-          return params.id === 'missing' ? null : params.id!
-        },
-        title: ({ data }) => `Order ${data}`,
-        component: ({ data }) => data,
-      })
-
-      cms.admin.action({
-        name: 'rename',
-        capability: 'shop.manage',
-        handler({ form, user }) {
-          const name = form.get('name')
-          if (!name) throw new ActionError('Name is required.')
-          log.push(`${user.email}:${String(name)}`)
-          const redirect = form.get('redirect')
-          return {
-            notice: `Renamed to ${String(name)}.`,
-            redirect: typeof redirect === 'string' ? redirect : undefined,
-          }
-        },
-      })
-      cms.admin.action({
-        name: 'lock',
-        capability: 'shop.manage',
-        handler: () => {
-          throw new ForbiddenError('That order is locked')
-        },
-      })
-      cms.admin.action({
-        name: 'crash',
-        capability: 'shop.manage',
-        handler: () => {
-          throw new Error('password=hunter2 in a driver error')
-        },
-      })
     },
   })
+  const admin = defineAdmin(shop, (cms) => {
+    cms.admin.page({
+      name: 'orders',
+      path: '/orders',
+      title: 'Orders',
+      capability: 'shop.manage',
+      menu: { label: 'Orders', order: 20 },
+      load: () => ['A-1'],
+      component: ({ data }) => data.join(','),
+    })
+    cms.admin.page({
+      name: 'products',
+      path: '/products',
+      title: 'Products',
+      capability: 'shop.manage',
+      menu: { label: 'Products', order: 10 },
+      component: () => 'products',
+    })
+    cms.admin.page({
+      name: 'order',
+      path: '/orders/:id',
+      capability: 'shop.manage',
+      load: ({ params }) => {
+        if (params.id === 'locked') throw new ForbiddenError()
+        return params.id === 'missing' ? null : params.id!
+      },
+      title: ({ data }) => `Order ${data}`,
+      component: ({ data }) => data,
+    })
+
+    cms.admin.action({
+      name: 'rename',
+      capability: 'shop.manage',
+      handler({ form, user }) {
+        const name = form.get('name')
+        if (!name) throw new ActionError('Name is required.')
+        log.push(`${user.email}:${String(name)}`)
+        const redirect = form.get('redirect')
+        return {
+          notice: `Renamed to ${String(name)}.`,
+          redirect: typeof redirect === 'string' ? redirect : undefined,
+        }
+      },
+    })
+    cms.admin.action({
+      name: 'lock',
+      capability: 'shop.manage',
+      handler: () => {
+        throw new ForbiddenError('That order is locked')
+      },
+    })
+    cms.admin.action({
+      name: 'crash',
+      capability: 'shop.manage',
+      handler: () => {
+        throw new Error('password=hunter2 in a driver error')
+      },
+    })
+  })
+  return { plugins: [shop], admin: [admin] }
 }
 
 const RENAME = '/api/p/shop/actions/rename'
@@ -83,7 +86,7 @@ const REFERER = { referer: `${ORIGIN}/admin/shop/products?page=2` }
 
 describe('admin pages', () => {
   it('resolves pages under /admin/{pluginId} for users with the capability', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const { user } = await signIn(kernel, 'shop_manager')
 
     const page = await kernel.resolveAdminPage('/admin/shop/orders/7', { tab: 'x' }, user)
@@ -108,7 +111,7 @@ describe('admin pages', () => {
   })
 
   it('forbids users without admin access or without the page capability', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     for (const role of ['customer', 'support']) {
       const { user } = await signIn(kernel, role)
       expect(await kernel.resolveAdminPage('/admin/shop/orders', {}, user)).toEqual({
@@ -118,7 +121,7 @@ describe('admin pages', () => {
   })
 
   it('builds the menu from pages the user may open, in order', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const admin = await signIn(kernel)
     const dashboard = {
       id: 'dashboard',
@@ -182,14 +185,18 @@ describe('admin pages', () => {
         component: () => null,
       })
     const svg = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg"/>')}`
+    const shop = shopSite()
+    const drawn = plugin('drawn', { icon: svg as `data:image/svg+xml;base64,${string}` })
+    // A raw SVG string could break out of CSS url(); only base64 is accepted.
+    const raw = plugin('raw', { icon: 'data:image/svg+xml;base64,"x' as never })
     const kernel = await bootKernel({
       plugins: [
-        { ...shopPlugin(), icon: 'cart' },
-        plugin('drawn', { icon: svg as `data:image/svg+xml;base64,${string}`, setup: menuPage }),
-        // A raw SVG string could break out of CSS url(); only base64 is accepted.
-        plugin('raw', { icon: 'data:image/svg+xml;base64,"x' as never, setup: menuPage }),
+        { ...shop.plugins[0]!, icon: 'cart' },
+        drawn,
+        raw,
         plugin('typo', { icon: 'kart' as never }),
       ],
+      admin: [...shop.admin, defineAdmin(drawn, menuPage), defineAdmin(raw, menuPage)],
     })
     const icons = kernel.adminMenu((await signIn(kernel)).user).map(({ id, icon }) => [id, icon])
     expect(icons).toEqual([
@@ -218,16 +225,18 @@ describe('admin pages', () => {
     const reports = plugin('reports', {
       name: 'Reports',
       optional: { shop: '^1.0.0', forum: '^1.0.0' },
-      setup(cms) {
-        cms.admin.page(page('sales', 'shop', 15))
-        cms.admin.page(page('signups', 'users'))
-        // The forum is installed but inactive; "nowhere" is a typo.
-        cms.admin.page(page('threads', 'forum'))
-        cms.admin.page(page('lost', 'nowhere'))
-      },
     })
+    const reportsAdmin = defineAdmin(reports, (cms) => {
+      cms.admin.page(page('sales', 'shop', 15))
+      cms.admin.page(page('signups', 'users'))
+      // The forum is installed but inactive; "nowhere" is a typo.
+      cms.admin.page(page('threads', 'forum'))
+      cms.admin.page(page('lost', 'nowhere'))
+    })
+    const shop = shopSite()
     const kernel = await bootKernel({
-      plugins: [shopPlugin(), reports, plugin('forum')],
+      plugins: [...shop.plugins, reports, plugin('forum')],
+      admin: [...shop.admin, reportsAdmin],
       active: ['shop', 'reports'],
     })
     const sections = kernel.adminMenu((await signIn(kernel)).user)
@@ -251,32 +260,32 @@ describe('admin pages', () => {
   })
 
   it('rejects menu pages with parameters and warns about undeclared capabilities', async () => {
-    const withParams = plugin('bad', {
-      setup: (cms) =>
-        cms.admin.page({
-          name: 'item',
-          path: '/items/:id',
-          title: 'Item',
-          capability: 'core.access_admin',
-          menu: { label: 'Item' },
-          component: () => null,
-        }),
-    })
-    await expect(bootKernel({ plugins: [withParams] })).rejects.toThrow(
+    const bad = plugin('bad')
+    const withParams = defineAdmin(bad, (cms) =>
+      cms.admin.page({
+        name: 'item',
+        path: '/items/:id',
+        title: 'Item',
+        capability: 'core.access_admin',
+        menu: { label: 'Item' },
+        component: () => null,
+      }),
+    )
+    await expect(bootKernel({ plugins: [bad], admin: [withParams] })).rejects.toThrow(
       'Admin page "bad.item" has parameters, so it cannot be in the menu',
     )
 
-    const undeclared = plugin('shop', {
-      setup: (cms) =>
-        cms.admin.page({
-          name: 'secret',
-          path: '/secret',
-          title: 'Secret',
-          capability: 'shop.undeclared',
-          component: () => null,
-        }),
-    })
-    const kernel = await bootKernel({ plugins: [undeclared] })
+    const shop = plugin('shop')
+    const undeclared = defineAdmin(shop, (cms) =>
+      cms.admin.page({
+        name: 'secret',
+        path: '/secret',
+        title: 'Secret',
+        capability: 'shop.undeclared',
+        component: () => null,
+      }),
+    )
+    const kernel = await bootKernel({ plugins: [shop], admin: [undeclared] })
     expect(kernel.warnings).toContain(
       'Admin page "shop.secret" requires undeclared capability "shop.undeclared"; only administrators can use it',
     )
@@ -286,7 +295,7 @@ describe('admin pages', () => {
 describe('admin actions', () => {
   it('runs the handler as the signed-in user and redirects back with a signed notice', async () => {
     const log: string[] = []
-    const kernel = await bootKernel({ plugins: [shopPlugin(log)] })
+    const kernel = await bootKernel(shopSite(log))
     const { user, cookie } = await signIn(kernel, 'shop_manager')
 
     const response = await kernel.handleApi(
@@ -301,7 +310,7 @@ describe('admin actions', () => {
   })
 
   it('follows same-site redirects only', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const { cookie } = await signIn(kernel)
     const post = (redirect: string) =>
       kernel.handleApi(formPost(RENAME, { name: 'x', redirect }, { cookie, ...REFERER }))
@@ -318,7 +327,7 @@ describe('admin actions', () => {
   })
 
   it('sends the user back with the message of an ActionError', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const { cookie } = await signIn(kernel)
     const response = await kernel.handleApi(formPost(RENAME, {}, { cookie, ...REFERER }))
     expect(redirectOf(kernel, response)).toEqual({
@@ -331,7 +340,7 @@ describe('admin actions', () => {
   it('logs unexpected errors and shows a generic message', async () => {
     const logger = { entries: [] as { message: string; context?: Record<string, unknown> }[] }
     const kernel = await bootKernel({
-      plugins: [shopPlugin()],
+      ...shopSite(),
       logger: {
         debug: () => {},
         info: () => {},
@@ -352,7 +361,7 @@ describe('admin actions', () => {
   })
 
   it('redirects signed-out users to the login page and back afterwards', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const response = await kernel.handleApi(formPost(RENAME, { name: 'x' }, REFERER))
     expect(redirectOf(kernel, response)).toMatchObject({
       status: 303,
@@ -361,7 +370,7 @@ describe('admin actions', () => {
   })
 
   it('answers 403 when the handler throws ForbiddenError', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const { cookie } = await signIn(kernel, 'shop_manager')
     const response = await kernel.handleApi(formPost('/api/p/shop/actions/lock', {}, { cookie }))
     expect(response.status).toBe(403)
@@ -369,7 +378,7 @@ describe('admin actions', () => {
   })
 
   it('refuses users without the capability', async () => {
-    const kernel = await bootKernel({ plugins: [shopPlugin()] })
+    const kernel = await bootKernel(shopSite())
     const { cookie } = await signIn(kernel, 'support')
     const response = await kernel.handleApi(formPost(RENAME, { name: 'x' }, { cookie }))
     expect(response.status).toBe(403)
@@ -377,7 +386,7 @@ describe('admin actions', () => {
 
   it('requires a same-site Origin and a form body', async () => {
     const kernel = await bootKernel({
-      plugins: [shopPlugin()],
+      ...shopSite(),
       allowedOrigins: ['https://admin.cms.test'],
     })
     const { cookie } = await signIn(kernel)

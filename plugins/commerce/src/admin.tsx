@@ -10,9 +10,10 @@ import {
   Views,
 } from '@otw/admin-ui'
 import type { PluginContext, SearchParams } from '@otw/sdk'
-import { ActionError } from '@otw/sdk'
+import { ActionError, defineAdmin } from '@otw/sdk'
 import type { ReactNode } from 'react'
 import { CommerceError } from './errors'
+import commerce from './index'
 import { currencyDigits, toMoneyInput } from './totals'
 import type { CommerceService, Money, Order, OrderStatus, OrderSummary, Product } from './types'
 
@@ -45,6 +46,7 @@ async function asActionError<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** The orders list's view from its query string: a known status or none, and a page from 1. */
 export function ordersQuery(searchParams: SearchParams) {
   const status = first(searchParams.status)
   const page = Number.parseInt(first(searchParams.page) ?? '1', 10)
@@ -54,14 +56,12 @@ export function ordersQuery(searchParams: SearchParams) {
   }
 }
 
-export function registerAdmin(
-  cms: PluginContext,
-  commerce: CommerceService,
-  manualGatewayId: string,
-): void {
+/** Commerce's admin entry: its screens, actions and settings pages, which only the admin loads. */
+export default defineAdmin(commerce, (cms) => registerAdmin(cms, cms.services.get('commerce')))
+
+function registerAdmin(cms: PluginContext, commerce: CommerceService): void {
   const format = commerce.formatMoney
 
-  registerCapabilities(cms, manualGatewayId)
   registerSettings(cms)
   registerDashboard(cms, commerce)
 
@@ -230,30 +230,6 @@ export function registerAdmin(
       const { order, changed } = await asActionError(() => commerce.cancelOrder(found.id))
       return { notice: changed ? `Order #${order.number} cancelled.` : 'Already cancelled.' }
     },
-  })
-}
-
-function registerCapabilities(cms: PluginContext, manualGatewayId: string): void {
-  cms.auth.role('shop_manager', { label: 'Shop manager', capabilities: ['core.access_admin'] })
-  cms.auth.capability('commerce.manage_products', {
-    label: 'Manage products',
-    roles: ['shop_manager'],
-  })
-  cms.auth.capability('commerce.manage_orders', { label: 'Manage orders', roles: ['shop_manager'] })
-  cms.auth.capability('commerce.manage_settings', {
-    label: 'Change shop settings',
-    roles: ['shop_manager'],
-  })
-  cms.auth.metaCapability('commerce.mark_order_paid', {
-    label: 'Mark an order as paid',
-    map: (_user, order) =>
-      order.status === 'pending' && order.gateway === manualGatewayId
-        ? ['commerce.manage_orders']
-        : false,
-  })
-  cms.auth.metaCapability('commerce.cancel_order', {
-    label: 'Cancel an order',
-    map: (_user, order) => (order.status === 'pending' ? ['commerce.manage_orders'] : false),
   })
 }
 

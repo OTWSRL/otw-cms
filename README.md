@@ -49,7 +49,9 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
 - **A site owns** `cms.config.json`, `next.config.ts` (wrapped in `withCms()`), its storefront
   layout and styles (`src/app/(site)/layout.tsx`, `globals.css`), `.env` and its own routes.
 - **The CMS owns** the files `cms generate` writes before every `dev` and `build`: the site
-  module (`src/cms/site.generated.ts`, the installed plugins), the admin's root layout and its one
+  module (`src/cms/site.generated.ts`, the installed plugins), the admin's
+  (`src/cms/admin.generated.ts`, the plugins with their admin entries, imported only by the admin
+  and the API, so admin code never reaches visitors), the admin's root layout and its one
   catch-all page with 403 and 404 pages, the API route, the storefront's home page and
   catch-all, and `instrumentation.ts`, which Next.js loads to record requests. Each starts with an `@generated` line; delete it and the file is the site's, never
   overwritten. The admin is one route, so new core screens arrive with the package. For its own
@@ -140,7 +142,8 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
 ## Writing a plugin
 
 ```tsx
-import { ActionError, definePlugin } from '@otw/sdk'
+// src/index.tsx: the main entry, which the site's pages, the API and the admin all load
+import { definePlugin } from '@otw/sdk'
 import type {} from '@otw/plugin-commerce' // loads commerce's extension-point types
 
 export default definePlugin({
@@ -178,7 +181,17 @@ export default definePlugin({
       map: (user, course) =>
         course.authorId === user.id ? ['lms.manage_courses'] : ['lms.manage_others_courses'],
     })
+  },
+})
+```
 
+```tsx
+// src/admin.tsx: the admin entry, the package's "./admin" export, which only the admin and the
+// API load: Next.js sends every client component a page imports to its visitors.
+import { ActionError, defineAdmin } from '@otw/sdk'
+import lms from './index'
+
+export default defineAdmin(lms, (cms) => {
     cms.admin.page({
       name: 'courses',
       path: '/courses', // served at /admin/lms/courses
@@ -205,7 +218,7 @@ export default definePlugin({
     })
     cms.admin.page({ ..., menu: { label: 'Course sales', parent: 'commerce' } }) // another menu
 
-    // Settings stay declared above; these say where they show.
+    // Settings stay declared in the definition; these say where they show.
     cms.admin.settingsPage({ name: 'settings', path: '/settings', title: 'Course settings' })
     cms.admin.settingsSection({
       name: 'certificates',
@@ -214,7 +227,8 @@ export default definePlugin({
       fields: ['lms.certificates'],
     })
 
-    // Fill other plugins' slots; offer your own with declaration merging and cms.slots.get().
+    // Fill admin slots here and site slots in setup(); offer your own with declaration merging
+    // and cms.slots.get().
     cms.slots.fill('admin.dashboard', { component: ({ user }) => <EnrollmentsWidget user={user} /> })
     cms.admin.action({
       name: 'publish',
@@ -225,11 +239,16 @@ export default definePlugin({
         return { notice: `${course.title} is live.` }
       },
     })
-  },
 })
 ```
 
 Rules the kernel enforces or relies on:
+
+- **Admin code goes in the admin entry.** `cms.admin.*` registrations and fills for admin slots
+  (`admin.*`, `{plugin}.admin.*`) belong in `defineAdmin()`; roles and capabilities in `setup()`,
+  so every part of the site agrees on them. The kernel refuses either in the wrong place.
+  `cms.admin.url('lms.courses')` works where the admin is loaded; site code links by path,
+  `cms.admin.url('/courses')`, like WordPress's `admin_url()`.
 
 - **Namespace everything** with your plugin id: tables (`lms_*`), hooks (`lms.course.completed`),
   registries and settings.

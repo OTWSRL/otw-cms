@@ -1,4 +1,5 @@
 import commerce, { type Order } from '@otw/plugin-commerce'
+import commerceAdmin from '@otw/plugin-commerce/admin'
 import { definePlugin, type SettingsValues } from '@otw/sdk'
 import { createTestKernel, type TestKernel } from '@otw/testing'
 import type { ReactElement, ReactNode } from 'react'
@@ -6,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import Stripe from 'stripe'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStripePlugin, type StripeClient } from '../src'
+import { createStripeAdmin } from '../src/admin'
 
 const WEBHOOK_SECRET = 'whsec_test_secret'
 const WEBHOOK = '/api/p/commerce-stripe/webhook'
@@ -42,6 +44,7 @@ async function bootStripe(client = fakeStripe().client, settings: SettingsValues
   })
   harness = await createTestKernel({
     plugins: [commerce, createStripePlugin({ client }), listener],
+    admin: [commerceAdmin, createStripeAdmin({ client })],
     settings: { 'commerce-stripe.webhookSecret': WEBHOOK_SECRET, ...settings },
   })
   const service = harness.kernel.service('commerce')
@@ -255,6 +258,7 @@ describe('admin', () => {
   it('tells the people who can fix it which keys are missing', async () => {
     harness = await createTestKernel({
       plugins: [commerce, createStripePlugin()],
+      admin: [commerceAdmin, createStripeAdmin()],
       settings: { 'commerce-stripe.webhookSecret': WEBHOOK_SECRET },
     })
     const [notice] = harness.kernel.slot('admin.notices')
@@ -264,6 +268,11 @@ describe('admin', () => {
     )
     const manager = await harness.signIn('shop_manager')
     expect(notice!({ user: manager.user })).toBeNull()
+  })
+
+  it('says nothing about the secret key when the plugin was given a client', async () => {
+    const { harness } = await bootStripe()
+    expect(harness.kernel.slot('admin.notices')).toEqual([])
   })
 
   it('shows the Checkout session on Stripe orders in the admin', async () => {

@@ -3,6 +3,7 @@ import { definePlugin, type PluginDefinition } from '@otw/sdk'
 import { createTestKernel, type TestKernel } from '@otw/testing'
 import { afterEach } from 'vitest'
 import commerce, { type Order, type PaymentGateway, type PaymentUrls } from '../src'
+import commerceAdmin from '../src/admin'
 
 let open: TestKernel[] = []
 
@@ -15,7 +16,13 @@ export async function bootShop(
   extra: PluginDefinition[] = [],
   options: Partial<Omit<KernelOptions, 'db' | 'logger' | 'plugins'>> = {},
 ) {
-  const harness = await createTestKernel({ plugins: [commerce, ...extra], ...options })
+  // As the admin boots it: the admin entries too, for the tests of its screens and actions.
+  const { admin = [], ...rest } = options
+  const harness = await createTestKernel({
+    plugins: [commerce, ...extra],
+    admin: [commerceAdmin, ...admin],
+    ...rest,
+  })
   open.push(harness)
   const service = harness.kernel.service('commerce')
   const notebook = await service.createProduct({ slug: 'notebook', title: 'Notebook', price: 1200 })

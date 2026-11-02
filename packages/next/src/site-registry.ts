@@ -1,10 +1,16 @@
 import type { Brand } from '@otw/core'
-import type { PluginDefinition } from '@otw/sdk'
+import type { AdminDefinition, PluginDefinition } from '@otw/sdk'
 
 /** What a site gives the CMS. `cms generate` writes it to `src/cms/site.generated.ts`. */
 export interface Site {
   /** The installed plugins, in `cms.config.json` order. */
   plugins: readonly PluginDefinition[]
+  /**
+   * The plugins' admin entries. Only the admin's site module, `src/cms/admin.generated.ts`, has
+   * them: the admin and the API routes import it, the site's pages don't, so admin components
+   * never reach visitors.
+   */
+  admin?: readonly AdminDefinition[]
   /** Each plugin's npm package, in the same order, for matching update checks to plugins. */
   packages?: readonly string[]
   /** New paths for plugin pages, by qualified name, from `cms.config.json`. */

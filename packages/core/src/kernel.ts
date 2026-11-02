@@ -1,6 +1,7 @@
 import type {
   ActionName,
   Actions,
+  AdminDefinition,
   AdminPage,
   ApiRoute,
   CapabilityArgs,
@@ -72,7 +73,7 @@ import {
 } from './plugin-state'
 import { RegistryStore } from './registries'
 import { resolvePlugins, type Resolution, type SkippedPlugin } from './resolver'
-import { paramNames, parsePattern, Router } from './router'
+import { fillPattern, paramNames, parsePattern, Router } from './router'
 import { ServiceStore } from './services'
 import {
   declaredSettings,
@@ -96,6 +97,11 @@ import { CORE_VERSION } from './version'
 export interface KernelOptions {
   /** Every installed plugin (from the generated import map). */
   plugins: readonly PluginDefinition[]
+  /**
+   * The plugins' admin entries, where the app shows the admin (its screens and API routes).
+   * Leave it out where visitors are, so admin components never reach them.
+   */
+  admin?: readonly AdminDefinition[]
   /**
    * Pins the active plugins and turns off activation in the admin (tests, or sites that manage
    * plugins in configuration). Without it, activation lives in the database; on first boot every
@@ -236,6 +242,8 @@ interface Prepared {
   configured: readonly string[]
   stored: ReadonlyMap<string, unknown>
   databaseUpdates: readonly string[]
+  /** The admin entries by plugin id; empty where the admin isn't loaded. */
+  adminEntries: ReadonlyMap<string, AdminDefinition>
 }
 
 /** Used by trial boots, which test values before they are stored. */
@@ -277,6 +285,7 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
     configured: options.active ?? (await loadActiveIds(db.root, options.plugins)),
     stored: start.stored ?? (await loadStoredSettings(db.root)),
     databaseUpdates: [],
+    adminEntries: adminEntriesByPlugin(options),
   }
   const failed = new Map<string, string>()
   if (atDeploy) {
@@ -310,6 +319,27 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
       failed.set(error.pluginId, error.message)
     }
   }
+}
+
+/** The admin entries by plugin id, each for an installed plugin, one per plugin. */
+function adminEntriesByPlugin({
+  plugins,
+  admin = [],
+}: KernelOptions): ReadonlyMap<string, AdminDefinition> {
+  const installed = new Set(plugins.map((plugin) => plugin.id))
+  const entries = new Map<string, AdminDefinition>()
+  for (const entry of admin) {
+    const id = entry.plugin.id
+    if (!installed.has(id)) throw new Error(`Admin entry for "${id}", which isn't installed`)
+    if (entries.has(id)) throw new Error(`Plugin "${id}" has two admin entries`)
+    entries.set(id, entry)
+  }
+  return entries
+}
+
+/** Admin slots: the core's (`admin.*`) and plugins' (`*.admin.*`), which only the admin shows. */
+function isAdminSlot(name: string): boolean {
+  return name.startsWith('admin.') || name.includes('.admin.')
 }
 
 async function boot(
@@ -615,7 +645,20 @@ async function boot(
     doAction: (name, payload) => stores.hooks.doAction(name, payload),
   })
 
-  const contextFor = (plugin: PluginDefinition): PluginContext => {
+  // The main entry (setup) runs everywhere, the site included; the admin entry only in the admin.
+  const contextFor = (plugin: PluginDefinition, entry: 'setup' | 'admin'): PluginContext => {
+    const inAdminEntry = (what: string) => {
+      if (entry === 'admin') return
+      throw new Error(
+        `Register ${what} in the plugin's admin entry (defineAdmin), not in setup(): setup() also runs for the site, so its code would reach visitors`,
+      )
+    }
+    const inSetup = (what: string) => {
+      if (entry === 'setup') return
+      throw new Error(
+        `Change roles and capabilities (${what}) in setup(), so every part of the site agrees on them: the admin entry is loaded only where the admin is`,
+      )
+    }
     const declared = new Set([
       ...Object.keys(plugin.requires ?? {}),
       ...Object.keys(plugin.optional ?? {}),
@@ -642,8 +685,19 @@ async function boot(
         apiUrl: (path) => apiPath(plugin.id, path),
       },
       slots: {
-        fill: (name, fill) =>
-          stores.slots.fill(plugin.id, name, fill.component as SlotComponent, fill.priority),
+        fill: (name, fill) => {
+          if (isAdminSlot(name) && entry === 'setup') {
+            throw new Error(
+              `Fill the admin slot "${name}" in the plugin's admin entry (defineAdmin), not in setup(): setup() also runs for the site, so its code would reach visitors`,
+            )
+          }
+          if (!isAdminSlot(name) && entry === 'admin') {
+            throw new Error(
+              `Fill the site slot "${name}" in setup(): the admin entry isn't loaded where visitors are, so the fill would never show there`,
+            )
+          }
+          stores.slots.fill(plugin.id, name, fill.component as SlotComponent, fill.priority)
+        },
         get: (name) => stores.slots.get(name).map((fill) => fill.component) as never,
       },
       settings: {
@@ -656,23 +710,51 @@ async function boot(
         },
       },
       auth: {
-        role: (id, definition) => stores.capabilities.role(plugin.id, id, definition),
-        capability: (name, definition) =>
-          stores.capabilities.capability(plugin.id, name, definition),
-        grant: (role, capabilities) => stores.capabilities.grant(plugin.id, role, capabilities),
-        revoke: (role, capabilities) => stores.capabilities.revoke(plugin.id, role, capabilities),
-        metaCapability: (name, definition) =>
-          stores.capabilities.metaCapability(plugin.id, name, definition as never),
-        extendCapability: (name, extension) =>
-          stores.capabilities.extendCapability(plugin.id, name, extension as never),
+        role: (id, definition) => {
+          inSetup(`role "${id}"`)
+          stores.capabilities.role(plugin.id, id, definition)
+        },
+        capability: (name, definition) => {
+          inSetup(`capability "${name}"`)
+          stores.capabilities.capability(plugin.id, name, definition)
+        },
+        grant: (role, capabilities) => {
+          inSetup(`granting "${role}"`)
+          stores.capabilities.grant(plugin.id, role, capabilities)
+        },
+        revoke: (role, capabilities) => {
+          inSetup(`revoking from "${role}"`)
+          stores.capabilities.revoke(plugin.id, role, capabilities)
+        },
+        metaCapability: (name, definition) => {
+          inSetup(`meta capability "${name}"`)
+          stores.capabilities.metaCapability(plugin.id, name, definition as never)
+        },
+        extendCapability: (name, extension) => {
+          inSetup(`extending "${name}"`)
+          stores.capabilities.extendCapability(plugin.id, name, extension as never)
+        },
         can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
       },
       admin: {
-        page: (page) => registerAdminPage(plugin.id, page as AdminPage<unknown>),
-        settingsPage: (page) => registerSettingsPage(plugin.id, page),
-        settingsSection: (section) => stores.settingsLayout.section(plugin.id, section),
-        settingsFields: (fields) => stores.settingsLayout.fields(plugin.id, fields),
+        page: (page) => {
+          inAdminEntry(`admin page "${plugin.id}.${page.name}"`)
+          registerAdminPage(plugin.id, page as AdminPage<unknown>)
+        },
+        settingsPage: (page) => {
+          inAdminEntry(`settings page "${plugin.id}.${page.name}"`)
+          registerSettingsPage(plugin.id, page)
+        },
+        settingsSection: (section) => {
+          inAdminEntry(`settings section "${plugin.id}.${section.name}"`)
+          stores.settingsLayout.section(plugin.id, section)
+        },
+        settingsFields: (fields) => {
+          inAdminEntry(`settings fields for "${fields.section}"`)
+          stores.settingsLayout.fields(plugin.id, fields)
+        },
         action: (action) => {
+          inAdminEntry(`admin action "${plugin.id}.${action.name}"`)
           requiredCapabilities.push({
             what: `Admin action "${plugin.id}.${action.name}"`,
             capability: action.capability,
@@ -684,7 +766,21 @@ async function boot(
             handler: ({ user, form }) => action.handler({ user: user!, form }),
           })
         },
-        url: (name, params) => stores.adminPages.url(name, params),
+        url: (name, params = {}) => {
+          if (name.startsWith('/')) {
+            return fillPattern(
+              parsePattern(adminPath(plugin.id, name)),
+              params,
+              `Admin path "${name}"`,
+            )
+          }
+          if (!options.admin && !stores.adminPages.get(name)) {
+            throw new Error(
+              `Admin page names are known only where the admin is loaded ("${name}"). Here, link to the page by its path: cms.admin.url('/path/of/the/page')`,
+            )
+          }
+          return stores.adminPages.url(name, params)
+        },
         actionUrl: (name) => actionPath(plugin.id, name),
       },
       traces: {
@@ -721,10 +817,25 @@ async function boot(
     settingUp = plugin.id
     try {
       await traced(`setup ${plugin.id}`, { 'otw.kind': 'setup', 'otw.plugin': plugin.id }, () =>
-        plugin.setup?.(contextFor(plugin)),
+        plugin.setup?.(contextFor(plugin, 'setup')),
       )
     } catch (error) {
       throw new PluginBootError(plugin.id, 'setup', error)
+    }
+  }
+  // After every setup(), so an admin entry can use any plugin's services and slots.
+  for (const plugin of resolution.order) {
+    const admin = prepared.adminEntries.get(plugin.id)
+    if (!admin) continue
+    settingUp = plugin.id
+    try {
+      await traced(
+        `admin setup ${plugin.id}`,
+        { 'otw.kind': 'setup', 'otw.plugin': plugin.id },
+        () => admin.setup(contextFor(plugin, 'admin')),
+      )
+    } catch (error) {
+      throw new PluginBootError(plugin.id, 'admin setup', error)
     }
   }
   settingUp = undefined

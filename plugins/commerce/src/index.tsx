@@ -1,5 +1,5 @@
 import { definePlugin } from '@otw/sdk'
-import { registerAdmin } from './admin'
+import { registerCapabilities } from './capabilities'
 import { OrderReceivedPage, ProductPage, ShopPage } from './components'
 import { migrations } from './migrations'
 import { CHECKOUT_ERROR_PARAM, createCheckoutHandler } from './routes/checkout'
@@ -108,7 +108,7 @@ export default definePlugin({
       component: () => <a href={cms.routes.url('commerce.shop')}>Shop</a>,
     })
 
-    registerAdmin(cms, commerce, manualGateway.id)
+    registerCapabilities(cms, manualGateway.id)
   },
 })
 

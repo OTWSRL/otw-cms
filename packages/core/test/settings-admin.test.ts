@@ -1,4 +1,4 @@
-import type { PluginDefinition, User } from '@otw/sdk'
+import { defineAdmin, type PluginDefinition, type User } from '@otw/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type Kernel, type KernelOptions } from '../src/kernel'
 import { createDb, formPost, memoryLogger, plugin, redirectOf, signIn } from './helpers'
@@ -46,19 +46,21 @@ const shop = plugin('shop', {
     if (cms.settings.get('shop.currency') === 'XXX') throw new Error('XXX is not a real currency')
     cms.auth.capability('shop.manage_settings', { label: 'Shop settings', roles: ['shop_manager'] })
     cms.auth.role('shop_manager', { label: 'Shop manager', capabilities: ['core.access_admin'] })
-    cms.admin.settingsPage({
-      name: 'store',
-      path: '/settings',
-      title: 'Store',
-      capability: 'shop.manage_settings',
-    })
-    cms.admin.settingsSection({
-      name: 'checkout',
-      page: 'shop.store',
-      title: 'Checkout',
-      fields: ['shop.currency', 'shop.guests'],
-    })
   },
+})
+const shopAdmin = defineAdmin(shop, (cms) => {
+  cms.admin.settingsPage({
+    name: 'store',
+    path: '/settings',
+    title: 'Store',
+    capability: 'shop.manage_settings',
+  })
+  cms.admin.settingsSection({
+    name: 'checkout',
+    page: 'shop.store',
+    title: 'Checkout',
+    fields: ['shop.currency', 'shop.guests'],
+  })
 })
 
 /** Adds a section to the shop's page, like a payment gateway on WooCommerce's Payments tab. */
@@ -69,32 +71,34 @@ const gateway = plugin('gateway', {
     'gateway.enabled': { type: 'boolean', label: 'Accept payments', default: true },
     'gateway.label': { type: 'text', label: 'Label at checkout', default: 'Card' },
   },
-  setup(cms) {
-    cms.admin.settingsSection({
-      name: 'gateway',
-      page: 'shop.store',
-      title: 'Gateway',
-      order: 5,
-      fields: ['gateway.enabled', 'gateway.label'],
-    })
-  },
+})
+const gatewayAdmin = defineAdmin(gateway, (cms) => {
+  cms.admin.settingsSection({
+    name: 'gateway',
+    page: 'shop.store',
+    title: 'Gateway',
+    order: 5,
+    fields: ['gateway.enabled', 'gateway.label'],
+  })
 })
 
 /** Adds one field to core's General › Site, like add_settings_field() on 'general'. */
 const seo = plugin('seo', {
   name: 'SEO',
   settings: { 'seo.separator': { type: 'text', label: 'Title separator', default: '·' } },
-  setup(cms) {
-    cms.admin.settingsFields({ section: 'core.site', fields: ['seo.separator'] })
-  },
+})
+const seoAdmin = defineAdmin(seo, (cms) => {
+  cms.admin.settingsFields({ section: 'core.site', fields: ['seo.separator'] })
 })
 
+/** The shop, gateway and SEO plugins with their admin entries; tests that swap plugins name theirs. */
 function site(extra: Partial<KernelOptions> = {}) {
   const db = createDb()
   return () =>
     createKernel({
       db,
       plugins: [shop, gateway, seo],
+      admin: [shopAdmin, gatewayAdmin, seoAdmin],
       logger: memoryLogger(),
       strict: true,
       passwordHashing: 'fast',
@@ -119,7 +123,11 @@ const layout = (kernel: Kernel, key: string, user: User) =>
 
 describe('settings pages', () => {
   it('gives a plugin that only declares settings its own page under Settings', async () => {
-    const kernel = await site({ plugins: [plainShop], env: { SHOP_API_KEY: 'sk_live_secret' } })()
+    const kernel = await site({
+      plugins: [plainShop],
+      admin: [],
+      env: { SHOP_API_KEY: 'sk_live_secret' },
+    })()
     const { user } = await signIn(kernel)
 
     const page = view(kernel, 'shop.settings', user)
@@ -174,22 +182,22 @@ describe('settings pages', () => {
         'badges.enabled': { type: 'boolean', label: 'Award badges' },
         'badges.title': { type: 'text', label: 'Badge title' },
       },
-      setup(cms) {
-        cms.admin.settingsSection({
-          name: 'forum',
-          page: 'forum.settings',
-          title: 'Forum badges',
-          fields: ['badges.enabled'],
-        })
-        cms.admin.settingsSection({
-          name: 'typo',
-          page: 'shop.stor',
-          title: 'Shop badges',
-          fields: ['badges.title'],
-        })
-      },
     })
-    const kernel = await site({ plugins: [shop, badges] })()
+    const badgesAdmin = defineAdmin(badges, (cms) => {
+      cms.admin.settingsSection({
+        name: 'forum',
+        page: 'forum.settings',
+        title: 'Forum badges',
+        fields: ['badges.enabled'],
+      })
+      cms.admin.settingsSection({
+        name: 'typo',
+        page: 'shop.stor',
+        title: 'Shop badges',
+        fields: ['badges.title'],
+      })
+    })
+    const kernel = await site({ plugins: [shop, badges], admin: [shopAdmin, badgesAdmin] })()
     const { user } = await signIn(kernel)
 
     expect(layout(kernel, 'badges.settings', user)).toEqual([
@@ -203,29 +211,25 @@ describe('settings pages', () => {
   })
 
   it('lets a plugin place only its own settings, once', async () => {
-    const thief = plugin('thief', {
-      requires: { shop: '^1.0.0' },
-      setup(cms) {
-        cms.admin.settingsFields({ section: 'shop.checkout', fields: ['shop.apiKey'] })
-      },
+    const thief = plugin('thief', { requires: { shop: '^1.0.0' } })
+    const thiefAdmin = defineAdmin(thief, (cms) => {
+      cms.admin.settingsFields({ section: 'shop.checkout', fields: ['shop.apiKey'] })
     })
-    await expect(site({ plugins: [shop, thief] })()).rejects.toThrow(
-      'Plugin "thief" can only place its own settings, not "shop.apiKey"',
-    )
+    await expect(
+      site({ plugins: [shop, thief], admin: [shopAdmin, thiefAdmin] })(),
+    ).rejects.toThrow('Plugin "thief" can only place its own settings, not "shop.apiKey"')
 
-    const twice = plugin('shop', {
-      settings: shopSettings,
-      setup(cms) {
-        cms.admin.settingsSection({
-          name: 'a',
-          page: 'core.general',
-          title: 'A',
-          fields: ['shop.currency'],
-        })
-        cms.admin.settingsFields({ section: 'core.site', fields: ['shop.currency'] })
-      },
+    const twice = plugin('shop', { settings: shopSettings })
+    const twiceAdmin = defineAdmin(twice, (cms) => {
+      cms.admin.settingsSection({
+        name: 'a',
+        page: 'core.general',
+        title: 'A',
+        fields: ['shop.currency'],
+      })
+      cms.admin.settingsFields({ section: 'core.site', fields: ['shop.currency'] })
     })
-    await expect(site({ plugins: [twice] })()).rejects.toThrow(
+    await expect(site({ plugins: [twice], admin: [twiceAdmin] })()).rejects.toThrow(
       'Setting "shop.currency" is already placed in "shop.a"',
     )
   })
@@ -351,6 +355,7 @@ describe('saving settings pages', () => {
     })
     const boot = site({
       plugins: [counted('shop', shop), watcher, counted('extra'), counted('bystander')],
+      admin: [shopAdmin],
     })
     const kernel = await boot()
     const { cookie } = await signIn(kernel)
@@ -365,6 +370,7 @@ describe('saving settings pages', () => {
     let setups = 0
     const kernel = await site({
       plugins: [{ ...shop, setup: (cms) => ((setups += 1), shop.setup!(cms)) }],
+      admin: [shopAdmin],
     })()
     const { cookie } = await signIn(kernel)
 
@@ -391,7 +397,7 @@ describe('saving settings pages', () => {
         cms.services.provide('ledger.books', { currency: () => cms.settings.get('shop.currency') })
       },
     })
-    const kernel = await site({ plugins: [shop, ledger, reporter] })()
+    const kernel = await site({ plugins: [shop, ledger, reporter], admin: [shopAdmin] })()
     const { cookie } = await signIn(kernel)
     const response = await kernel.handleApi(save('shop.store', { 'shop.currency': 'JPY' }, cookie))
     expect(redirectOf(kernel, response).flash).toEqual({
@@ -406,7 +412,7 @@ describe('saving settings pages', () => {
     const noisy = plugin('noisy', {
       setup: (cms) => cms.logger.warn('Not configured yet'),
     })
-    const kernel = await site({ plugins: [shop, noisy], logger })()
+    const kernel = await site({ plugins: [shop, noisy], admin: [shopAdmin], logger })()
     const { cookie } = await signIn(kernel)
     const warnings = () => logger.entries.filter((entry) => entry.level === 'warn').length
     expect(warnings()).toBe(1)
@@ -435,7 +441,7 @@ describe('saving settings pages', () => {
     const lockedOnly = plugin('shop', {
       settings: { 'shop.apiKey': shopSettings['shop.apiKey'] },
     }) satisfies PluginDefinition
-    const kernel = await site({ plugins: [lockedOnly] })()
+    const kernel = await site({ plugins: [lockedOnly], admin: [] })()
     const { cookie } = await signIn(kernel)
     const flash = async (page: string) =>
       redirectOf(kernel, await kernel.handleApi(save(page, {}, cookie))).flash

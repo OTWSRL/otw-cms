@@ -34,6 +34,23 @@ export function parsePattern(pattern: string): Segment[] {
     })
 }
 
+/** A pattern's path with its parameters filled in. `what` names the route in errors. */
+export function fillPattern(
+  segments: readonly Segment[],
+  params: Record<string, string>,
+  what: string,
+): string {
+  const parts = segments.map((segment) => {
+    if (segment.kind === 'static') return segment.value
+    const value = params[segment.name]
+    if (value === undefined || value === '') {
+      throw new Error(`${what} needs parameter "${segment.name}"`)
+    }
+    return encodeURIComponent(value)
+  })
+  return '/' + parts.join('/')
+}
+
 export function paramNames(segments: Segment[]): string[] {
   return segments.flatMap((s) => (s.kind === 'param' ? [s.name] : []))
 }
@@ -107,15 +124,7 @@ export class Router<T> {
   url(key: string, params: Record<string, string> = {}): string {
     const route = this.#byKey.get(key)
     if (!route) throw new Error(`Unknown route "${key}"`)
-    const parts = route.segments.map((segment) => {
-      if (segment.kind === 'static') return segment.value
-      const value = params[segment.name]
-      if (value === undefined || value === '') {
-        throw new Error(`Route "${key}" needs parameter "${segment.name}"`)
-      }
-      return encodeURIComponent(value)
-    })
-    return '/' + parts.join('/')
+    return fillPattern(route.segments, params, `Route "${key}"`)
   }
 }
 

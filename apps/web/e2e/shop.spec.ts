@@ -28,6 +28,33 @@ test('a shopper finds the shop through the plugin slot and places an order', asy
   await expect(page.getByTestId('order-total')).toHaveText('$36.00')
 })
 
+test('visitors download none of the admin’s code', async ({ page }) => {
+  const scripts: string[] = []
+  // Read on the way in: a body read from the response event is gone once the page moves on.
+  await page.route(
+    (url) => url.pathname.endsWith('.js'),
+    async (route) => {
+      const response = await route.fetch()
+      scripts.push(await response.text())
+      await route.fulfill({ response })
+    },
+  )
+  // Text only the admin's client components carry: its menu, notices and list tables.
+  const markers = ['wp-not-current-submenu', 'Dismiss this notice.', 'Show more details']
+  const carrying = (marker: string) => scripts.filter((code) => code.includes(marker)).length
+
+  for (const path of ['/', '/shop', '/product/ceramic-mug']) {
+    await page.goto(path)
+    await page.waitForLoadState('networkidle')
+  }
+  for (const marker of markers) expect(carrying(marker), marker).toBe(0)
+
+  // The admin's own pages do carry them, so the markers are the right ones.
+  await page.goto('/admin/login')
+  await page.waitForLoadState('networkidle')
+  for (const marker of markers) expect(carrying(marker), marker).toBeGreaterThan(0)
+})
+
 test('only configured gateways are offered', async ({ page }) => {
   await page.goto('/product/canvas-tote')
   await expect(page.getByRole('radio')).toHaveCount(1)

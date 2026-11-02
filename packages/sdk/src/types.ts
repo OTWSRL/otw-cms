@@ -215,7 +215,10 @@ export type CapabilityExtension<K extends MetaCapabilityName> = (
   ...args: MetaCapabilities[K]
 ) => RequiredCapabilities
 
-/** `cms.auth`: roles, capabilities and checks, as in WordPress. */
+/**
+ * `cms.auth`: roles, capabilities and checks, as in WordPress. Add and change roles and
+ * capabilities in `setup()`, so every part of the site agrees on them; checks work anywhere.
+ */
 export interface AuthApi {
   /** Adds a role, like WordPress's `add_role()`. */
   role(id: string, definition: RoleDefinition): void
@@ -365,7 +368,11 @@ export interface SettingsFields {
   fields: readonly SettingName[]
 }
 
-/** `cms.admin`: this plugin's admin pages, form actions and settings screens. */
+/**
+ * `cms.admin`: this plugin's admin pages, form actions and settings screens. Register them in the
+ * plugin's admin entry (`defineAdmin`), which only the admin loads; `url()` and `actionUrl()` work
+ * anywhere.
+ */
 export interface AdminApi {
   /** Adds an admin page, like `add_menu_page()` or `add_submenu_page()`. */
   page<TData = undefined>(page: AdminPage<TData>): void
@@ -378,7 +385,11 @@ export interface AdminApi {
   settingsPage(page: SettingsPage): void
   settingsSection(section: SettingsSection): void
   settingsFields(fields: SettingsFields): void
-  /** URL of any plugin's admin page by qualified name, e.g. `commerce.products`. */
+  /**
+   * URL of an admin page. By qualified name, such as `commerce.products`, where the admin is
+   * loaded: its screens, and API routes. By path, relative to this plugin's admin pages, such as
+   * `/orders/:id`, anywhere, the site included, like WordPress's `admin_url()`.
+   */
   url(name: string, params?: Record<string, string>): string
   /** Form `action` URL for one of this plugin's admin actions. */
   actionUrl(name: string): string
@@ -466,7 +477,11 @@ export type SlotComponent<K extends SlotName = SlotName> = (
 
 /** `cms.slots`: renders components in other plugins' slots, and reads the fills of this plugin's own. */
 export interface SlotsApi {
-  /** Renders `component` wherever the slot is shown. Lower `priority` comes first; defaults to 10. */
+  /**
+   * Renders `component` wherever the slot is shown. Lower `priority` comes first; defaults to 10.
+   * Fill admin slots (`admin.*`, and plugins' `*.admin.*`) in the admin entry, the site's in
+   * `setup()`.
+   */
   fill<K extends SlotName>(name: K, fill: { component: SlotComponent<K>; priority?: number }): void
   /**
    * The fills for a slot, in priority order, for plugins that offer a slot on their own screens.
@@ -609,8 +624,24 @@ export interface PluginDefinition {
   /** Beside the plugin's section in the admin menu. Defaults to `admin`, a gear. */
   icon?: AdminIcon
   /**
-   * Registers everything the plugin adds: hooks, routes, admin pages, slots. Runs on every boot,
-   * after the plugins it depends on, and after its migrations.
+   * Registers what every part of the site needs: hooks, services, routes, site slots, roles and
+   * capabilities. Runs on every boot, after the plugins it depends on, and after its migrations.
+   * Admin pages, actions, settings screens and admin slots go in the plugin's admin entry.
    */
   setup?: (cms: PluginContext) => void | Promise<void>
+}
+
+/**
+ * A plugin's admin entry: what only the admin shows. The plugin's package exports it as
+ * `./admin`, and `cms generate` loads it where the admin is and nowhere else, so its components,
+ * and the browser code they bring, never reach the site's visitors.
+ */
+export interface AdminDefinition {
+  /** The plugin it belongs to: its main entry's definition. */
+  plugin: PluginDefinition
+  /**
+   * Registers admin pages, form actions, settings screens and fills for admin slots. Runs after
+   * every plugin's `setup()`, in the same order, so it can use any plugin's services.
+   */
+  setup: (cms: PluginContext) => void | Promise<void>
 }

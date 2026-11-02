@@ -20,6 +20,9 @@ extensibility and drop the flaw.
 Between 6 and 7: **request tracing**, with OpenTelemetry in core, and the **performance plugin**,
 WordPress's Query Monitor plus the browser's timings and Web Vitals (README, Tracing). The plugin
 is the first in a repository of its own, `../otw-plugin-performance`, as third-party plugins are.
+Then **admin entries**: a plugin's admin code is a second entry, `./admin`, which only the admin
+and the API routes load, so none of it reaches the site's visitors (Plugin Handbook › Admin
+screens).
 
 Next: 7, Content.
 

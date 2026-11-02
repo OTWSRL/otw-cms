@@ -23,6 +23,7 @@ export function bootSite(
 ): Promise<Kernel> {
   return createKernel({
     plugins: site.plugins,
+    admin: site.admin,
     active: activePluginsFromEnv(env),
     migrations: migrationModeFromEnv(env),
     db,

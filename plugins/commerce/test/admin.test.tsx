@@ -1,4 +1,4 @@
-import { definePlugin, type User } from '@otw/sdk'
+import { defineAdmin, definePlugin, type User } from '@otw/sdk'
 import { TEST_ORIGIN, type TestKernel } from '@otw/testing'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -276,17 +276,17 @@ describe('commerce admin extension points', () => {
       id: 'order-notes',
       version: '1.0.0',
       requires: { commerce: '^0.1.0' },
-      setup(cms) {
-        cms.slots.fill('commerce.admin.order', {
-          component: ({ order, user }) => (
-            <aside>
-              Note for #{order.number}, seen by {user.email}
-            </aside>
-          ),
-        })
-      },
     })
-    const shop = await bootShop([notes])
+    const notesAdmin = defineAdmin(notes, (cms) => {
+      cms.slots.fill('commerce.admin.order', {
+        component: ({ order, user }) => (
+          <aside>
+            Note for #{order.number}, seen by {user.email}
+          </aside>
+        ),
+      })
+    })
+    const shop = await bootShop([notes], { admin: [notesAdmin] })
     const { user } = await shop.signIn('shop_manager')
     const order = await placeOrder(shop)
     expect(await renderAdmin(shop, `/admin/commerce/orders/${order.id}`, user)).toContain(
