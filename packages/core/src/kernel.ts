@@ -20,6 +20,7 @@ import type {
   Logger,
   MetaCapabilityName,
   PageMetadata,
+  PageContext,
   PageProps,
   PageRoute,
   PluginContext,
@@ -37,7 +38,7 @@ import type {
   SlotName,
   User,
 } from '@otw/sdk'
-import { ActionError, ForbiddenError } from '@otw/sdk'
+import { ActionError, ForbiddenError, PageRedirect } from '@otw/sdk'
 import {
   actionPath,
   ADMIN_PREFIX,
@@ -63,7 +64,7 @@ import { serveUpload } from './media-serve'
 import { createMailService, type MailService } from './mail'
 import { accountActions } from './account-actions'
 import { createAccountPages, type AccountResolution } from './account-pages'
-import { createAccountService, type AccountService } from './accounts'
+import { createAccountService, signInUrl, type AccountService } from './accounts'
 import { createUsersService, UserMetaStore, type UsersService } from './users'
 import { userActions } from './user-actions'
 import { localStorage, UPLOADS_PATH } from './media-storage'
@@ -236,8 +237,16 @@ export interface Kernel {
   registry<K extends RegistryName>(name: K): RegistryOf<K>
   setting<K extends SettingName>(key: K): Settings[K] | undefined
   url(name: string, params?: Record<string, string>): string
-  /** Matches a page route and runs its loader. `null` means 404. */
-  resolvePage(pathname: string, searchParams?: SearchParams): Promise<ResolvedPage | null>
+  /**
+   * Matches a page route and runs its loader. `null` means 404. `user` looks up who's asking,
+   * when the page asks; without it, nobody is signed in. A loader may throw `PageRedirect` (as
+   * `requireUser()` does for a signed-out visitor) or `ForbiddenError`, for the caller to answer.
+   */
+  resolvePage(
+    pathname: string,
+    searchParams?: SearchParams,
+    options?: { user?: () => Promise<User | null> },
+  ): Promise<ResolvedPage | null>
   slot<K extends SlotName>(name: K): SlotComponent<K>[]
   handleApi(request: Request): Promise<Response>
 
@@ -972,6 +981,7 @@ async function boot(
         api: (route) => registerApi(plugin.id, route),
         url: (name, params) => stores.pages.url(name, params),
         apiUrl: (path) => apiPath(plugin.id, path),
+        signInUrl: (returnTo) => signInUrl(returnTo),
       },
       slots: {
         fill: (name, fill) => {
@@ -1331,6 +1341,18 @@ async function boot(
   })
 }
 
+/** `?a=1&b=2` from a page's search parameters, or nothing: the page's own address, to come back to. */
+function queryString(searchParams: SearchParams): string {
+  const query = new URLSearchParams()
+  for (const [name, value] of Object.entries(searchParams)) {
+    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+      query.append(name, item)
+    }
+  }
+  const text = query.toString()
+  return text ? `?${text}` : ''
+}
+
 function unusedOverrideWarnings(
   routes: KernelOptions['routes'],
   used: ReadonlySet<string>,
@@ -1479,18 +1501,31 @@ function buildKernel(input: {
     registry: (name) => stores.registries.view(APP, name),
     setting: (key) => values[key],
     url: (name, params) => stores.pages.url(name, params),
-    async resolvePage(pathname, searchParams = {}) {
+    async resolvePage(pathname, searchParams = {}, options = {}) {
       const match = stores.pages.match(pathname)
       if (!match) return null
       const { pluginId, route } = match.route.value
-      const context = { params: match.params, searchParams }
+      // Looked up on the first call only: most pages never ask, and a session costs a query.
+      let lookup: Promise<User | null> | undefined
+      const user = () => (lookup ??= options.user?.() ?? Promise.resolve(null))
+      const here = `${pathname}${queryString(searchParams)}`
+      const context: PageContext = {
+        params: match.params,
+        searchParams,
+        user,
+        async requireUser() {
+          const signedIn = await user()
+          if (!signedIn) throw new PageRedirect(signInUrl(here))
+          return signedIn
+        },
+      }
       const key = match.route.key
       const span = { 'otw.kind': 'page', 'otw.plugin': pluginId, 'otw.route': key }
       const data = route.load
         ? await traced(`load ${key}`, span, () => route.load!(context))
         : undefined
       if (data === null) return null
-      const props: PageProps<unknown> = { ...context, data }
+      const props: PageProps<unknown> = { params: match.params, searchParams, user, data }
       return {
         key,
         pluginId,

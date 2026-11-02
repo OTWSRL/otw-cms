@@ -11,6 +11,7 @@ import {
 import { userTokens, users, type UserTokenPurpose } from './core-schema'
 import { isUniqueViolation } from './content'
 import type { DatabaseContext } from './database'
+import { safeRedirectPath } from './admin'
 import type { MailService } from './mail'
 import { hashPassword, type HashCost } from './passwords'
 
@@ -20,6 +21,16 @@ export const ACCOUNT_PATH = '/account'
 export const TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 /** Emails one address gets from sign-up, reset and email changes in an hour, at most. */
 export const MAX_EMAILS_PER_HOUR = 3
+/**
+ * Where to sign in and come back to `returnTo`, a path on the site, like `wp_login_url()`: the
+ * account page, whose sign-in form sends people on to `next`. A `returnTo` that isn't a path on
+ * the site is left out.
+ */
+export function signInUrl(returnTo?: string): string {
+  const next = returnTo === undefined ? null : safeRedirectPath(returnTo)
+  return next ? `${ACCOUNT_PATH}?next=${encodeURIComponent(next)}` : ACCOUNT_PATH
+}
+
 /** The role sign-ups get, as WooCommerce gives its customers. */
 export const SIGN_UP_ROLE = 'customer'
 

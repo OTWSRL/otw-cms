@@ -428,10 +428,23 @@ export type SearchParams = Record<string, string | string[] | undefined>
 export interface PageContext {
   params: Record<string, string>
   searchParams: SearchParams
+  /**
+   * The user signed in with the request's session cookie, or `null`: looked up on the first
+   * call, once per request, so a page that never asks costs nothing.
+   */
+  user(): Promise<User | null>
+  /**
+   * The signed-in user. A signed-out visitor is sent to sign in, and brought back to this page,
+   * query string and all, once they have: WordPress's `auth_redirect()`. Call it in `load`.
+   */
+  requireUser(): Promise<User>
 }
 
-/** What a page route's `component` and `metadata` receive: the context and what `load` returned. */
-export interface PageProps<TData> extends PageContext {
+/**
+ * What a page route's `component` and `metadata` receive: the context and what `load` returned.
+ * Who may see the page is `load`'s to decide, so they get `user()` but not `requireUser()`.
+ */
+export interface PageProps<TData> extends Omit<PageContext, 'requireUser'> {
   data: TData
 }
 
@@ -450,7 +463,10 @@ export interface PageRoute<TData = undefined> {
   name: string
   /** Default path such as `/product/:slug`. Sites can override it without touching the plugin. */
   path: string
-  /** Return `null` to render a 404. */
+  /**
+   * Return `null` to render a 404. Throw `ForbiddenError` for a 403, or `PageRedirect` to send the
+   * visitor elsewhere on the site; `context.requireUser()` sends a signed-out one to sign in.
+   */
   load?: (context: PageContext) => TData | null | Promise<TData | null>
   metadata?: (props: PageProps<TData>) => PageMetadata | Promise<PageMetadata>
   component: (props: PageProps<TData>) => ReactNode | Promise<ReactNode>
@@ -492,6 +508,11 @@ export interface RoutesApi {
   url(name: string, params?: Record<string, string>): string
   /** Public URL of one of this plugin's API routes. */
   apiUrl(path: string): string
+  /**
+   * Where to sign in, and come back to `returnTo` (a path on this site) afterwards, like
+   * `wp_login_url()`: for a "Sign in to save" link. Without it, the account page.
+   */
+  signInUrl(returnTo?: string): string
 }
 
 /** A component that fills a slot: it receives the slot's props. */

@@ -1,7 +1,7 @@
 import type { AccountResolution, ContentResolution } from '@otw/core'
-import type { SearchParams } from '@otw/sdk'
+import { ForbiddenError, PageRedirect, type SearchParams } from '@otw/sdk'
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { forbidden, notFound, redirect } from 'next/navigation'
 import { cache } from 'react'
 import { currentSite } from '../site-registry'
 import { getKernel } from '../runtime/kernel'
@@ -21,10 +21,25 @@ export interface SiteRouteProps {
 }
 
 // generateMetadata and the page both need the page; cache() runs the plugin's loader once.
+// The user is looked up only if the page asks for it.
 const loadPage = cache(async (pathname: string, query: string) => {
   const kernel = await getKernel()
-  return kernel.resolvePage(pathname, parseSearchParams(query))
+  return kernel.resolvePage(pathname, parseSearchParams(query), { user: getCurrentUser })
 })
+
+/**
+ * A plugin's page, or how its loader answered instead: a redirect (to sign in, say), which Next
+ * sends as a 307, or a 403.
+ */
+async function pluginPage(pathname: string, query: string) {
+  try {
+    return await loadPage(pathname, query)
+  } catch (error) {
+    if (error instanceof PageRedirect) redirect(error.location)
+    if (error instanceof ForbiddenError) forbidden()
+    throw error
+  }
+}
 
 // The viewer matters here: previews and private entries are theirs to see.
 const loadContent = cache(async (pathname: string, query: string) => {
@@ -49,7 +64,7 @@ async function resolve({ params, searchParams }: SiteRouteProps) {
   const query = await searchParams
   const serialized = serializeSearchParams(query)
   const preview = query.preview !== undefined
-  const page = preview ? null : await loadPage(pathname, serialized)
+  const page = preview ? null : await pluginPage(pathname, serialized)
   const account = page || preview ? null : await loadAccount(pathname, serialized)
   const content = page || account ? null : await loadContent(pathname, serialized)
   return { slug, preview, page, account, content }

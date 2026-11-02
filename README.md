@@ -177,6 +177,16 @@ export default definePlugin({
       metadata: ({ data }) => ({ title: data.title }),
       component: ({ data }) => <CoursePage course={data} />,
     })
+    cms.routes.page({
+      name: 'progress',
+      path: '/courses/:slug/progress',
+      // Signed out: sent to sign in, and back here (auth_redirect). user() is the lazy variant.
+      load: async ({ params, requireUser }) => ({
+        course: params.slug!,
+        user: await requireUser(),
+      }),
+      component: ({ data }) => <ProgressPage {...data} />,
+    })
 
     cms.when('commerce', () => {
       cms.registries.get('commerce.purchasables').add({ id: 'course', resolveMany: findPrices })

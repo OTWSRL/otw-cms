@@ -19,6 +19,7 @@ export { ContentError, type ContentErrorCode } from './content-error'
 export { MediaError, type MediaErrorCode } from './media-error'
 export { isSafeHref } from './links'
 export { ForbiddenError } from './forbidden-error'
+export { PageRedirect } from './page-redirect'
 export { HttpError } from './http-error'
 
 /** Identity helper for type inference. The kernel validates the definition when it loads. */

@@ -130,6 +130,16 @@ test('a customer who signs in at the admin lands on their account', async ({ pag
   await expect(page.getByRole('heading', { name: 'Your account' })).toBeVisible()
 })
 
+test('signing in from a page’s sign-in link comes back to that page', async ({ page }) => {
+  // Where a plugin page's requireUser() sends a signed-out visitor.
+  await page.goto(`/account?next=${encodeURIComponent('/shop?ref=account')}`)
+  const form = page.getByRole('form', { name: 'Sign in' })
+  await form.getByLabel('Email address').fill(CLEO.email)
+  await form.getByLabel('Password').fill(CLEO.password)
+  await form.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page).toHaveURL('/shop?ref=account')
+})
+
 test('an email address changes once the new one confirms it', async ({ page }) => {
   await signInOnSite(page, CLEO)
   const next = `cleo-new-${run}@example.com`
