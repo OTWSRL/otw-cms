@@ -38,26 +38,53 @@ export interface Site {
   routes?: Readonly<Record<string, string>>
   /** The name the admin shows for the CMS, from `cms.config.json`. */
   brand?: Brand
-  /** The site's own templates, when it has `src/cms/templates.tsx`. */
-  templates?: SiteTemplates
+  /**
+   * The site's own templates, when it has `src/cms/templates.tsx`. `cms generate` gives a function
+   * that imports them, so the module stays importable outside Next.js (scripts, tests): templates
+   * render with the kernel, which only runs inside it.
+   */
+  templates?: SiteTemplates | (() => Promise<{ default: SiteTemplates }>)
 }
 
 // Module-scoped, not global: Next compiles server components and route handlers separately, and
-// each must boot plugins compiled for its own bundle. Each bundle's routes import the site module,
-// which registers it here.
-let registered: Site | undefined
+// each must boot plugins compiled for its own bundle. Each bundle's routes import a site module,
+// which registers it here. One bundle can have both: the site's pages and the admin share this
+// module, and each registers its part, the site's templates or the admin's entries, which the
+// other's must not overwrite.
+let pages: Site | undefined
+let admin: Site | undefined
+let latest: Site | undefined
+let combined: Site | undefined
 
-/** Registers the site for this bundle and returns it. Called by the generated site module. */
+/** Registers a site module for this bundle and returns it. Called by the generated modules. */
 export function defineSite(site: Site): Site {
-  registered = site
+  if (site.admin) admin = site
+  else pages = site
+  latest = site
+  combined = undefined
   return site
 }
 
+/**
+ * The site: the plugins and settings the last registered module gave (a dev reload's newest), the
+ * admin module's entries, and the site module's templates. The same object until a module
+ * registers again, so the kernel booted for it is reused.
+ */
 export function currentSite(): Site {
-  if (!registered) {
+  if (!latest) {
     throw new Error(
       'No site is registered. Import src/cms/site.generated.ts (written by `cms generate`) in this route or its layout.',
     )
   }
-  return registered
+  combined ??=
+    pages && admin
+      ? { ...latest, admin: admin.admin, templates: pages.templates ?? admin.templates }
+      : latest
+  return combined
+}
+
+/** The site's own templates, for its pages, imported on first use when the module gives them so. */
+export async function siteTemplates(): Promise<SiteTemplates | undefined> {
+  const { templates } = currentSite()
+  return typeof templates === 'function' ? (await templates()).default : templates
 }

@@ -155,7 +155,9 @@ function importPath(from: string, to: string): string {
 
 /**
  * The lines of a site module: the plugins, with their admin entries when `admin` lists them, and
- * the site's own templates (`cms/templates.tsx`) when it has them.
+ * the site's own templates (`cms/templates.tsx`) when it has them, imported when a page first
+ * needs them: they render with the kernel, which scripts and tests that boot the site from this
+ * module can't load outside Next.js.
  */
 function siteModule(config: CmsConfig, admin?: ReadonlySet<string>, templates = false): string[] {
   const withAdmin = config.plugins.flatMap((name, i) => (admin?.has(name) ? [i] : []))
@@ -165,7 +167,6 @@ function siteModule(config: CmsConfig, admin?: ReadonlySet<string>, templates = 
     ...withAdmin.map(
       (i) => `import admin${i} from ${JSON.stringify(`${config.plugins[i]}/admin`)}`,
     ),
-    ...(templates ? ["import templates from './templates'"] : []),
     '',
     'export const site = defineSite({',
     `  plugins: [${config.plugins.map((_, i) => `plugin${i}`).join(', ')}],`,
@@ -173,7 +174,7 @@ function siteModule(config: CmsConfig, admin?: ReadonlySet<string>, templates = 
     `  packages: [${config.plugins.map((name) => JSON.stringify(name)).join(', ')}],`,
     ...(config.routes ? [`  routes: ${JSON.stringify(config.routes)},`] : []),
     ...(config.brand ? [`  brand: ${JSON.stringify(config.brand)},`] : []),
-    ...(templates ? ['  templates,'] : []),
+    ...(templates ? ["  templates: () => import('./templates'),"] : []),
     '})',
   ]
 }

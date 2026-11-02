@@ -116,12 +116,14 @@ export const site = defineSite({
     )
   })
 
-  it("imports the site's own templates into the site's module, not the admin's", () => {
+  it("loads the site's own templates from the site's module when a page needs them", () => {
     const [site, admin] = managedFiles({ plugins: [] }, { srcDir: 'src' }, [], true)
+    // Not imported at the top: they render with the kernel, which scripts and tests outside
+    // Next.js can't load, and they import the site module to boot it.
+    expect(site!.content).not.toContain('import templates')
     expect(site!.content).toContain(
-      "import { defineSite } from '@otw/next'\nimport templates from './templates'\n",
+      "  packages: [],\n  templates: () => import('./templates'),\n})",
     )
-    expect(site!.content).toContain('  packages: [],\n  templates,\n})')
     expect(admin!.content).not.toContain('templates')
   })
 
@@ -229,7 +231,7 @@ describe('generate', () => {
     expect(await readFile(site, 'utf8')).not.toContain('templates')
     await writeFile(join(root, 'src/cms/templates.tsx'), 'export default {}\n')
     expect((await statuses())['src/cms/site.generated.ts']).toBe('written')
-    expect(await readFile(site, 'utf8')).toContain("import templates from './templates'")
+    expect(await readFile(site, 'utf8')).toContain("templates: () => import('./templates')")
   })
 
   /** Installs a package with these exports in `node_modules` under `dir`. */

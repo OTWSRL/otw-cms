@@ -118,3 +118,17 @@ test('Settings › Reading makes the homepage a page, with the posts on another'
   await page.getByRole('button', { name: 'Save Changes' }).click()
   await notice(page, 'Settings saved.')
 })
+
+test('the site’s pages and the admin, on one server, each keep their own part', async ({
+  page,
+}) => {
+  // Next shares the CMS's modules between them: whichever loaded its site module last must not
+  // take the other's templates or admin entries. Back and forth, so one of them always loads last.
+  await signInAsAdmin(page)
+  for (let round = 0; round < 2; round++) {
+    await page.goto('/account')
+    await expect(page.getByText('Your shop account')).toBeVisible()
+    await page.goto('/admin/commerce/orders')
+    await expect(page.getByRole('heading', { name: 'Orders' })).toBeVisible()
+  }
+})

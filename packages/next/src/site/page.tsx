@@ -3,7 +3,7 @@ import { ForbiddenError, PageRedirect, type SearchParams } from '@otw/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound, redirect } from 'next/navigation'
 import { cache } from 'react'
-import { currentSite } from '../site-registry'
+import { siteTemplates } from '../site-registry'
 import { getKernel } from '../runtime/kernel'
 import { getCurrentUser } from '../runtime/session'
 import { AccountTemplate } from './account'
@@ -102,8 +102,7 @@ export async function SitePage(props: SiteRouteProps) {
  * the default, as a theme's templates win over a plugin's in WordPress.
  */
 async function Content({ resolution }: { resolution: ContentResolution }) {
-  const kernel = await getKernel()
-  const own = currentSite().templates
+  const [kernel, own] = await Promise.all([getKernel(), siteTemplates()])
   if (resolution.view === 'single') {
     const Template =
       own?.single?.[resolution.name] ??
@@ -122,8 +121,8 @@ async function Content({ resolution }: { resolution: ContentResolution }) {
 }
 
 /** The account pages in the site's own template, or the default. */
-function Account({ resolution }: { resolution: AccountResolution }) {
-  const Template = currentSite().templates?.account ?? AccountTemplate
+async function Account({ resolution }: { resolution: AccountResolution }) {
+  const Template = (await siteTemplates())?.account ?? AccountTemplate
   return <Template {...resolution.props} />
 }
 

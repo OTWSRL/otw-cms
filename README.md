@@ -441,7 +441,9 @@ post types in LearnDash, LifterLMS and Tutor.
   noindex); the rest is a 404. Settings › Reading makes the home page the latest posts or a
   static page, with a posts page (an `entry` setting: a dropdown of pages). Templates: the
   site's `src/cms/templates.tsx` wins over a plugin's `cms.content.template()`, which wins over
-  the defaults in `@otw/next/site`. `permalinks(entries)` batches a page of addresses; the
+  the defaults in `@otw/next/site`. The site module imports it when a page first needs it, so
+  scripts outside Next.js can import the module, and it registers beside the admin's module
+  rather than over it: Next shares the registry between the site's pages and the admin. `permalinks(entries)` batches a page of addresses; the
   admin shows View and Preview links.
 - **Revisions.** Types with the `revisions` feature (Posts and Pages) keep what each save wrote
   (title, body, excerpt, custom fields) in `cms_revisions`, with who saved it, in the save's
