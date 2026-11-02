@@ -61,6 +61,11 @@ export function AdminBar({
                 <span className="display-name">{name}</span>
                 <span className="username">{user.email}</span>
               </li>
+              <li id="wp-admin-bar-edit-profile">
+                <Link className="ab-item" href="/admin/profile">
+                  Edit Profile
+                </Link>
+              </li>
               <li id="wp-admin-bar-logout">
                 <form method="post" action={logoutUrl}>
                   <button type="submit" className="ab-item">

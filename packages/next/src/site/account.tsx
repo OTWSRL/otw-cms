@@ -1,6 +1,8 @@
-import type { AccountTemplateProps } from '@otw/sdk'
+import { metaOptions } from '@otw/core'
+import type { AccountTemplateProps, UserMetaField } from '@otw/sdk'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { Slot } from './slot'
 
 /** The one-time message after a form: read out as it appears. */
 function Notice({ notice }: Pick<AccountTemplateProps, 'notice'>) {
@@ -81,6 +83,85 @@ function Field({
 }
 
 const EXPIRED = 'This link has expired or has already been used.'
+
+/**
+ * A field a plugin puts on the account page, named `meta.{key}` as the admin's are, and listed in
+ * `userFields` so an unticked checkbox counts as false.
+ */
+function UserField({ field, value }: { field: UserMetaField; value: unknown }) {
+  const { definition, key } = field
+  const id = `account-details-${key.replace('.', '-')}`
+  const name = `meta.${key}`
+  const hint = definition.type === 'strings' ? 'One per line.' : definition.description
+  const described = hint ? { 'aria-describedby': `${id}-hint` } : {}
+  const text = typeof value === 'string' ? value : ''
+  const options = metaOptions(definition)
+  let input: ReactNode
+  if (definition.type === 'boolean') {
+    input = (
+      <input id={id} name={name} type="checkbox" defaultChecked={value === true} {...described} />
+    )
+  } else if (definition.type === 'number') {
+    input = (
+      <input
+        id={id}
+        name={name}
+        type="number"
+        step={definition.integer ? 1 : 'any'}
+        min={definition.min}
+        max={definition.max}
+        defaultValue={typeof value === 'number' ? value : ''}
+        {...described}
+      />
+    )
+  } else if (definition.type === 'string' && options.length > 0) {
+    input = (
+      <select id={id} name={name} defaultValue={text} {...described}>
+        {!options.some((option) => option.value === text) && <option value="">—</option>}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    )
+  } else if (definition.type === 'string' && !definition.multiline) {
+    input = (
+      <input
+        id={id}
+        name={name}
+        type="text"
+        maxLength={definition.maxLength}
+        defaultValue={text}
+        {...described}
+      />
+    )
+  } else {
+    const shown =
+      definition.type === 'strings'
+        ? Array.isArray(value)
+          ? value.join('\n')
+          : ''
+        : definition.type === 'json'
+          ? value === undefined
+            ? ''
+            : JSON.stringify(value, null, 2)
+          : text
+    input = <textarea id={id} name={name} rows={4} defaultValue={shown} {...described} />
+  }
+  return (
+    <p className={`account-field account-field-${definition.type}`}>
+      <input type="hidden" name="userFields" value={key} />
+      <label htmlFor={id}>{definition.label}</label>
+      {input}
+      {hint && (
+        <span className="account-hint" id={`${id}-hint`}>
+          {hint}
+        </span>
+      )}
+    </p>
+  )
+}
 
 /**
  * The account pages, as WooCommerce's My Account and `wp-login.php` show them: signing in (and
@@ -219,8 +300,8 @@ export function AccountTemplate(props: AccountTemplateProps) {
           </>
         )}
       </p>
-      <h2>Name</h2>
-      <Form action={actions.name} label="Name" submit="Save name">
+      <h2>Your details</h2>
+      <Form action={actions.name} label="Your details" submit="Save details">
         <Field
           form="name"
           name="name"
@@ -229,6 +310,13 @@ export function AccountTemplate(props: AccountTemplateProps) {
           defaultValue={user.name}
           required={false}
         />
+        {props.fields.map((field) => (
+          <UserField
+            key={field.key}
+            field={field}
+            value={(props.meta as Record<string, unknown>)[field.key]}
+          />
+        ))}
       </Form>
       <h2>Email address</h2>
       <p>
@@ -269,6 +357,7 @@ export function AccountTemplate(props: AccountTemplateProps) {
           hint="At least 10 characters. Your other sessions will be signed out."
         />
       </Form>
+      <Slot name="account.sections" props={{ user }} />
       <form method="post" action={actions.signOut} className="account-sign-out">
         <button type="submit">Sign out</button>
       </form>

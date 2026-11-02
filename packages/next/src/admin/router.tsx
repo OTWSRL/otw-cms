@@ -1,7 +1,7 @@
 import type { Kernel, SettingsPageView } from '@otw/core'
 import type { CapabilityName, ContentTypeName, SearchParams, User } from '@otw/sdk'
 import type { Metadata } from 'next'
-import { forbidden, notFound } from 'next/navigation'
+import { forbidden, notFound, redirect } from 'next/navigation'
 import { cache, type ReactNode } from 'react'
 import { getKernel } from '../runtime/kernel'
 import {
@@ -29,6 +29,8 @@ import { SetupScreen } from './screens/setup'
 import { UpdatesScreen } from './screens/updates'
 import { NewUserScreen } from './screens/user-new'
 import { UsersScreen } from './screens/users'
+import { ProfileScreen } from './screens/profile'
+import { UserEditScreen } from './screens/user-edit'
 import { SettingsForm } from './settings-form'
 import { AdminShell } from './shell'
 
@@ -60,6 +62,7 @@ const SCREENS: Readonly<Record<string, CoreScreen>> = {
     Screen: NewUserScreen,
   },
   '/admin/users/roles': { title: 'Roles', capability: 'core.manage_users', Screen: RolesScreen },
+  '/admin/profile': { title: 'Profile', Screen: ProfileScreen },
   '/admin/updates': { title: 'Updates', capability: 'core.manage_updates', Screen: UpdatesScreen },
 }
 
@@ -169,6 +172,19 @@ const resolveScreen = cache(async (path: string, query: string): Promise<Resolve
     )
     const title = `${entry ? 'Edit' : 'Add New'} ${type.labels.singular}`
     return { kernel, user, title, body }
+  }
+  if (resolution.kind === 'user-edit') {
+    // As user-edit.php sends you to profile.php for yourself.
+    if (resolution.target.id === user.id) redirect('/admin/profile')
+    const body = (
+      <UserEditScreen
+        kernel={kernel}
+        user={user}
+        target={resolution.target}
+        searchParams={searchParams}
+      />
+    )
+    return { kernel, user, title: 'Edit User', body }
   }
   if (resolution.kind === 'media-library') {
     const body = <MediaLibraryScreen kernel={kernel} user={user} searchParams={searchParams} />

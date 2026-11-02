@@ -179,6 +179,7 @@ test.describe('wider screens', () => {
       'All Users',
       'Add User',
       'Roles',
+      'Profile',
     ])
     await submenu(page, 'Users').getByRole('link', { name: 'Roles' }).click()
     await expect(page).toHaveURL('/admin/users/roles')

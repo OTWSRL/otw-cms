@@ -30,6 +30,8 @@ export type OrderSummary = Omit<Order, 'lines' | 'adjustments'>
 /** Which orders `listOrders()` returns: a status, and a page of them. */
 export interface OrderListOptions {
   status?: OrderStatus
+  /** Orders placed with this address, as an account's are found: compared in lower case. */
+  email?: string
   /** Defaults to 25, at most 100. */
   limit?: number
   offset?: number

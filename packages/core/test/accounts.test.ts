@@ -140,7 +140,7 @@ describe('a signed-in account', () => {
     const { user, cookie } = await signIn(kernel, 'customer')
     const other = await kernel.auth.createSession(user.id)
     expect((await post(kernel, 'account-name', { name: 'Cleo P.' }, cookie)).flash?.message).toBe(
-      'Your name was saved.',
+      'Your details were saved.',
     )
     const wrong = await post(
       kernel,

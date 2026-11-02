@@ -479,6 +479,17 @@ email address changes only once a link sent to it is used, and the old one is to
 whether an account exists. Sign-ups are Customers; a customer signing in at the admin lands on
 `/account`. Sites replace the pages with an `account` template.
 
+## Profiles and user fields
+
+`cms.users.meta()` registers typed, checked user fields (7c's custom fields in a registry of
+their own, in `cms_users.meta`), limited to `roles`, and `onAccount` for the person's own page;
+`getMeta()`, `getMetaMany()`, `updateMeta()`. Users › Profile (`profile.php`: name, fields, email
+changed from a confirming link, password, Log Out Everywhere Else) and Edit User
+(`user-edit.php`: role, name, email changed at once with the old address told, fields, Send
+Reset Link, Log Out Everywhere) show them with no form code. Plugins add account page sections
+with the `account.sections` slot; Commerce lists the orders placed with the account's address
+once it's proven.
+
 ## Security model
 
 Plugins run in-process with full access, the same trust model as WordPress and npm. Declared

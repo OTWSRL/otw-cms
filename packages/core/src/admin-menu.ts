@@ -128,6 +128,16 @@ export const CORE_MENU: readonly MenuEntry[] = [
     capability: 'core.manage_users',
     parent: 'users',
   },
+  {
+    // Everyone's own profile.php; for those who may not manage users, the section's only item.
+    key: 'core.profile',
+    pluginId: 'core',
+    label: 'Profile',
+    url: '/admin/profile',
+    order: 3,
+    capability: 'core.access_admin',
+    parent: 'users',
+  },
 ]
 
 /**

@@ -36,6 +36,7 @@ export type AdminPageEntry =
   | { pluginId: string; content: { type: string; screen: ContentScreen } }
   | { pluginId: string; taxonomy: { name: string; screen: 'terms' | 'term' } }
   | { pluginId: string; media: MediaScreen }
+  | { pluginId: string; user: 'edit' }
 
 /** Media › Library (upload.php), Add New (media-new.php), and a file's Edit Media screen. */
 export type MediaScreen = 'library' | 'new' | 'edit'
@@ -58,6 +59,8 @@ export type AdminResolution =
   | { kind: 'media-library' }
   | { kind: 'media-new' }
   | { kind: 'media-edit'; item: MediaItem }
+  /** user-edit.php: another user's details, role and fields. */
+  | { kind: 'user-edit'; target: User }
   | {
       kind: 'page'
       key: string

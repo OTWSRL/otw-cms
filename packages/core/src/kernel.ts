@@ -64,6 +64,8 @@ import { createMailService, type MailService } from './mail'
 import { accountActions } from './account-actions'
 import { createAccountPages, type AccountResolution } from './account-pages'
 import { createAccountService, type AccountService } from './accounts'
+import { createUsersService, UserMetaStore, type UsersService } from './users'
+import { userActions } from './user-actions'
 import { localStorage, UPLOADS_PATH } from './media-storage'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
@@ -248,6 +250,8 @@ export interface Kernel {
   readonly mail: MailService
   /** People's own accounts: signing up, resetting passwords, changing their details. */
   readonly accounts: AccountService
+  /** Users and the fields plugins give them. */
+  readonly users: UsersService
   /** The account page at a site path (`/account`, its reset and email pages), or `null`. */
   resolveAccount(
     pathname: string,
@@ -498,6 +502,7 @@ async function boot(
   const contentScreens = new ContentScreenStore(assertOpen)
   const typesInMenu = new Map<string, number>()
 
+  const userFields = new UserMetaStore(assertOpen)
   const imageSizes = new ImageSizeStore(assertOpen)
   const maxUploadBytes = options.uploads?.maxBytes ?? DEFAULT_MAX_UPLOAD
   if (!Number.isSafeInteger(maxUploadBytes) || maxUploadBytes < 1) {
@@ -851,9 +856,20 @@ async function boot(
     roleExists: (role) => stores.capabilities.hasRole(role),
     hashCost: options.passwordHashing,
   })
-  for (const action of accountActions({ auth, accounts })) registerAction(CORE, action)
+  const users = createUsersService({ db, fields: userFields, accounts })
+  for (const action of accountActions({ auth, accounts, users })) registerAction(CORE, action)
+  const userForms = userActions({
+    auth,
+    accounts,
+    users,
+    can: (user, capability) => stores.capabilities.can(user, capability),
+  })
+  for (const action of userForms) registerAction(CORE, action)
+  // user-edit.php; the router sends someone editing themselves to their Profile.
+  stores.adminPages.add('core.user-edit', '/admin/users/:id', { pluginId: CORE, user: 'edit' })
   const resolveAccount = createAccountPages({
     accounts,
+    users,
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
     actionUrl: (name) => actionPath(CORE, name),
     readFlash: (value) => prepared.flash.decode(value),
@@ -1061,6 +1077,17 @@ async function boot(
             )
           }
           provideStorage(plugin.id, storage)
+        },
+      },
+      users: {
+        ...users,
+        meta: (key, definition) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Register user field "${key}" in setup(), so every part of the site knows it: the admin entry is loaded only where the admin is`,
+            )
+          }
+          userFields.register(plugin.id, key, definition as never)
         },
       },
       mail: {
@@ -1300,6 +1327,7 @@ async function boot(
     mail,
     accounts,
     resolveAccount,
+    users,
   })
 }
 
@@ -1346,6 +1374,7 @@ function buildKernel(input: {
   mail: MailService
   accounts: AccountService
   resolveAccount: ReturnType<typeof createAccountPages>
+  users: UsersService
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
   const { options, logger, db } = prepared
@@ -1484,6 +1513,7 @@ function buildKernel(input: {
     media: input.media,
     mail: input.mail,
     accounts: input.accounts,
+    users: input.users,
     resolveAccount: (pathname, searchParams, user) =>
       input.resolveAccount(pathname, searchParams, user),
     maxUploadBytes: input.maxUploadBytes,
@@ -1523,6 +1553,16 @@ function buildKernel(input: {
       if ('content' in entry) return contentScreen(entry.content, match.params, user)
       if ('taxonomy' in entry) return taxonomyScreen(entry.taxonomy, match.params, user)
       if ('media' in entry) return mediaScreen(entry.media, match.params, user)
+      if ('user' in entry) {
+        if (
+          !capabilities.can(user, 'core.access_admin') ||
+          !capabilities.can(user, 'core.manage_users')
+        ) {
+          return { kind: 'forbidden' }
+        }
+        const target = await input.users.get(match.params.id ?? '')
+        return target ? { kind: 'user-edit', target } : { kind: 'not-found' }
+      }
       const { pluginId, page } = entry
       if (
         !capabilities.can(user, 'core.access_admin') ||

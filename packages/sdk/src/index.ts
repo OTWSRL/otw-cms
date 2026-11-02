@@ -230,6 +230,12 @@ export interface Taxonomies {
  */
 export interface EntryMeta {}
 
+/**
+ * User field key -> its value's type. Register each with `cms.users.meta()`; keys start with the
+ * plugin's id, as `lms.bio`.
+ */
+export interface UserMeta {}
+
 /** Slot name -> the props each fill receives. */
 export interface Slots {
   /** Links in the site's main navigation, which the site's layout renders with `<Slot name="header.nav" />`. */
@@ -245,6 +251,11 @@ export interface Slots {
    * renders it with `<Slot name="site.footer" props={{ user }} />`.
    */
   'site.footer': { user: User | null }
+  /**
+   * Sections of the signed-in person's account page, after its own, like WooCommerce's My Account
+   * tabs: a shop's orders, a course's progress.
+   */
+  'account.sections': { user: User }
 }
 
 /** Any declared registry's name. */
@@ -261,6 +272,8 @@ export type SettingName = keyof Settings & string
 export type ContentTypeName = keyof ContentTypes & string
 /** Any declared custom field's key. */
 export type EntryMetaKey = keyof EntryMeta & string
+/** Any declared user field's key. */
+export type UserMetaKey = keyof UserMeta & string
 /** Any declared taxonomy's name. */
 export type TaxonomyName = keyof Taxonomies & string
 /** Any declared capability's name, content types' and taxonomies' included. */

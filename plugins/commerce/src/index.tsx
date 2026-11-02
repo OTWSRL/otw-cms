@@ -1,6 +1,6 @@
 import { definePlugin } from '@otw/sdk'
 import { registerCapabilities } from './capabilities'
-import { OrderReceivedPage, ProductPage, ShopPage } from './components'
+import { AccountOrders, OrderReceivedPage, ProductPage, ShopPage } from './components'
 import { migrations } from './migrations'
 import { CHECKOUT_ERROR_PARAM, createCheckoutHandler } from './routes/checkout'
 import { createCommerceService, createProductPurchasable } from './service'
@@ -106,6 +106,24 @@ export default definePlugin({
 
     cms.slots.fill('header.nav', {
       component: () => <a href={cms.routes.url('commerce.shop')}>Shop</a>,
+    })
+
+    // My Account › Orders: the orders placed with the account's proven address.
+    cms.slots.fill('account.sections', {
+      component: async ({ user }) => {
+        const verified = await cms.users.isVerified(user.id)
+        const { orders } = verified
+          ? await commerce.listOrders({ email: user.email, limit: 20 })
+          : { orders: [] }
+        return (
+          <AccountOrders
+            orders={orders}
+            verified={verified}
+            format={commerce.formatMoney}
+            orderUrl={(order) => cms.routes.url('commerce.order-received', { id: order.id })}
+          />
+        )
+      },
     })
 
     registerCapabilities(cms, manualGateway.id)

@@ -109,6 +109,11 @@ export interface AccountService {
   changePassword(user: User, current: string, next: string, session: string | null): Promise<void>
   changeName(user: User, name: string): Promise<User>
   /**
+   * An administrator's change of someone's address, at once, as user-edit.php makes it: the old
+   * address is told, and the new one isn't proved until a link sent to it is used.
+   */
+  setEmail(user: User, email: string): Promise<User>
+  /**
    * Asks for the password, then emails the new address a link to confirm it; nothing changes
    * until it's used.
    */
@@ -304,6 +309,31 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         .where(eq(users.id, user.id))
         .returning(userColumns)
       if (!updated) throw new AuthError('not_found', 'That user no longer exists.')
+      return updated
+    },
+
+    async setEmail(user, rawEmail) {
+      const email = cleanEmail(rawEmail)
+      if (email === user.email) return user
+      let updated: User | undefined
+      try {
+        ;[updated] = await db.current
+          .update(users)
+          .set({ email, emailVerifiedAt: null })
+          .where(eq(users.id, user.id))
+          .returning(userColumns)
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new AuthError('email_taken', 'A user with that email address already exists.')
+        }
+        throw error
+      }
+      if (!updated) throw new AuthError('not_found', 'That user no longer exists.')
+      await send(user.email, 'Your email address was changed', [
+        `The email address of your account at ${options.siteTitle() || 'this site'} is now ${email}.`,
+        '',
+        'If you didn’t ask for this, contact the site’s administrator.',
+      ])
       return updated
     },
 

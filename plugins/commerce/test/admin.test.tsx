@@ -163,6 +163,12 @@ describe('commerce admin screens', () => {
         ],
       },
       {
+        id: 'users',
+        label: 'Users',
+        icon: 'users',
+        items: [{ key: 'core.profile', label: 'Profile', url: '/admin/profile' }],
+      },
+      {
         id: 'settings',
         label: 'Settings',
         icon: 'settings',

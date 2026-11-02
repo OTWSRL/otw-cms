@@ -27,8 +27,8 @@ screens).
 Milestone 7, Content, is complete: content types and entries, their screens and the block
 editor, taxonomies and custom fields, site pages and revisions, and the media library.
 
-Now: 8, Accounts and email, in three parts. 8a, email, and 8b, accounts on the site, are done;
-next, 8c, profiles and user meta.
+Milestone 8, Accounts and email, is complete: email through a plugin's transport, accounts on
+the site, and profiles with user fields. Next: 9, the LMS plugin.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -471,7 +471,7 @@ plugins add (`show_user_profile`), user meta, and a mail transport with filters 
 | ---- | ------------------------------------------------------------------------ | ----------------------------------------- |
 | 8a   | `cms.mail.send()`, a transport from one plugin, hooks (done)             | `wp_mail()`, SMTP plugins                 |
 | 8b   | Sign-up with a verified email, sign-in, lost password, `/account` (done) | `wp-login.php`, WooCommerce's My Account  |
-| 8c   | User meta, Profile and Edit User screens, account sections from plugins  | `profile.php`, `user-edit.php`, user meta |
+| 8c   | User meta, Profile and Edit User screens, account sections (done)        | `profile.php`, `user-edit.php`, user meta |
 
 ### 8a. Email (done)
 
@@ -509,6 +509,22 @@ plugins add (`show_user_profile`), user meta, and a mail transport with filters 
   address, the old one told. `auth.checkPassword()` and `auth.signOutEverywhere()`.
 - Admin sign-in: Lost your password?, and a customer is sent to `/account`. Sign-in for an
   account with no password costs a hash too, so it can't be told apart.
+
+### 8c. Profiles and user fields (done)
+
+- `cms.users.meta(key, definition)`: custom fields' types and checks (a `MetaStore` of its own),
+  plus `roles` and `onAccount`; values in `cms_users.meta` (migration core/0009_user_meta).
+  `get()`, `getMeta()` with defaults, `getMetaMany()` in one query, `updateMeta()` checked against
+  the user's role, `fields()`, `isVerified()`.
+- **Users › Profile** (`profile.php`): name and fields (`profile-save`, each field's capability
+  checked), email and password through the account's own forms, Log Out Everywhere Else. Edit
+  Profile in the admin bar; everyone in the admin has the menu item.
+- **Edit User** (`user-edit.php`, `/admin/users/:id`, `core.manage_users`): role, name, email
+  (at once, the old address told, the new one unconfirmed), fields, Send Reset Link, Log Out
+  Everywhere. Editing yourself goes to Profile.
+- **Account page**: `onAccount` fields under Your details, the only ones its form may change;
+  plugins' sections through the `account.sections` slot. Commerce lists the orders placed with
+  the account's address (`listOrders({ email })`), once the address is proven.
 
 ## 9. LMS plugin
 

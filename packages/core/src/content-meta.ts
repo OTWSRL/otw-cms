@@ -1,4 +1,10 @@
-import type { ContentTypeSelector, EntryMetaValues, MetaDefinition, MetaField } from '@otw/sdk'
+import type {
+  ContentTypeSelector,
+  EntryMetaValues,
+  MetaDefinition,
+  MetaField,
+  UserMetaDefinition,
+} from '@otw/sdk'
 import { ContentError } from '@otw/sdk'
 import { selectedTypes } from './content-screens'
 
@@ -15,7 +21,9 @@ function invalid(message: string): never {
 }
 
 /** A string field's options, as `{ value, label }` whichever way they were written. */
-export function metaOptions(definition: MetaDefinition): { value: string; label: string }[] {
+export function metaOptions(
+  definition: MetaDefinition | UserMetaDefinition,
+): { value: string; label: string }[] {
   if (definition.type !== 'string' || !definition.options) return []
   return definition.options.map((option) =>
     typeof option === 'string' ? { value: option, label: option } : option,

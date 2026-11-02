@@ -238,4 +238,10 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    id: '0009_user_meta',
+    up: async (db) => {
+      await db.execute(sql`ALTER TABLE cms_users ADD COLUMN meta jsonb NOT NULL DEFAULT '{}'`)
+    },
+  },
 ]

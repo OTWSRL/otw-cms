@@ -63,7 +63,15 @@ export async function UsersScreen({ kernel, user: me, searchParams: params }: Sc
                   <span className="avatar avatar-list" aria-hidden="true">
                     <AdminIcon icon="users" />
                   </span>
-                  <strong>{user.email}</strong>
+                  <strong>
+                    <a
+                      className="row-title"
+                      href={user.id === me.id ? '/admin/profile' : `/admin/users/${user.id}`}
+                      aria-label={`Edit ${user.email}`}
+                    >
+                      {user.email}
+                    </a>
+                  </strong>
                   {user.id === me.id && <span className="description"> (you)</span>}
                 </span>
               ),

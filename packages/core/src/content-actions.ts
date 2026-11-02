@@ -520,7 +520,10 @@ const CORE_BULK: Readonly<
 }
 
 /** A field box's input as the field's value; `null` for an empty one, which removes the field. */
-export function metaFromForm(field: MetaField, form: FormData): unknown {
+export function metaFromForm(
+  field: Pick<MetaField, 'key'> & { definition: Pick<MetaField['definition'], 'type' | 'label'> },
+  form: FormData,
+): unknown {
   const name = `meta.${field.key}`
   const { definition } = field
   if (definition.type === 'boolean') return form.has(name)

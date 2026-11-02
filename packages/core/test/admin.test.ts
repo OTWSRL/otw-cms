@@ -195,6 +195,7 @@ describe('admin pages', () => {
           { key: 'core.users', label: 'All Users', url: '/admin/users' },
           { key: 'core.user-new', label: 'Add User', url: '/admin/users/new' },
           { key: 'core.roles', label: 'Roles', url: '/admin/users/roles' },
+          { key: 'core.profile', label: 'Profile', url: '/admin/profile' },
         ],
       },
       {
@@ -208,7 +209,16 @@ describe('admin pages', () => {
         ],
       },
     ])
-    expect(kernel.adminMenu((await signIn(kernel, 'support')).user)).toEqual([dashboard])
+    // Everyone in the admin has their own Profile, as in WordPress.
+    expect(kernel.adminMenu((await signIn(kernel, 'support')).user)).toEqual([
+      dashboard,
+      {
+        id: 'users',
+        label: 'Users',
+        icon: 'users',
+        items: [{ key: 'core.profile', label: 'Profile', url: '/admin/profile' }],
+      },
+    ])
     expect(kernel.adminMenu((await signIn(kernel, 'customer')).user)).toEqual([])
   })
 
@@ -296,7 +306,13 @@ describe('admin pages', () => {
       'settings',
     ])
     expect(items('shop')).toEqual(['shop.products', 'reports.sales', 'shop.orders'])
-    expect(items('users')).toEqual(['core.users', 'core.user-new', 'core.roles', 'reports.signups'])
+    expect(items('users')).toEqual([
+      'core.users',
+      'core.user-new',
+      'core.roles',
+      'core.profile',
+      'reports.signups',
+    ])
     expect(items('reports')).toEqual(['reports.threads', 'reports.lost'])
     expect(kernel.warnings).toEqual([
       'Admin page "reports.lost" names unknown menu parent "nowhere"',

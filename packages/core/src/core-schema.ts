@@ -1,4 +1,4 @@
-import type { Block, EntryMetaValues, EntryStatus } from '@otw/sdk'
+import type { Block, EntryMetaValues, EntryStatus, UserMetaValues } from '@otw/sdk'
 import {
   bigint,
   boolean,
@@ -26,6 +26,8 @@ export const users = pgTable('cms_users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   /** When the person proved they read this address, by using a link sent to it. */
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+  /** Plugins' fields, registered with `cms.users.meta()`: WordPress's user meta. */
+  meta: jsonb('meta').$type<UserMetaValues>().notNull().default({}),
 })
 
 export const sessions = pgTable(

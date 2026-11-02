@@ -9,6 +9,8 @@ import type {
   ContentTypeName,
   EntryMeta,
   EntryMetaKey,
+  UserMeta,
+  UserMetaKey,
   TaxonomyName,
   FilterContext,
   FilterName,
@@ -1037,6 +1039,9 @@ export interface AccountTemplateProps {
   verified: boolean
   /** Whether they may use the admin, for a link to it. */
   canUseAdmin: boolean
+  /** The fields plugins put on the account page for their role (`onAccount`), and their values. */
+  fields: UserMetaField[]
+  meta: UserMetaValues
   /** Settings › General's "Anyone can register", with a mail plugin to send the link. */
   canRegister: boolean
   /** On `reset` and `confirm-email`: the link's token, and whether it still works. */
@@ -1464,6 +1469,65 @@ export interface MediaApi {
   months(): Promise<string[]>
 }
 
+// ── Users ────────────────────────────────────────────────────────────────────
+
+/** Custom fields' definitions, without the content types they're for. */
+type WithoutTypes<T> = T extends unknown ? Omit<T, 'types'> : never
+
+/**
+ * A field on users, like WordPress's user meta with `register_meta( 'user', … )`: typed and
+ * checked as entries' custom fields are, and shown on the admin's Profile and Edit User screens.
+ */
+export type UserMetaDefinition = WithoutTypes<MetaDefinition> & {
+  /** The roles whose users have it; every role's when left out. */
+  roles?: readonly string[]
+  /** Shown on the person's own account page on the site too, for them to change. */
+  onAccount?: boolean
+}
+
+/** The definitions that can hold a value of type `V`. */
+export type UserMetaDefinitionFor<V> = WithoutTypes<MetaDefinitionFor<V>> & {
+  roles?: readonly string[]
+  onAccount?: boolean
+}
+
+/** A user's fields by key, as `UserMeta` declares them. */
+export type UserMetaValues = { [K in UserMetaKey]?: UserMeta[K] }
+
+/** Fields to change: a value sets one, `null` removes it. */
+export type UserMetaChanges = { [K in UserMetaKey]?: UserMeta[K] | null }
+
+/** A registered user field. */
+export interface UserMetaField {
+  /** Such as `lms.bio`. */
+  key: string
+  pluginId: string
+  definition: UserMetaDefinition
+}
+
+/** `cms.users`: people's accounts, and the fields plugins give them. */
+export interface UsersApi {
+  /**
+   * Registers a field users have, named under the plugin (`lms.bio`), like `register_meta()`
+   * for users. In `setup()` only.
+   */
+  meta<K extends UserMetaKey>(key: K, definition: UserMetaDefinitionFor<UserMeta[K]>): void
+  /** The fields registered, or those a role's users have. */
+  fields(role?: string): UserMetaField[]
+  get(id: string): Promise<User | null>
+  /** A user's fields, defaults shown for those not set: `get_user_meta()`. */
+  getMeta(userId: string): Promise<UserMetaValues>
+  /** Several users' fields in one query, for a page of them. */
+  getMetaMany(userIds: readonly string[]): Promise<Map<string, UserMetaValues>>
+  /**
+   * Changes the fields named: `update_user_meta()`. Each must be registered for the user's role,
+   * and valid; a `ContentError` says which isn't, as for custom fields.
+   */
+  updateMeta(userId: string, changes: UserMetaChanges): Promise<UserMetaValues>
+  /** Whether the user has proved their email address, by using a link sent to it. */
+  isVerified(userId: string): Promise<boolean>
+}
+
 // ── Mail ─────────────────────────────────────────────────────────────────────
 
 /** An email to send, like `wp_mail()`'s arguments. */
@@ -1616,6 +1680,7 @@ export interface PluginContext {
   readonly content: ContentApi
   readonly media: MediaApi
   readonly mail: MailApi
+  readonly users: UsersApi
   readonly traces: TracesApi
   readonly logger: Logger
   /**

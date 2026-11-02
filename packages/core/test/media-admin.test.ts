@@ -118,8 +118,8 @@ describe('who may use the media library', () => {
         .adminMenu(user)
         .map((section) => section.id)
         .join(' ')
-    expect(menu(author.user)).toBe('dashboard posts media')
-    expect(menu(contributor.user)).toBe('dashboard posts')
+    expect(menu(author.user)).toBe('dashboard posts media users')
+    expect(menu(contributor.user)).toBe('dashboard posts users')
   })
 })
 

@@ -22,6 +22,7 @@ export { bodyLines, diffLines, diffRevisions, type DiffLine, type FieldDiff } fr
 export { formatBytes, type MediaService } from './media'
 export { isMailbox, type MailService } from './mail'
 export { ACCOUNT_PATH, type AccountService } from './accounts'
+export type { UsersService } from './users'
 export type { AccountResolution } from './account-pages'
 export { localStorage, UPLOADS_PATH } from './media-storage'
 export { isSafeKey } from './media-files'

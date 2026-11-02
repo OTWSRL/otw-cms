@@ -1,5 +1,5 @@
 import type { CommerceErrorCode } from './errors'
-import type { Money, Order, OrderStatus, PaymentGateway, Product } from './types'
+import type { Money, Order, OrderStatus, OrderSummary, PaymentGateway, Product } from './types'
 
 type Format = (amount: Money) => string
 
@@ -108,6 +108,64 @@ export function ProductPage({
         </form>
       )}
     </article>
+  )
+}
+
+/**
+ * The account page's Orders, as WooCommerce's My Account › Orders: those placed with the
+ * account's address, once the person has proved it is theirs. Until then, saying so, since
+ * anyone can type an address at checkout.
+ */
+export function AccountOrders({
+  orders,
+  verified,
+  format,
+  orderUrl,
+}: {
+  orders: readonly OrderSummary[]
+  verified: boolean
+  format: Format
+  orderUrl(order: OrderSummary): string
+}) {
+  return (
+    <section className="commerce-account-orders" aria-labelledby="account-orders">
+      <h2 id="account-orders">Orders</h2>
+      {!verified ? (
+        <p>
+          Your orders show here once you’ve confirmed your email address. To confirm it, set a new
+          password from the link “Lost your password?” emails you.
+        </p>
+      ) : orders.length === 0 ? (
+        <p>No orders yet.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Order</th>
+              <th scope="col">Date</th>
+              <th scope="col">Status</th>
+              <th scope="col">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map((order) => (
+              <tr key={order.id}>
+                <td>
+                  <a href={orderUrl(order)}>#{order.number}</a>
+                </td>
+                <td>
+                  <time dateTime={order.createdAt.toISOString()}>
+                    {order.createdAt.toISOString().slice(0, 10)}
+                  </time>
+                </td>
+                <td>{STATUS_LABELS[order.status]}</td>
+                <td>{format(order.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   )
 }
 

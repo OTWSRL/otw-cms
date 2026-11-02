@@ -2,6 +2,7 @@ import type { AccountTemplateProps, AccountView, SearchParams, User } from '@otw
 import { safeRedirectPath } from './admin'
 import { ACCOUNT_PATH, type AccountService } from './accounts'
 import type { Flash } from './flash'
+import type { UsersService } from './users'
 
 /** The account pages' paths, by view; `/account` is sign-in or the account, by who's asking. */
 const PAGES: Readonly<Record<string, AccountView>> = {
@@ -27,6 +28,7 @@ export interface AccountResolution {
 
 export interface AccountPagesOptions {
   accounts: AccountService
+  users: UsersService
   canUseAdmin(user: User): boolean
   actionUrl(name: string): string
   readFlash(value: string | string[] | undefined): Flash | null
@@ -61,6 +63,11 @@ export function createAccountPages(options: AccountPagesOptions) {
         user,
         verified: view === 'account' && user ? await accounts.isVerified(user.id) : false,
         canUseAdmin: user ? options.canUseAdmin(user) : false,
+        fields:
+          view === 'account' && user
+            ? options.users.fields(user.role).filter((meta) => meta.definition.onAccount)
+            : [],
+        meta: view === 'account' && user ? await options.users.getMeta(user.id) : {},
         canRegister: accounts.canRegister(),
         token: token || null,
         valid: info !== null,

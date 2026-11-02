@@ -1,6 +1,9 @@
 import { FormField, FormTable } from '@otw/admin-ui'
 import { metaOptions } from '@otw/core'
-import type { EntryMetaValues, MetaField } from '@otw/sdk'
+import type { MetaField, UserMetaField } from '@otw/sdk'
+
+/** An entry's custom field or a user's field: both are shown the same way. */
+type Field = MetaField | UserMetaField
 
 /** The input for one field, named `meta.{key}`, or shown disabled and unnamed when read-only. */
 function Input({
@@ -10,7 +13,7 @@ function Input({
   editable,
   describedBy,
 }: {
-  field: MetaField
+  field: Field
   id: string
   value: unknown
   editable: boolean
@@ -95,19 +98,21 @@ export function MetaFields({
   fields,
   meta,
   editable,
+  listName = 'metaFields',
 }: {
-  fields: readonly MetaField[]
-  /** The entry's values with defaults, or `{}` on Add New. */
-  meta: EntryMetaValues
-  editable(field: MetaField): boolean
+  fields: readonly Field[]
+  /** The values with defaults, or `{}` on Add New. */
+  meta: Readonly<Record<string, unknown>>
+  editable(field: Field): boolean
+  /** The hidden input naming the fields the form may change: `userFields` for users'. */
+  listName?: string
 }) {
   return (
     <FormTable>
       {fields.map((field) => {
         const canEdit = editable(field)
         const id = `meta-${field.key.replace('.', '-')}`
-        const value =
-          (meta as Record<string, unknown>)[field.key] ?? field.definition.default ?? undefined
+        const value = meta[field.key] ?? field.definition.default ?? undefined
         const { description, type } = field.definition
         const hint =
           type === 'strings'
@@ -120,7 +125,7 @@ export function MetaFields({
             htmlFor={id}
             description={hint && <span id={`${id}-description`}>{hint}</span>}
           >
-            {canEdit && <input type="hidden" name="metaFields" value={field.key} />}
+            {canEdit && <input type="hidden" name={listName} value={field.key} />}
             <Input
               field={field}
               id={id}

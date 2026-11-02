@@ -90,10 +90,10 @@ test('a visitor signs up, sets a password from the email, and manages their acco
   await expect(page.getByRole('status')).toHaveText('Your password is set, and you’re signed in.')
   await expect(page.getByText(`${CLEO.email} (confirmed)`)).toBeVisible()
 
-  const name = page.getByRole('form', { name: 'Name' })
-  await name.getByLabel('Name').fill('Cleo S.')
-  await name.getByRole('button', { name: 'Save name' }).click()
-  await expect(page.getByRole('status')).toHaveText('Your name was saved.')
+  const details = page.getByRole('form', { name: 'Your details' })
+  await details.getByLabel('Name').fill('Cleo S.')
+  await details.getByRole('button', { name: 'Save details' }).click()
+  await expect(page.getByRole('status')).toHaveText('Your details were saved.')
   await expect(page.getByText('Signed in as Cleo S.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Sign out' }).click()
@@ -145,4 +145,39 @@ test('an email address changes once the new one confirms it', async ({ page }) =
   await expect(page.getByRole('status')).toHaveText(`Your email address is now ${next}.`)
   // The old address hears of it, as WordPress tells it.
   expect((await mailTo(CLEO.email, 'Your email address was changed')).text).toContain(next)
+  CLEO.email = next
+})
+
+test('an account shows the orders placed with its proven address', async ({ page }) => {
+  await signInOnSite(page, CLEO)
+  const orders = page.getByRole('region', { name: 'Orders' })
+  await expect(orders).toContainText('No orders yet.')
+
+  await page.goto('/product/ceramic-mug')
+  await page.getByLabel('Email').fill(CLEO.email)
+  await page.getByLabel(/Pay later/).check()
+  await page.getByRole('button', { name: 'Place order' }).click()
+  const number = (await page.getByRole('heading', { name: /^Order #\d+$/ }).textContent())!
+
+  await page.goto('/account')
+  await expect(orders.getByRole('link', { name: number.replace('Order ', '') })).toBeVisible()
+  await expect(orders).toContainText('Awaiting payment')
+})
+
+test('administrators edit their profile, and someone else’s account', async ({ page }) => {
+  await signInAsAdmin(page)
+  await page.getByRole('button', { name: /^Howdy/ }).click()
+  await page.getByRole('link', { name: 'Edit Profile' }).click()
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible()
+  await page.getByLabel('Name', { exact: true }).fill('Ada A. Admin')
+  await page.getByRole('button', { name: 'Update Profile' }).click()
+  await notice(page, 'Profile updated.')
+  await expect(page.getByRole('button', { name: 'Howdy, Ada A. Admin' })).toBeVisible()
+
+  await page.goto('/admin/users')
+  await page.getByRole('link', { name: `Edit ${CLEO.email}` }).click()
+  await expect(page.getByRole('heading', { name: 'Edit User Cleo S.' })).toBeVisible()
+  await page.getByRole('button', { name: 'Send Reset Link' }).click()
+  await notice(page, `A link to set a new password is on its way to ${CLEO.email}`)
+  await mailTo(CLEO.email, 'Password reset')
 })

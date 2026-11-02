@@ -215,8 +215,11 @@ export function createCommerceService(
       return row ? loadOrder(cms.db, row) : null
     },
 
-    async listOrders({ status, limit = DEFAULT_PAGE_SIZE, offset = 0 } = {}) {
-      const where = status ? eq(orders.status, status) : undefined
+    async listOrders({ status, email, limit = DEFAULT_PAGE_SIZE, offset = 0 } = {}) {
+      const where = and(
+        status ? eq(orders.status, status) : undefined,
+        email !== undefined ? eq(orders.email, email.trim().toLowerCase()) : undefined,
+      )
       const [rows, [{ total } = { total: 0 }]] = await Promise.all([
         cms.db
           .select(orderSummaryColumns)

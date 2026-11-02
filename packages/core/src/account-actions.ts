@@ -1,8 +1,10 @@
-import type { User } from '@otw/sdk'
-import { ActionError } from '@otw/sdk'
+import type { User, UserMetaChanges, UserMetaField } from '@otw/sdk'
+import { ActionError, ContentError } from '@otw/sdk'
 import { safeRedirectPath, type InternalAction } from './admin'
 import { ACCOUNT_PATH, type AccountService } from './accounts'
 import { AuthError, type AuthService } from './auth'
+import { metaFromForm } from './content-actions'
+import type { UsersService } from './users'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
 
 function field(form: FormData, name: string): string {
@@ -10,11 +12,16 @@ function field(form: FormData, name: string): string {
   return typeof value === 'string' ? value : ''
 }
 
+/** Where a form goes after saving: the account, or the admin's Profile, which shares the forms. */
+const back = (form: FormData) => safeRedirectPath(field(form, 'redirect')) ?? ACCOUNT_PATH
+
 async function asActionError<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn()
   } catch (error) {
-    if (error instanceof AuthError) throw new ActionError(error.message)
+    if (error instanceof AuthError || error instanceof ContentError) {
+      throw new ActionError(error.message)
+    }
     throw error
   }
 }
@@ -22,13 +29,25 @@ async function asActionError<T>(fn: () => Promise<T>): Promise<T> {
 export interface AccountActionDependencies {
   auth: AuthService
   accounts: AccountService
+  users: UsersService
+}
+
+/** A form's user field inputs as changes; an empty one removes the field. */
+export function metaChanges(fields: readonly UserMetaField[], form: FormData): UserMetaChanges {
+  return Object.fromEntries(
+    fields.map((meta) => [meta.key, metaFromForm(meta, form)]),
+  ) as UserMetaChanges
 }
 
 /**
  * The account pages' forms: `wp-login.php`'s sign in, register, lost password and reset, and
  * My Account's details. Signed-out forms say the same whether or not an account exists.
  */
-export function accountActions({ auth, accounts }: AccountActionDependencies): InternalAction[] {
+export function accountActions({
+  auth,
+  accounts,
+  users,
+}: AccountActionDependencies): InternalAction[] {
   const signedIn = (user: User | null): User => {
     if (!user) throw new ActionError('Sign in first.')
     return user
@@ -91,8 +110,18 @@ export function accountActions({ auth, accounts }: AccountActionDependencies): I
       name: 'account-name',
       capability: null,
       async handler({ form, user }) {
-        await asActionError(() => accounts.changeName(signedIn(user), field(form, 'name')))
-        return { redirect: ACCOUNT_PATH, notice: 'Your name was saved.' }
+        const me = signedIn(user)
+        // Only the fields the account page shows: the rest are the admin's to change.
+        const shown = users
+          .fields(me.role)
+          .filter(
+            (meta) => meta.definition.onAccount && form.getAll('userFields').includes(meta.key),
+          )
+        await asActionError(async () => {
+          await accounts.changeName(me, field(form, 'name'))
+          if (shown.length > 0) await users.updateMeta(me.id, metaChanges(shown, form))
+        })
+        return { redirect: back(form), notice: 'Your details were saved.' }
       },
     },
     {
@@ -108,7 +137,7 @@ export function accountActions({ auth, accounts }: AccountActionDependencies): I
           ),
         )
         return {
-          redirect: ACCOUNT_PATH,
+          redirect: back(form),
           notice: 'Your password was changed, and your other sessions were signed out.',
         }
       },
@@ -122,7 +151,7 @@ export function accountActions({ auth, accounts }: AccountActionDependencies): I
           accounts.requestEmailChange(signedIn(user), field(form, 'password'), email, origin),
         )
         return {
-          redirect: ACCOUNT_PATH,
+          redirect: back(form),
           notice: `We’ve emailed ${email} a link to confirm it. Your address changes once it’s used.`,
         }
       },
