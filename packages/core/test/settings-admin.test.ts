@@ -146,6 +146,7 @@ describe('settings pages', () => {
     expect(kernel.adminMenu(user).find((section) => section.id === 'settings')?.items).toEqual([
       { key: 'core.general', label: 'General', url: '/admin/settings' },
       { key: 'core.reading', label: 'Reading', url: '/admin/settings/reading' },
+      { key: 'core.media', label: 'Media', url: '/admin/settings/media' },
       { key: 'shop.settings', label: 'Shop', url: '/admin/shop/settings' },
     ])
   })

@@ -1243,6 +1243,172 @@ export interface ContentApi {
   ): Promise<Term[]>
 }
 
+// ── Media ────────────────────────────────────────────────────────────────────
+
+/** What the media library sorts files into, as its type filter does. */
+export type MediaKind = 'image' | 'audio' | 'video' | 'document' | 'spreadsheet' | 'archive'
+
+/** One of an image's sizes, made when it was uploaded. */
+export interface MediaSize {
+  /** Its storage key, beside the image's own: `2026/11/photo-300x200.jpg`. */
+  file: string
+  /** Where it's served. */
+  url: string
+  width: number
+  height: number
+  mimeType: string
+  /** In bytes. */
+  size: number
+}
+
+/** An uploaded file, like a WordPress attachment. */
+export interface MediaItem {
+  id: string
+  /** Who uploaded it, when known. */
+  authorId: string | null
+  /** The entry it was uploaded to, like an attachment's parent; `null` when unattached. */
+  entryId: string | null
+  /** Its storage key, such as `2026/11/photo.jpg`. */
+  file: string
+  /** Where it's served. */
+  url: string
+  /** The file as uploaded, when an image above 2560 pixels was scaled down for `file`. */
+  originalFile: string | null
+  /** Where the original is served, like `wp_get_original_image_url()`. */
+  originalUrl: string | null
+  /** Its name as uploaded. */
+  filename: string
+  mimeType: string
+  kind: MediaKind
+  /** In bytes. */
+  size: number
+  /** An image's dimensions; `null` for other files. */
+  width: number | null
+  height: number | null
+  /**
+   * An image's sizes by name: `thumbnail`, `medium`, `medium_large`, `large`, `1536x1536`,
+   * `2048x2048` and plugins'. Sizes it's no bigger than are left out, as in WordPress.
+   */
+  sizes: Record<string, MediaSize>
+  title: string
+  /** Alternative text, for images. */
+  alt: string
+  caption: string
+  description: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** A size images get at upload, like `add_image_size()`. 0 leaves a side free. */
+export interface ImageSizeDefinition {
+  width: number
+  height: number
+  /** Crops to exactly `width` × `height` from the center; otherwise the image fits within them. */
+  crop?: boolean
+}
+
+/** A size images get, by name. */
+export interface ImageSize extends Required<ImageSizeDefinition> {
+  name: string
+}
+
+/** A file to add to the library. */
+export interface MediaUpload {
+  /** Its name as the uploader had it. The extension decides its type, checked against its bytes. */
+  name: string
+  data: Uint8Array
+}
+
+/** Who uploaded a file, what it's for, and what to say about it. */
+export interface MediaUploadOptions {
+  /** Who uploaded it: a user id. */
+  by?: string | null
+  /** The entry it's uploaded to. */
+  entryId?: string | null
+  /** Defaults to the file's name without its extension, as in WordPress. */
+  title?: string
+  alt?: string
+  caption?: string
+  description?: string
+}
+
+/** What `update()` changes; fields left out keep their values. */
+export interface MediaChanges {
+  title?: string
+  alt?: string
+  caption?: string
+  description?: string
+  entryId?: string | null
+}
+
+/** Which files `list()` returns, newest first unless it says. */
+export interface MediaQuery {
+  kind?: MediaKind
+  /** Uploaded to this entry; `null` for unattached files. */
+  entryId?: string | null
+  authorId?: string
+  /** Matches titles and file names. */
+  search?: string
+  /** `YYYY-MM`: uploaded that month, in UTC. */
+  month?: string
+  orderBy?: 'date' | 'title'
+  order?: 'asc' | 'desc'
+  /** 1 to 100; defaults to 20. */
+  limit?: number
+  offset?: number
+}
+
+/** A stored file's bytes, all of them or a range. */
+export interface StoredFile {
+  body: ReadableStream<Uint8Array>
+  /** The whole file's size, in bytes, even for a range. */
+  size: number
+  modifiedAt: Date
+}
+
+/**
+ * Where uploads are kept: the site's disk unless a plugin provides another, such as S3. Keys are
+ * paths such as `2026/11/photo.jpg`. Files are never overwritten, so they can be cached for good.
+ */
+export interface MediaStorage {
+  /** Writes a new file. Returns `false`, writing nothing, when the key is taken. */
+  create(key: string, data: Uint8Array, contentType: string): Promise<boolean>
+  /** The file's bytes, or those from `start` to `end` (inclusive); `null` when there's none. */
+  read(key: string, range?: { start: number; end: number }): Promise<StoredFile | null>
+  stat(key: string): Promise<{ size: number; modifiedAt: Date } | null>
+  /** Removes the file; a missing one is not an error. */
+  delete(key: string): Promise<void>
+  /** Where it's served: a path on this site, or another address, such as a CDN's. */
+  url(key: string): string
+}
+
+/** `cms.media`: the media library, like WordPress's attachments. */
+export interface MediaApi {
+  /**
+   * Adds a size made for each image uploaded from then on, like `add_image_size()`, named under
+   * the plugin: `card` is `lms.card`. In `setup()` only.
+   */
+  imageSize(name: string, size: ImageSizeDefinition): void
+  /** Keeps uploads somewhere other than the disk. In `setup()` only, by one plugin at most. */
+  storage(storage: MediaStorage): void
+  /** The sizes images get: core's, as Settings › Media has them, then plugins'. */
+  imageSizes(): ImageSize[]
+  /**
+   * Adds a file, like `media_handle_upload()`: checks its type, stores it under a unique name in
+   * the month's folder, and makes an image's sizes. Throws `MediaError`.
+   */
+  upload(file: MediaUpload, options?: MediaUploadOptions): Promise<MediaItem>
+  get(id: string): Promise<MediaItem | null>
+  /** Several by id, in one query, in the order asked for; missing ones are left out. */
+  getMany(ids: readonly string[]): Promise<MediaItem[]>
+  list(query?: MediaQuery): Promise<{ items: MediaItem[]; total: number }>
+  update(id: string, changes: MediaChanges): Promise<MediaItem>
+  /** Deletes it and its files, like `wp_delete_attachment()`. */
+  delete(id: string): Promise<void>
+  /** The months with uploads, newest first, as `YYYY-MM`. */
+  months(): Promise<string[]>
+}
+
 // ── Tracing ──────────────────────────────────────────────────────────────────
 
 /** What a span in a request's trace timed. */
@@ -1343,6 +1509,7 @@ export interface PluginContext {
   readonly auth: AuthApi
   readonly admin: AdminApi
   readonly content: ContentApi
+  readonly media: MediaApi
   readonly traces: TracesApi
   readonly logger: Logger
   /**

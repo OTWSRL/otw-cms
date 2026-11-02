@@ -2372,6 +2372,217 @@ body:has(> .cms-login) {
   }
 }
 
+/* upload.php: the library as a grid or a list. */
+.cms-admin .media-modes {
+  margin: 8px 0 0;
+}
+
+.cms-admin .media-modes a[aria-current='page'] {
+  color: var(--wp-heading);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cms-admin .media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin .media-grid li {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--wp-border);
+}
+
+.cms-admin .media-grid li > a {
+  display: block;
+  color: var(--wp-text);
+  text-decoration: none;
+}
+
+.cms-admin .media-grid li > a:focus-visible {
+  box-shadow: var(--wp-focus);
+  outline: none;
+}
+
+.cms-admin .media-grid input[type='checkbox'] {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+}
+
+/* Square tiles, filled: more specific than the list's 60px thumbnails below. */
+.cms-admin .media-grid .media-thumbnail-large {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--wp-page-bg);
+}
+
+.cms-admin .media-grid .media-icon-large {
+  display: flex;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border: 0;
+}
+
+.cms-admin .media-grid-title {
+  display: block;
+  padding: 6px 8px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cms-admin .media-file {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cms-admin .media-thumbnail {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+}
+
+.cms-admin .media-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  color: var(--wp-muted);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--wp-page-bg);
+  border: 1px solid var(--wp-border);
+}
+
+.cms-admin .filename {
+  margin: 4px 0 0;
+  color: var(--wp-muted);
+  overflow-wrap: anywhere;
+}
+
+.cms-admin .no-media {
+  padding: 24px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--wp-border);
+}
+
+/* media-new.php: the drop zone, and each file's progress under it. */
+.cms-admin .drag-drop-area {
+  padding: 40px 16px;
+  text-align: center;
+  background: #fff;
+  border: 4px dashed var(--wp-border);
+}
+
+.cms-admin .drag-drop-area.drag-over {
+  border-color: var(--wp-highlight);
+}
+
+.cms-admin .drag-drop-info {
+  margin: 0;
+  font-size: 20px;
+}
+
+.cms-admin .drag-drop-area .button-hero {
+  padding: 6px 24px;
+  font-size: 14px;
+}
+
+.cms-admin .drag-drop-area input[type='file']:focus-visible + label {
+  box-shadow: var(--wp-focus);
+}
+
+.cms-admin .media-items {
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--wp-border);
+}
+
+.cms-admin .media-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--wp-page-bg);
+}
+
+.cms-admin .media-item:first-child {
+  border-top: 0;
+}
+
+.cms-admin .media-item img {
+  object-fit: cover;
+}
+
+.cms-admin .media-item-name {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin .media-item-error {
+  flex: 2;
+  color: var(--wp-danger);
+}
+
+.cms-admin .max-upload-size {
+  color: var(--wp-muted);
+}
+
+/* The attachment edit screen. */
+.cms-admin .media-preview-wrap {
+  margin: 16px 0;
+}
+
+.cms-admin .media-preview {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.cms-admin video.media-preview {
+  width: 100%;
+}
+
+.cms-admin .media-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.cms-admin .media-field input,
+.cms-admin .media-field textarea {
+  width: 100%;
+}
+
+.cms-admin .media-field .description {
+  display: block;
+  margin-top: 4px;
+}
+
+.cms-admin #file-url {
+  margin: 4px 0;
+}
+
 /* revision.php: the list beside what the chosen revision changed. */
 .cms-admin .revisions {
   display: grid;

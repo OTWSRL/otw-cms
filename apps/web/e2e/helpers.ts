@@ -50,10 +50,15 @@ export function mainMenu(page: Page) {
  * A top-level menu entry, which opens its section's first page, as in WordPress. Its name may
  * end in WordPress's update count, as in "Plugins (1 update)".
  */
-export function openSection(page: Page, label: string) {
+export async function openSection(page: Page, label: string) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const name = new RegExp(`^${escaped}( \\(\\d+ updates?\\))?$`)
-  return mainMenu(page).getByRole('link', { name }).click()
+  await mainMenu(page).getByRole('link', { name }).click()
+  // The pointer stays where it clicked, over the menu, where another section's flyout can open
+  // over the screen's first column, as in WordPress. A person moves away; so does the test.
+  await page.waitForLoadState()
+  const viewport = page.viewportSize()
+  if (viewport) await page.mouse.move(viewport.width - 1, viewport.height - 1)
 }
 
 /** The submenu of the current section. Other sections' submenus only fly out on hover. */

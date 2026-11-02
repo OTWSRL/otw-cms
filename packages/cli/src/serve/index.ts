@@ -81,8 +81,9 @@ export async function serve(options: ServeOptions): Promise<void> {
     CMS_SUPERVISOR_TOKEN: token,
     // The proxy in front is ours: the visitor's origin comes from its X-Forwarded headers.
     CMS_TRUST_PROXY: '1',
-    // Every release uses the site's database, wherever its own copy of the code is.
+    // Every release uses the site's database and uploads, wherever its own copy of the code is.
     ...(database === 'embedded' ? { CMS_DATA_DIR: dataDir } : {}),
+    CMS_UPLOADS_DIR: resolve(root, env.CMS_UPLOADS_DIR || '.data/uploads'),
   }
 
   const supervisor = new Supervisor(

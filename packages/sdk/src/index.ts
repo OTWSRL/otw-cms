@@ -4,6 +4,7 @@ import type {
   Term,
   EntryFields,
   EntryStatus,
+  MediaItem,
   PluginContext,
   PluginDefinition,
   User,
@@ -14,6 +15,7 @@ export type { AdminIcon, AdminIconName } from './admin-icons'
 export { ADMIN_ICON_NAMES, isAdminIcon } from './admin-icons'
 export { ActionError } from './action-error'
 export { ContentError, type ContentErrorCode } from './content-error'
+export { MediaError, type MediaErrorCode } from './media-error'
 export { isSafeHref } from './links'
 export { ForbiddenError } from './forbidden-error'
 export { HttpError } from './http-error'
@@ -67,6 +69,11 @@ export interface Filters {
    * `wp_insert_post_data`. They're checked again after the filters.
    */
   'content.entry': [EntryFields, { type: string; previous: Entry | null }]
+  /**
+   * The file types people may upload, by extension (`jpg|jpeg|jpe`) to type, like
+   * `upload_mimes`. Remove types here; added ones are checked only by extension.
+   */
+  'media.mimes': [Record<string, string>, { by: string | null }]
 }
 
 /** Action name -> payload. */
@@ -95,6 +102,12 @@ export interface Actions {
     terms: Term[]
     previous: Term[]
   }
+  /** A file was added to the library: `add_attachment`. Runs in the upload's transaction. */
+  'media.uploaded': { item: MediaItem }
+  /** A file's details changed: `attachment_updated`. */
+  'media.updated': { item: MediaItem; previous: MediaItem }
+  /** A file was deleted: `delete_attachment`. Its files go once the transaction commits. */
+  'media.deleted': { item: MediaItem }
 }
 
 /** Service name -> the API the providing plugin exposes to others. */
@@ -119,6 +132,22 @@ export interface Settings {
   'reading.page_for_posts': string
   /** How many entries an archive page lists. */
   'reading.posts_per_page': string
+  /** Settings › Media: the thumbnail size's width, in pixels. */
+  'media.thumbnail_size_w': string
+  /** The thumbnail size's height, in pixels. */
+  'media.thumbnail_size_h': string
+  /** Whether thumbnails are cropped to their exact size. */
+  'media.thumbnail_crop': boolean
+  /** The medium size's largest width; 0 leaves it free. */
+  'media.medium_size_w': string
+  /** The medium size's largest height; 0 leaves it free. */
+  'media.medium_size_h': string
+  /** The large size's largest width; 0 leaves it free. */
+  'media.large_size_w': string
+  /** The large size's largest height; 0 leaves it free. */
+  'media.large_size_h': string
+  /** Uploads go in year and month folders, `2026/11/`, as WordPress's do by default. */
+  'media.uploads_use_yearmonth_folders': boolean
 }
 
 /** Capability name -> `true`. Admin pages and actions each require one. */
@@ -138,13 +167,20 @@ export interface Capabilities {
    * revoked.
    */
   'core.read': true
+  /** Upload files and use the media library, like WordPress's `upload_files`: authors and up. */
+  'core.upload_files': true
 }
 
 /**
  * Meta capability name -> the arguments it is checked against. Like WordPress's `edit_post`,
  * it maps an object to the primitive capabilities it requires: `can(user, 'commerce.cancel_order', order)`.
  */
-export interface MetaCapabilities {}
+export interface MetaCapabilities {
+  /** Change a file's details: one's own with `core.edit_posts`, others' with `core.edit_others_posts`. */
+  'core.edit_media': [MediaItem]
+  /** Delete a file: one's own with `core.delete_posts`, others' with `core.delete_others_posts`. */
+  'core.delete_media': [MediaItem]
+}
 
 /**
  * Content type name -> `true`, or `{ plural }` when its plural isn't the name and an `s`. Declaring

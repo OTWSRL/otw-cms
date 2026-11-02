@@ -429,6 +429,21 @@ post types in LearnDash, LifterLMS and Tutor.
   transaction; status-only saves keep none, and each entry keeps its type's number (25 by
   default), the oldest pruned by one delete. The revisions screen compares one with the one
   before, field by field, and restores it (as a save of its own), for those who may edit.
+- **Media.** WordPress's Media Library apart from entries, in `cms_media`: Media › Library
+  (grid or list, filters by type, month and attachment, search, bulk delete), Add New (drag and
+  drop, each file uploaded with its progress through `POST /api/p/core/media`; a plain form
+  without JavaScript) and the Edit Media screen. `cms.media.upload()` checks the extension
+  against WordPress's allowed types (less HTML, SVG and scripts; the `media.mimes` filter), the
+  bytes against the type (images decoded by sharp, the rest by signature), and the size
+  (`CMS_MAX_UPLOAD_MB`, checked from Content-Length before a form is read). Names are made safe
+  and lower case, in `2026/11/`, and claimed by exclusive create (`photo-1.jpg`), so concurrent
+  uploads never overwrite. Images get WordPress's six sizes (Settings › Media's three, plus
+  `imageSize()` from plugins), above 2560 a `-scaled` copy with the original kept; sizes are
+  oriented and stripped of metadata. Files live in `MediaStorage` (the disk, `CMS_UPLOADS_DIR`,
+  unless a plugin provides one) and are served by a generated `/uploads/[...path]` route with
+  ETags, ranges, `nosniff` and a sandbox CSP. `core.upload_files` (Authors and up) and the meta
+  capabilities `core.edit_media` and `core.delete_media`, mapped onto posts' as WordPress maps
+  attachments; files are deleted after the delete commits.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
   links included, and `Blocks` from `@otw/next/site` renders them on the site with no

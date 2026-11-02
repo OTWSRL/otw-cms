@@ -7,6 +7,7 @@ import type {
   CapabilityName,
   ContentType,
   Entry,
+  MediaItem,
   Taxonomy,
   Term,
   Logger,
@@ -34,6 +35,10 @@ export type AdminPageEntry =
   | { pluginId: string; settingsPage: string }
   | { pluginId: string; content: { type: string; screen: ContentScreen } }
   | { pluginId: string; taxonomy: { name: string; screen: 'terms' | 'term' } }
+  | { pluginId: string; media: MediaScreen }
+
+/** Media › Library (upload.php), Add New (media-new.php), and a file's Edit Media screen. */
+export type MediaScreen = 'library' | 'new' | 'edit'
 
 export type SettingsResolution =
   | { kind: 'not-found' }
@@ -50,6 +55,9 @@ export type AdminResolution =
   /** A taxonomy's screen (edit-tags.php), and a term's (term.php). */
   | { kind: 'taxonomy-terms'; taxonomy: Taxonomy }
   | { kind: 'taxonomy-term'; taxonomy: Taxonomy; term: Term }
+  | { kind: 'media-library' }
+  | { kind: 'media-new' }
+  | { kind: 'media-edit'; item: MediaItem }
   | {
       kind: 'page'
       key: string
@@ -77,6 +85,11 @@ export interface ActionOutput extends AdminActionResult {
 export interface InternalAction {
   name: string
   capability: CapabilityName | null
+  /**
+   * The largest form it reads, by Content-Length, for actions that take files: a bigger one is
+   * refused with `message` before its body is read.
+   */
+  maxBody?: { bytes: number; message: string }
   handler: (input: ActionInput) => ActionOutput | void | Promise<ActionOutput | void>
 }
 
@@ -165,6 +178,16 @@ export function createActionHandler(action: InternalAction, deps: ActionDependen
 
     const flashTo = (path: string, flash: Flash | null) =>
       withFlash(path, flash ? deps.flash.encode(flash) : null)
+
+    if (action.maxBody) {
+      const length = Number(request.headers.get('content-length') ?? NaN)
+      if (!Number.isSafeInteger(length)) {
+        return Response.json({ error: 'Send the form with its length' }, { status: 411 })
+      }
+      if (length > action.maxBody.bytes) {
+        return redirect(flashTo(back, { kind: 'error', message: action.maxBody.message }))
+      }
+    }
 
     let form: FormData
     try {

@@ -136,7 +136,13 @@ test('plugins add pages under Settings and sections to each other’s pages', as
   await signIn(page, ADMIN)
   await openSection(page, 'Settings')
   const settings = submenu(page, 'Settings')
-  await expect(settings.getByRole('link')).toHaveText(['General', 'Reading', 'Shop', 'Payments'])
+  await expect(settings.getByRole('link')).toHaveText([
+    'General',
+    'Reading',
+    'Media',
+    'Shop',
+    'Payments',
+  ])
   await settings.getByRole('link', { name: 'Payments' }).click()
   await expect(page).toHaveURL('/admin/commerce/settings/payments')
   await expect(page).toHaveTitle('Payment settings · Admin · My Site')

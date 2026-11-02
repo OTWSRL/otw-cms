@@ -155,6 +155,15 @@ describe('admin pages', () => {
         ],
       },
       {
+        id: 'media',
+        label: 'Media',
+        icon: 'media',
+        items: [
+          { key: 'core.media.library', label: 'Library', url: '/admin/media' },
+          { key: 'core.media.new', label: 'Add New Media File', url: '/admin/media/new' },
+        ],
+      },
+      {
         id: 'pages',
         label: 'Pages',
         icon: 'page',
@@ -195,6 +204,7 @@ describe('admin pages', () => {
         items: [
           { key: 'core.general', label: 'General', url: '/admin/settings' },
           { key: 'core.reading', label: 'Reading', url: '/admin/settings/reading' },
+          { key: 'core.media', label: 'Media', url: '/admin/settings/media' },
         ],
       },
     ])
@@ -230,6 +240,7 @@ describe('admin pages', () => {
     expect(icons).toEqual([
       ['dashboard', 'dashboard'],
       ['posts', 'post'],
+      ['media', 'media'],
       ['pages', 'page'],
       ['drawn', svg],
       ['shop', 'cart'],
@@ -276,6 +287,7 @@ describe('admin pages', () => {
     expect(sections.map((section) => section.id)).toEqual([
       'dashboard',
       'posts',
+      'media',
       'pages',
       'shop',
       'reports',

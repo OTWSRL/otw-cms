@@ -1,7 +1,7 @@
 import { createKernel, type Env, type Kernel } from '@otw/core'
 import type { Database } from '@otw/sdk'
 import type { Site } from '../site-registry'
-import { activePluginsFromEnv, migrationModeFromEnv } from './settings'
+import { activePluginsFromEnv, migrationModeFromEnv, uploadsFromEnv } from './settings'
 import { traceCollector } from './tracing'
 import { updateServiceFromEnv } from './updates'
 
@@ -34,6 +34,7 @@ export function bootSite(
     routes: site.routes,
     traces: traceCollector(),
     brand: site.brand,
+    uploads: uploadsFromEnv(env),
     onChange,
   })
 }

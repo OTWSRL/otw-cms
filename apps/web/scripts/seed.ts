@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
-import { bootSite, dataDir, openDatabase } from '@otw/next/server'
+import { bootSite, dataDir, openDatabase, uploadsFromEnv } from '@otw/next/server'
 import { site } from '../src/cms/site.generated'
 
 const DEMO_PRODUCTS = [
@@ -14,13 +14,17 @@ const DEMO_PRODUCTS = [
   { slug: 'canvas-tote', title: 'Canvas Tote', description: 'Heavy cotton canvas.', price: 2400 },
 ]
 
-/** `--reset` wipes the local PGlite data first. It refuses to touch anything outside ./.data. */
+/**
+ * `--reset` wipes the local PGlite data and the uploads first. It refuses to touch anything
+ * outside ./.data.
+ */
 async function resetLocalData(): Promise<void> {
   if (process.env.DATABASE_URL) throw new Error('--reset only works with the embedded database')
-  const dir = dataDir()
-  if (!dir.startsWith(resolve('.data') + sep))
-    throw new Error(`Refusing to delete ${dir}: not under ./.data`)
-  await rm(dir, { recursive: true, force: true })
+  for (const dir of [dataDir(), uploadsFromEnv(process.env).dir]) {
+    if (!dir.startsWith(resolve('.data') + sep))
+      throw new Error(`Refusing to delete ${dir}: not under ./.data`)
+    await rm(dir, { recursive: true, force: true })
+  }
 }
 
 async function main(): Promise<void> {

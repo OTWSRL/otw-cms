@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { activePluginsFromEnv, migrationModeFromEnv } from '../src/runtime/settings'
+import { resolve } from 'node:path'
+import { activePluginsFromEnv, migrationModeFromEnv, uploadsFromEnv } from '../src/runtime/settings'
 
 describe('activePluginsFromEnv', () => {
   it('leaves activation to the database when unset or blank', () => {
@@ -26,5 +27,24 @@ describe('migrationModeFromEnv', () => {
     expect(() => migrationModeFromEnv({ CMS_MIGRATIONS: 'never' })).toThrow(
       'CMS_MIGRATIONS must be "startup" or "deploy", not "never"',
     )
+  })
+})
+
+describe('uploadsFromEnv', () => {
+  it('keeps uploads in .data/uploads, up to 64 MB each, unless told otherwise', () => {
+    expect(uploadsFromEnv({})).toEqual({
+      dir: resolve('.data/uploads'),
+      maxBytes: 64 * 1024 * 1024,
+    })
+    expect(uploadsFromEnv({ CMS_UPLOADS_DIR: '/srv/uploads', CMS_MAX_UPLOAD_MB: '0.5' })).toEqual({
+      dir: '/srv/uploads',
+      maxBytes: 512 * 1024,
+    })
+  })
+
+  it('refuses a limit that isn’t a size', () => {
+    for (const value of ['0', '-1', '64MB', '20000']) {
+      expect(() => uploadsFromEnv({ CMS_MAX_UPLOAD_MB: value })).toThrow('CMS_MAX_UPLOAD_MB')
+    }
   })
 })

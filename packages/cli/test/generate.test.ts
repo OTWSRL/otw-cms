@@ -156,6 +156,7 @@ export const site = defineSite({
       'src/app/(cms)/admin/forbidden.tsx',
       'src/app/(cms)/admin/not-found.tsx',
       'src/app/(cms)/api/p/[...path]/route.ts',
+      'src/app/(cms)/uploads/[...path]/route.ts',
       'src/instrumentation.ts',
       'src/app/(site)/page.tsx',
       'src/app/(site)/[...slug]/page.tsx',
@@ -171,6 +172,12 @@ export const dynamic = 'force-dynamic'
     expect(imports('src/app/(cms)/api/p/[...path]/route.ts')).toContain(
       "import '../../../../../cms/admin.generated'",
     )
+    // Uploads come from the storage plugins set up in the site's module; no admin code.
+    expect(imports('src/app/(cms)/uploads/[...path]/route.ts')).toBe(`${MARKER}
+import '../../../../cms/site.generated'
+export { GET, HEAD } from '@otw/next/uploads'
+export const dynamic = 'force-dynamic'
+`)
     expect(imports('src/app/(site)/page.tsx')).toContain("import '../../cms/site.generated'")
     expect(imports('src/app/(site)/[...slug]/page.tsx')).toContain(
       "import '../../../cms/site.generated'",
@@ -204,12 +211,12 @@ describe('generate', () => {
     Object.fromEntries((await generate({ root })).files.map((f) => [f.path, f.status]))
 
   it('writes every file, then leaves them alone until something changes', async () => {
-    expect(Object.values(await statuses())).toEqual(Array(10).fill('written'))
+    expect(Object.values(await statuses())).toEqual(Array(11).fill('written'))
     const site = join(root, 'src/cms/site.generated.ts')
     expect(await readFile(site, 'utf8')).toContain('import plugin0 from "@acme/lms"')
     const written = (await stat(site)).mtimeMs
 
-    expect(Object.values(await statuses())).toEqual(Array(10).fill('unchanged'))
+    expect(Object.values(await statuses())).toEqual(Array(11).fill('unchanged'))
     expect((await stat(site)).mtimeMs).toBe(written)
 
     await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: [] }))

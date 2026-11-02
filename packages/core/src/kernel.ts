@@ -9,6 +9,7 @@ import type {
   ContentTemplate,
   ContentTypeDefinition,
   ContentView,
+  MediaStorage,
   Database,
   TaxonomyDefinition,
   FilterContext,
@@ -44,15 +45,21 @@ import {
   type AdminPageEntry,
   type AdminResolution,
   type ContentScreen,
+  type MediaScreen,
   type InternalAction,
   type SettingsResolution,
 } from './admin'
+import { resolve as resolvePath } from 'node:path'
 import { AdminMenu, type AdminMenuSection } from './admin-menu'
 import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
 import { createAuthService, type AuthService } from './auth'
 import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
 import { createContentService, type ContentService } from './content'
+import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
+import { MEDIA_PATH, mediaActions, mediaUploadRoute } from './media-actions'
+import { serveUpload } from './media-serve'
+import { localStorage, UPLOADS_PATH } from './media-storage'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
 import { MetaStore } from './content-meta'
@@ -164,6 +171,11 @@ export interface KernelOptions {
    * `cms.traces.enable()` turns recording on.
    */
   traces?: TraceCollector
+  /**
+   * Where uploads are kept on disk unless a plugin provides storage (default `.data/uploads`), and
+   * the largest file one upload may be (default 64 MB).
+   */
+  uploads?: { dir?: string; maxBytes?: number }
 }
 
 export interface ResolvedPage {
@@ -225,6 +237,12 @@ export interface Kernel {
   readonly auth: AuthService
   /** Content types and their entries, for the admin's screens and the site's pages. */
   readonly content: ContentService
+  /** The media library. */
+  readonly media: MediaService
+  /** The largest file one upload may be, in bytes. */
+  readonly maxUploadBytes: number
+  /** Answers a request for an upload, `/uploads/{key}`, from the storage. */
+  serveUpload(request: Request, key: string): Promise<Response>
   can<C extends CapabilityName | MetaCapabilityName>(
     user: User | null,
     capability: C,
@@ -284,7 +302,11 @@ interface StartOptions {
 }
 
 const ROUTE_NAME = /^[a-z][a-z0-9-]*$/
-const RESERVED_PATHS = ['/api', '/_next', '/admin']
+const RESERVED_PATHS = ['/api', '/_next', '/admin', UPLOADS_PATH]
+/** Where uploads go without `uploads.dir` or a plugin's storage, relative to the site. */
+const DEFAULT_UPLOADS_DIR = '.data/uploads'
+/** The largest upload without `uploads.maxBytes`: 64 MB. */
+const DEFAULT_MAX_UPLOAD = 64 * 1024 * 1024
 const APP = 'app'
 const PINNED = 'Plugins are switched on in the site configuration, so they cannot be changed here.'
 
@@ -460,6 +482,49 @@ async function boot(
   })
   const contentScreens = new ContentScreenStore(assertOpen)
   const typesInMenu = new Map<string, number>()
+
+  const imageSizes = new ImageSizeStore(assertOpen)
+  const maxUploadBytes = options.uploads?.maxBytes ?? DEFAULT_MAX_UPLOAD
+  if (!Number.isSafeInteger(maxUploadBytes) || maxUploadBytes < 1) {
+    throw new Error(`The upload limit must be a whole number of bytes, not ${maxUploadBytes}`)
+  }
+  const diskStorage = localStorage(options.uploads?.dir ?? resolvePath(DEFAULT_UPLOADS_DIR))
+  let pluginStorage: { pluginId: string; storage: MediaStorage } | null = null
+  const mediaStorage = () => pluginStorage?.storage ?? diskStorage
+  const media = createMediaService({
+    db,
+    hooks: stores.hooks,
+    logger,
+    storage: mediaStorage,
+    imageSizes: () => [
+      ...coreImageSizes({
+        thumbnail: [
+          values['media.thumbnail_size_w'] ?? '',
+          values['media.thumbnail_size_h'] ?? '',
+          values['media.thumbnail_crop'] ?? true,
+        ],
+        medium: [values['media.medium_size_w'] ?? '', values['media.medium_size_h'] ?? ''],
+        large: [values['media.large_size_w'] ?? '', values['media.large_size_h'] ?? ''],
+      }),
+      ...imageSizes.list(),
+    ],
+    byMonth: () => values['media.uploads_use_yearmonth_folders'] ?? true,
+    maxBytes: maxUploadBytes,
+  })
+  /** A plugin's storage, checked as far as it can be before it's used. */
+  const provideStorage = (pluginId: string, storage: MediaStorage) => {
+    assertOpen(`media storage from "${pluginId}"`)
+    if (pluginStorage) {
+      throw new Error(
+        `Plugin "${pluginId}" provides media storage, but "${pluginStorage.pluginId}" already does; only one can`,
+      )
+    }
+    const methods = ['create', 'read', 'stat', 'delete', 'url'] as const
+    if (!storage || methods.some((method) => typeof storage[method] !== 'function')) {
+      throw new TypeError(`Media storage from "${pluginId}" needs ${methods.join(', ')}`)
+    }
+    pluginStorage = { pluginId, storage }
+  }
 
   /** Registers the type, and its list, Add New and edit screens and menu items when it has them. */
   const registerContentType = (
@@ -727,6 +792,19 @@ async function boot(
     transaction: (fn) => db.transaction(() => fn()),
   })
   for (const action of contentForms) registerAction(CORE, action)
+  // WordPress's upload.php, media-new.php and the attachment's edit screen.
+  stores.adminPages.add('core.media.library', MEDIA_PATH, { pluginId: CORE, media: 'library' })
+  stores.adminPages.add('core.media.new', `${MEDIA_PATH}/new`, { pluginId: CORE, media: 'new' })
+  stores.adminPages.add('core.media.edit', `${MEDIA_PATH}/:id`, { pluginId: CORE, media: 'edit' })
+  const mediaDependencies = {
+    media,
+    can: (user: User, capability: string, ...args: unknown[]) =>
+      stores.capabilities.can(user, capability, ...args),
+    transaction: <T>(fn: () => Promise<T>) => db.transaction(() => fn()),
+    maxBytes: maxUploadBytes,
+  }
+  for (const action of mediaActions(mediaDependencies)) registerAction(CORE, action)
+  registerApi(CORE, mediaUploadRoute(mediaDependencies))
 
   /** These plugins and, transitively, the active plugins they require or optionally use. */
   const withDependencies = (ids: Iterable<string>): string[] => {
@@ -909,6 +987,25 @@ async function boot(
             )
           }
           metaFields.register(plugin.id, key, definition)
+        },
+      },
+      media: {
+        ...media,
+        imageSize: (name, size) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Register image size "${plugin.id}.${name}" in setup(): uploads use it wherever they're made`,
+            )
+          }
+          imageSizes.register(plugin.id, name, size)
+        },
+        storage: (storage) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Provide media storage in setup(): the site serves uploads, where the admin entry isn't loaded`,
+            )
+          }
+          provideStorage(plugin.id, storage)
         },
       },
       admin: {
@@ -1130,6 +1227,9 @@ async function boot(
     contentScreens,
     templates,
     resolveContent,
+    media,
+    mediaStorage,
+    maxUploadBytes,
   })
 }
 
@@ -1170,6 +1270,9 @@ function buildKernel(input: {
   templates: TemplateStore
   resolveContent: ReturnType<typeof createSiteContent>
   origins: OriginPolicy
+  media: MediaService
+  mediaStorage: () => MediaStorage
+  maxUploadBytes: number
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
   const { options, logger, db } = prepared
@@ -1209,6 +1312,26 @@ function buildKernel(input: {
     if (term?.taxonomy !== taxonomy.name) return { kind: 'not-found' }
     if (!capabilities.can(user, taxonomy.capabilities.editTerm, term)) return { kind: 'forbidden' }
     return { kind: 'taxonomy-term', taxonomy, term }
+  }
+
+  /** The library and Add New need `core.upload_files`, as upload.php does; a file's screen, `core.edit_media` on it. */
+  const mediaScreen = async (
+    screen: MediaScreen,
+    params: Record<string, string>,
+    user: User,
+  ): Promise<AdminResolution> => {
+    if (
+      !capabilities.can(user, 'core.access_admin') ||
+      !capabilities.can(user, 'core.upload_files')
+    ) {
+      return { kind: 'forbidden' }
+    }
+    if (screen === 'library') return { kind: 'media-library' }
+    if (screen === 'new') return { kind: 'media-new' }
+    const item = await input.media.get(params.id ?? '')
+    if (!item) return { kind: 'not-found' }
+    if (!capabilities.can(user, 'core.edit_media', item)) return { kind: 'forbidden' }
+    return { kind: 'media-edit', item }
   }
 
   const contentScreen = async (
@@ -1285,6 +1408,9 @@ function buildKernel(input: {
 
     auth: input.auth,
     content: input.content,
+    media: input.media,
+    maxUploadBytes: input.maxUploadBytes,
+    serveUpload: (request, key) => serveUpload(input.mediaStorage(), key, request),
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),
     roles: () => capabilities.roles(),
     capabilities: () => capabilities.capabilities(),
@@ -1319,6 +1445,7 @@ function buildKernel(input: {
       if ('settingsPage' in entry) return settingsPage(entry.settingsPage, user)
       if ('content' in entry) return contentScreen(entry.content, match.params, user)
       if ('taxonomy' in entry) return taxonomyScreen(entry.taxonomy, match.params, user)
+      if ('media' in entry) return mediaScreen(entry.media, match.params, user)
       const { pluginId, page } = entry
       if (
         !capabilities.can(user, 'core.access_admin') ||

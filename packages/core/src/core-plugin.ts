@@ -1,6 +1,10 @@
 import type {
+  CapabilityName,
   ContentTypeDefinition,
+  MediaItem,
   PluginDefinition,
+  RequiredCapabilities,
+  TextSetting,
   SettingDefinitions,
   TaxonomyDefinition,
   User,
@@ -34,6 +38,20 @@ function validateLocale(value: string): string | null {
     return null
   } catch {
     return 'Use a language tag such as en-US'
+  }
+}
+
+/** A side of an image size, in Settings › Media: 0 leaves it free, as in WordPress. */
+function pixels(label: string, fallback: string): TextSetting {
+  return {
+    type: 'text',
+    label,
+    default: fallback,
+    maxLength: 5,
+    validate: (value) =>
+      /^\d+$/.test(value) && Number(value) <= 10000
+        ? null
+        : 'Use a whole number of pixels from 0 to 10000',
   }
 }
 
@@ -78,6 +96,23 @@ const coreSettings: SettingDefinitions = {
         ? null
         : 'Use a whole number from 1 to 100',
   },
+  // Settings › Media, with WordPress's defaults.
+  'media.thumbnail_size_w': pixels('Thumbnail width', '150'),
+  'media.thumbnail_size_h': pixels('Thumbnail height', '150'),
+  'media.thumbnail_crop': {
+    type: 'boolean',
+    label: 'Crop thumbnail to exact dimensions (normally thumbnails are proportional)',
+    default: true,
+  },
+  'media.medium_size_w': pixels('Medium size max width', '300'),
+  'media.medium_size_h': pixels('Medium size max height', '300'),
+  'media.large_size_w': pixels('Large size max width', '1024'),
+  'media.large_size_h': pixels('Large size max height', '1024'),
+  'media.uploads_use_yearmonth_folders': {
+    type: 'boolean',
+    label: 'Organize my uploads into month- and year-based folders',
+    default: true,
+  },
   'site.locale': {
     type: 'text',
     label: 'Locale',
@@ -117,6 +152,27 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
   // No role gets it: updating rebuilds the site, so it stays with administrators unless granted.
   capabilities.capability(CORE, 'core.manage_updates', { label: 'Update the CMS and plugins' })
+  // WordPress's upload_files: authors and editors; contributors write without uploading.
+  capabilities.capability(CORE, 'core.upload_files', { label: 'Upload files' })
+  capabilities.grant(CORE, 'editor', ['core.upload_files'])
+  capabilities.grant(CORE, 'author', ['core.upload_files'])
+  // Media are checked as WordPress checks attachments, by posts' capabilities: one's own file
+  // with edit_posts or delete_posts, anyone else's with edit_others_posts or delete_others_posts.
+  const mediaChange =
+    (own: CapabilityName, others: CapabilityName) =>
+    (user: User, ...args: unknown[]): RequiredCapabilities => {
+      const item = args[0] as MediaItem | undefined
+      if (!item || typeof item !== 'object') return false
+      return item.authorId !== null && item.authorId === user.id ? [own] : [others]
+    }
+  capabilities.metaCapability(CORE, 'core.edit_media', {
+    label: 'Media: edit',
+    map: mediaChange('core.edit_posts', 'core.edit_others_posts'),
+  })
+  capabilities.metaCapability(CORE, 'core.delete_media', {
+    label: 'Media: delete',
+    map: mediaChange('core.delete_posts', 'core.delete_others_posts'),
+  })
 }
 
 /** WordPress's posts and pages. Authors and contributors write posts; pages are editors'. */
@@ -186,6 +242,34 @@ export function registerCoreSettings(layout: SettingsLayoutStore): void {
       'reading.page_for_posts',
       'reading.posts_per_page',
     ],
+  })
+  // WordPress's Settings › Media.
+  layout.page(
+    CORE,
+    { name: 'media', path: '/media', title: 'Media Settings', menu: { label: 'Media', order: 2 } },
+    `${ADMIN_PREFIX}/settings/media`,
+  )
+  layout.section(CORE, {
+    name: 'image-sizes',
+    page: 'core.media',
+    title: 'Image sizes',
+    description:
+      'The sizes listed below determine the maximum dimensions in pixels to use when adding an image to the Media Library.',
+    fields: [
+      'media.thumbnail_size_w',
+      'media.thumbnail_size_h',
+      'media.thumbnail_crop',
+      'media.medium_size_w',
+      'media.medium_size_h',
+      'media.large_size_w',
+      'media.large_size_h',
+    ],
+  })
+  layout.section(CORE, {
+    name: 'uploads',
+    page: 'core.media',
+    title: 'Uploading Files',
+    fields: ['media.uploads_use_yearmonth_folders'],
   })
 }
 

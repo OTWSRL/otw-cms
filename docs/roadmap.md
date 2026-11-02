@@ -25,8 +25,8 @@ and the API routes load, so none of it reaches the site's visitors (Plugin Handb
 screens).
 
 Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
-screens, are done, and so are 7c, taxonomies and custom fields, and 7d, site pages and
-revisions. Next: 7e, the media library.
+screens, are done, and so are 7c, taxonomies and custom fields, 7d, site pages and revisions,
+and the media library of 7e. Next: images in the editor, and featured images.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -355,6 +355,37 @@ source.
   `rowAction` and `bulkAction` from their admin entry, for one type, several or `'*'`.
 - Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
   which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
+
+### 7e. The media library (done) and images in the editor
+
+- **The library** (`upload.php`, `media-new.php`, the attachment's edit screen): a grid or a list,
+  filtered by kind, month, unattached and mine, searched by title and file name, with bulk delete;
+  Add New uploads each dropped file with its progress through `POST /api/p/core/media`
+  (`async-upload.php`), and is a plain form without JavaScript; Edit Media has the title, alt text,
+  caption, description and the file's details. Settings › Media has the sizes and year/month
+  folders.
+- **Records** in `cms_media` (migration core/0006_media), apart from entries; `entry_id` is the
+  attachment's parent and is cleared when the entry goes.
+- **Uploads** (`wp_handle_upload`): WordPress's allowed types for people without
+  `unfiltered_html`, less CSS and the image formats browsers can't show, changed by the
+  `media.mimes` filter; contents checked against the type (sharp decodes images; signatures for the
+  rest), a lying image extension corrected; `CMS_MAX_UPLOAD_MB` (64), refused from Content-Length
+  before a form is read; names sanitized and lower case, in year/month folders, claimed by an
+  exclusive create, numbered as `wp_unique_filename()`.
+- **Images**: WordPress's six sizes (three from Settings › Media) and plugins' (`imageSize()`), made
+  from a `-scaled` copy above 2560 (`big_image_size_threshold`), never enlarged, shared when two
+  come out the same; EXIF orientation applied and metadata stripped in sizes; the original kept.
+- **Storage**: `MediaStorage` (create without overwriting, read with ranges, stat, delete, url),
+  the disk by default (`CMS_UPLOADS_DIR`, shared by `cms serve`'s releases, in Docker's volume),
+  or one plugin's. A generated `/uploads/[...path]` route serves it with ETag and Last-Modified,
+  ranges, `nosniff`, a sandbox CSP (not for PDFs) and a day's caching.
+- **Capabilities**: `core.upload_files` for Authors, Editors and Administrators; `core.edit_media`
+  and `core.delete_media` mapped onto posts' capabilities, as attachments are. Files go after the
+  delete's transaction commits (`afterCommit()` on the database context).
+- Next in 7e: an Image block with a media picker in the editor, featured images (`thumbnail`),
+  and responsive images (`srcset`) on the site.
+- Not in 7e: image editing, regenerating sizes, custom fields and taxonomies on media, a media
+  trash, and a storage plugin for S3.
 
 ### 7d. Site pages and revisions (done)
 

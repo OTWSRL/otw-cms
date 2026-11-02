@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Database, PluginDefinition } from '@otw/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
@@ -9,9 +12,19 @@ export { createMemoryLogger as memoryLogger } from '../src/logger'
 
 const open: PGlite[] = []
 
+const folders: string[] = []
+
 afterEach(async () => {
   await Promise.all(open.splice(0).map((client) => client.close()))
+  for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })
 })
+
+/** An empty folder, removed after the test: where a test kernel keeps its uploads. */
+export function tempDir(): string {
+  const folder = mkdtempSync(join(tmpdir(), 'cms-test-'))
+  folders.push(folder)
+  return folder
+}
 
 // initdb takes most of a second; restoring an empty cluster from a dump takes about 100 ms.
 const template = await (async () => {
@@ -65,7 +78,37 @@ export function bootKernel(options: Partial<KernelOptions> & Pick<KernelOptions,
     logger: memoryLogger(),
     strict: true,
     passwordHashing: 'fast',
+    uploads: { dir: tempDir() },
     ...options,
+  })
+}
+
+/** A multipart form post with files, sent with its length, as browsers send forms. */
+export async function multipartPost(
+  path: string,
+  fields: Record<string, string>,
+  files: { field: string; name: string; data: Uint8Array; type?: string }[],
+  headers: Record<string, string> = {},
+): Promise<Request> {
+  const form = new FormData()
+  for (const [name, value] of Object.entries(fields)) form.append(name, value)
+  for (const file of files) {
+    form.append(
+      file.field,
+      new File([new Uint8Array(file.data)], file.name, { type: file.type ?? '' }),
+    )
+  }
+  const encoded = new Response(form)
+  const body = new Uint8Array(await encoded.arrayBuffer())
+  return new Request(new URL(path, ORIGIN), {
+    method: 'POST',
+    headers: {
+      origin: ORIGIN,
+      'content-type': encoded.headers.get('content-type')!,
+      'content-length': String(body.byteLength),
+      ...headers,
+    },
+    body,
   })
 }
 

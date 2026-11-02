@@ -34,6 +34,8 @@ const RESERVED_IDS = new Set([
   // Core's content types' screens: /admin/posts, /admin/pages.
   'posts',
   'pages',
+  // Core's Media screens: /admin/media.
+  'media',
 ])
 
 interface Edge {

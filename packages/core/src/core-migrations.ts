@@ -168,4 +168,39 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    id: '0006_media',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_media (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          author_id uuid REFERENCES cms_users (id) ON DELETE SET NULL,
+          entry_id uuid REFERENCES cms_entries (id) ON DELETE SET NULL,
+          file text NOT NULL UNIQUE,
+          original_file text,
+          filename text NOT NULL,
+          mime_type text NOT NULL,
+          size bigint NOT NULL,
+          width integer,
+          height integer,
+          sizes jsonb NOT NULL DEFAULT '{}',
+          title text NOT NULL DEFAULT '',
+          alt text NOT NULL DEFAULT '',
+          caption text NOT NULL DEFAULT '',
+          description text NOT NULL DEFAULT '',
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `)
+      await db.execute(
+        sql`CREATE INDEX cms_media_created_idx ON cms_media (created_at DESC, id DESC)`,
+      )
+      // Filters by type match a prefix (image/) or a list; text_pattern_ops serves LIKE 'image/%'.
+      await db.execute(
+        sql`CREATE INDEX cms_media_mime_idx ON cms_media (mime_type text_pattern_ops)`,
+      )
+      await db.execute(sql`CREATE INDEX cms_media_entry_idx ON cms_media (entry_id)`)
+      await db.execute(sql`CREATE INDEX cms_media_author_idx ON cms_media (author_id)`)
+    },
+  },
 ]

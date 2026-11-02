@@ -50,6 +50,7 @@ export default defineConfig({
       timeout: 300_000,
       env: {
         CMS_DATA_DIR: '.data/e2e',
+        CMS_UPLOADS_DIR: '.data/e2e-uploads',
         DATABASE_URL: '',
         STRIPE_SECRET_KEY: '',
         STRIPE_WEBHOOK_SECRET: '',

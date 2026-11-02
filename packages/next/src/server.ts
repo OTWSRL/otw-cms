@@ -4,4 +4,10 @@
  */
 export { bootSite, type BootOptions } from './runtime/boot'
 export { DEFAULT_DATA_DIR, dataDir, openDatabase, type DatabaseHandle } from './runtime/database'
-export { activePluginsFromEnv, migrationModeFromEnv, type MigrationMode } from './runtime/settings'
+export {
+  activePluginsFromEnv,
+  DEFAULT_UPLOADS_DIR,
+  migrationModeFromEnv,
+  uploadsFromEnv,
+  type MigrationMode,
+} from './runtime/settings'

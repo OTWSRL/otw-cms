@@ -230,6 +230,12 @@ export function managedFiles(
       "export { DELETE, GET, PATCH, POST, PUT } from '@otw/next/api'",
       dynamic,
     ]),
+    // The media library's files, as wp-content/uploads. A plugin may keep them elsewhere, so
+    // they come from the site's module, where plugins set up, never the admin's.
+    route('app/(cms)/uploads/[...path]/route.ts', [
+      "export { GET, HEAD } from '@otw/next/uploads'",
+      dynamic,
+    ]),
     // Next.js loads it when the server starts. A site with its own (Sentry, say) keeps it and
     // calls this register() from its own.
     file(at('instrumentation.ts'), ["export { register } from '@otw/next/instrumentation'"], true),

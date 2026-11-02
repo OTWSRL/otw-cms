@@ -1,7 +1,7 @@
 import type { ContentType, Taxonomy, Term } from '@otw/sdk'
 
 /** Paths the CMS's own routes and Next.js use: content can't live under them. */
-const RESERVED = ['api', '_next', 'admin']
+const RESERVED = ['api', '_next', 'admin', 'uploads']
 const SEGMENT = /^[a-z0-9][a-z0-9._~-]*$/i
 const CORE = 'core'
 

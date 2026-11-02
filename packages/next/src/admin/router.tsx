@@ -15,6 +15,9 @@ import { AdminScreen, adminTitle } from './screen'
 import { ContentEditScreen } from './screens/content-edit'
 import { ContentListScreen } from './screens/content-list'
 import { ContentRevisionsScreen } from './screens/content-revisions'
+import { MediaEditScreen } from './screens/media-edit'
+import { MediaLibraryScreen } from './screens/media-library'
+import { MediaNewScreen } from './screens/media-new'
 import { ContentTermScreen } from './screens/content-term'
 import { ContentTermsScreen } from './screens/content-terms'
 import type { ScreenContext } from './screens/context'
@@ -72,6 +75,7 @@ const LOGIN_SCREENS: Readonly<
 const CORE_SETTINGS: Readonly<Record<string, string>> = {
   '/admin/settings': 'core.general',
   '/admin/settings/reading': 'core.reading',
+  '/admin/settings/media': 'core.media',
 }
 
 interface Resolved {
@@ -165,6 +169,29 @@ const resolveScreen = cache(async (path: string, query: string): Promise<Resolve
     )
     const title = `${entry ? 'Edit' : 'Add New'} ${type.labels.singular}`
     return { kernel, user, title, body }
+  }
+  if (resolution.kind === 'media-library') {
+    const body = <MediaLibraryScreen kernel={kernel} user={user} searchParams={searchParams} />
+    return { kernel, user, title: 'Media Library', body }
+  }
+  if (resolution.kind === 'media-new') {
+    return {
+      kernel,
+      user,
+      title: 'Upload New Media',
+      body: <MediaNewScreen kernel={kernel} searchParams={searchParams} />,
+    }
+  }
+  if (resolution.kind === 'media-edit') {
+    const body = (
+      <MediaEditScreen
+        kernel={kernel}
+        user={user}
+        item={resolution.item}
+        searchParams={searchParams}
+      />
+    )
+    return { kernel, user, title: 'Edit Media', body }
   }
   if (resolution.kind === 'content-revisions') {
     const { type, entry } = resolution

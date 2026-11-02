@@ -1,5 +1,6 @@
 import type { Block, EntryMetaValues, EntryStatus } from '@otw/sdk'
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -132,4 +133,45 @@ export const revisions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('cms_revisions_entry_idx').on(table.entryId, table.createdAt, table.id)],
+)
+
+/** One of an image's sizes as stored; its address comes from the storage when it's read. */
+export interface StoredMediaSize {
+  file: string
+  width: number
+  height: number
+  mimeType: string
+  size: number
+}
+
+/**
+ * The media library, like WordPress's attachments, apart from entries: lists of posts never
+ * wade through files, and files have no statuses, slugs or bodies.
+ */
+export const media = pgTable(
+  'cms_media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+    entryId: uuid('entry_id').references(() => entries.id, { onDelete: 'set null' }),
+    file: text('file').notNull().unique(),
+    originalFile: text('original_file'),
+    filename: text('filename').notNull(),
+    mimeType: text('mime_type').notNull(),
+    size: bigint('size', { mode: 'number' }).notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    sizes: jsonb('sizes').$type<Record<string, StoredMediaSize>>().notNull().default({}),
+    title: text('title').notNull().default(''),
+    alt: text('alt').notNull().default(''),
+    caption: text('caption').notNull().default(''),
+    description: text('description').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('cms_media_created_idx').on(table.createdAt, table.id),
+    index('cms_media_entry_idx').on(table.entryId),
+    index('cms_media_author_idx').on(table.authorId),
+  ],
 )
