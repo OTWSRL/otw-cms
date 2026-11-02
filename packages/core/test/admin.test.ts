@@ -138,6 +138,25 @@ describe('admin pages', () => {
           { key: 'core.updates', label: 'Updates', url: '/admin/updates' },
         ],
       },
+      // Core's content types, in sections of their own, as in WordPress.
+      {
+        id: 'posts',
+        label: 'Posts',
+        icon: 'post',
+        items: [
+          { key: 'core.post.list', label: 'All Posts', url: '/admin/posts' },
+          { key: 'core.post.new', label: 'Add New Post', url: '/admin/posts/new' },
+        ],
+      },
+      {
+        id: 'pages',
+        label: 'Pages',
+        icon: 'page',
+        items: [
+          { key: 'core.page.list', label: 'All Pages', url: '/admin/pages' },
+          { key: 'core.page.new', label: 'Add New Page', url: '/admin/pages/new' },
+        ],
+      },
       {
         id: 'shop',
         label: 'Shop',
@@ -201,6 +220,8 @@ describe('admin pages', () => {
     const icons = kernel.adminMenu((await signIn(kernel)).user).map(({ id, icon }) => [id, icon])
     expect(icons).toEqual([
       ['dashboard', 'dashboard'],
+      ['posts', 'post'],
+      ['pages', 'page'],
       ['drawn', svg],
       ['shop', 'cart'],
       ['plugins', 'plugins'],
@@ -245,6 +266,8 @@ describe('admin pages', () => {
 
     expect(sections.map((section) => section.id)).toEqual([
       'dashboard',
+      'posts',
+      'pages',
       'shop',
       'reports',
       'plugins',

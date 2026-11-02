@@ -51,7 +51,10 @@ export interface AuthService {
   /** First-run setup. Fails once any user exists. */
   createFirstAdministrator(input: Omit<NewUser, 'role'>): Promise<User>
   hasUsers(): Promise<boolean>
-  listUsers(): Promise<User[]>
+  /** Every user by email, or only those with one of `roles`, such as an Author dropdown's. */
+  listUsers(options?: { roles?: readonly string[] }): Promise<User[]>
+  /** These users, for showing who wrote a page of entries; ids that aren't users are left out. */
+  getUsers(ids: readonly string[]): Promise<User[]>
   /** Refuses to demote the last administrator. */
   setRole(userId: string, role: string): Promise<User>
   /** All or none, like WordPress's "Change role to…"; refuses to leave no administrator. */
@@ -161,7 +164,20 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
       return row !== undefined
     },
 
-    listUsers: () => db.current.select(userColumns).from(users).orderBy(asc(users.email)),
+    async listUsers({ roles } = {}) {
+      if (roles?.length === 0) return []
+      return db.current
+        .select(userColumns)
+        .from(users)
+        .where(roles ? inArray(users.role, [...roles]) : undefined)
+        .orderBy(asc(users.email))
+    },
+
+    async getUsers(ids) {
+      const valid = [...new Set(ids)].filter((id) => UUID.test(id))
+      if (valid.length === 0) return []
+      return db.current.select(userColumns).from(users).where(inArray(users.id, valid))
+    },
 
     async setRole(userId, role) {
       const [updated] = await service.setRoles([userId], role)

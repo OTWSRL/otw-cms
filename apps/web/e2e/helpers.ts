@@ -22,6 +22,21 @@ export async function signIn(
   await page.getByRole('button', { name: 'Log In' }).click()
 }
 
+/** Sets up the administrator when a spec runs on its own, or signs in as them. */
+export async function signInAsAdmin(page: Page) {
+  await page.goto('/admin/setup')
+  if (page.url().endsWith('/admin/setup')) {
+    await page.getByLabel('Name').fill(ADMIN.name)
+    await page.getByLabel('Email').fill(ADMIN.email)
+    await page.getByLabel('Password').fill(ADMIN.password)
+    await page.getByRole('button', { name: 'Create administrator' }).click()
+    await notice(page, 'Your site is ready.')
+    return
+  }
+  await signIn(page, ADMIN)
+  await expect(page).toHaveURL(/\/admin(\?|$)/)
+}
+
 /** The one-time message after a form post. */
 export function notice(page: Page, message: string) {
   return expect(page.getByRole('status').filter({ hasText: message })).toBeVisible()

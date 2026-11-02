@@ -510,3 +510,132 @@ describe('list', () => {
     await refused(content.list({ type: [] }), 'invalid_input', 'at least one content type')
   })
 })
+
+describe('list, for the admin', () => {
+  const words = (body: string) => [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
+
+  it('searches titles, excerpts and body text, every word, with LIKE wildcards taken literally', async () => {
+    const { content } = await site()
+    await content.create('core.post', { title: 'Baking bread', body: words('flour and water') })
+    await content.create('core.post', { title: 'Cakes', excerpt: 'Flour, sugar' })
+    await content.create('core.post', { title: '100% rye', body: words('sour_dough') })
+    await content.create('core.post', { title: 'Pasta', body: words('flourish') })
+    const titles = async (search: string) =>
+      (await content.list({ type: 'core.post', search, orderBy: 'title' })).entries.map(
+        (entry) => entry.title,
+      )
+    expect(await titles('FLOUR')).toEqual(['Baking bread', 'Cakes', 'Pasta'])
+    expect(await titles('flour water')).toEqual(['Baking bread'])
+    expect(await titles('100%')).toEqual(['100% rye'])
+    expect(await titles('%')).toEqual(['100% rye'])
+    expect(await titles('r_dough')).toEqual(['100% rye'])
+    expect(await titles('r_d')).toEqual(['100% rye'])
+    expect(await titles('_')).toEqual(['100% rye'])
+    expect(await titles('   ')).toHaveLength(4)
+  })
+
+  it('filters by date and by id', async () => {
+    const { content } = await site()
+    const at = (month: number) => new Date(Date.UTC(2026, month - 1, 15))
+    const jan = await content.create('core.post', { status: 'published', publishedAt: at(1) })
+    const feb = await content.create('core.post', { status: 'published', publishedAt: at(2) })
+    const list = (query: object) =>
+      content.list({ type: 'core.post', ...query }).then(({ entries }) => entries.map((e) => e.id))
+    expect(await list({ after: new Date(Date.UTC(2026, 1, 1)) })).toEqual([feb.id])
+    expect(await list({ before: new Date(Date.UTC(2026, 1, 1)) })).toEqual([jan.id])
+    expect(await list({ ids: [jan.id, 'not-an-id'] })).toEqual([jan.id])
+    expect(await list({ ids: [] })).toEqual([])
+    await refused(
+      content.list({ type: 'core.post', after: 'May' as never }),
+      'invalid_input',
+      'date',
+    )
+  })
+
+  it('counts by status, for everyone or one author, and lists the months with entries', async () => {
+    const { kernel, content } = await site()
+    const writer = await author(kernel)
+    await content.create('core.post', {
+      status: 'published',
+      publishedAt: new Date(Date.UTC(2025, 11, 31, 23)),
+      authorId: writer.id,
+    })
+    await content.create('core.post', {
+      status: 'published',
+      publishedAt: new Date(Date.UTC(2026, 2, 1)),
+    })
+    const gone = await content.create('core.post', { authorId: writer.id })
+    await content.trash(gone.id)
+    expect(await content.count('core.post')).toEqual({
+      draft: 0,
+      pending: 0,
+      published: 2,
+      private: 0,
+      trash: 1,
+    })
+    expect(await content.count('core.post', { authorId: writer.id })).toMatchObject({
+      published: 1,
+      trash: 1,
+    })
+    expect((await content.count('core.post', { authorId: 'nobody' })).published).toBe(0)
+    const now = new Date()
+    // In UTC: 23:00 on 31 December is December's, wherever the server is.
+    expect(await content.months('core.post')).toEqual([
+      { year: 2026, month: 3 },
+      { year: 2025, month: 12 },
+    ])
+    expect(await content.months('core.post', { status: ['trash'] })).toEqual([
+      { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 },
+    ])
+  })
+
+  it('lists pages as a tree: parents first, siblings by order then title, with their depth', async () => {
+    const { content } = await site()
+    const page = (title: string, extra: object = {}) =>
+      content.create('core.page', { title, status: 'published', ...extra })
+    const about = await page('About', { position: 2 })
+    await page('Home', { position: 1 })
+    const team = await page('Team', { parentId: about.id })
+    await page('Alice', { parentId: team.id })
+    await page('History', { parentId: about.id })
+    const draft = await content.create('core.page', { title: 'Careers', parentId: about.id })
+    const tree = await content.list({ type: 'core.page', orderBy: 'tree' })
+    expect(tree.entries.map((entry) => entry.title)).toEqual([
+      'Home',
+      'About',
+      'Careers',
+      'History',
+      'Team',
+      'Alice',
+    ])
+    expect(tree.depths).toEqual([0, 0, 1, 1, 1, 2])
+    expect(tree.total).toBe(6)
+
+    const drafts = await content.list({ type: 'core.page', orderBy: 'tree', status: 'draft' })
+    expect(drafts).toMatchObject({ entries: [{ id: draft.id }], depths: [1], total: 1 })
+    const second = await content.list({ type: 'core.page', orderBy: 'tree', limit: 2, offset: 4 })
+    expect(second.entries.map((entry) => entry.title)).toEqual(['Team', 'Alice'])
+    expect(await content.list({ type: 'core.page', orderBy: 'tree', offset: 50 })).toEqual({
+      entries: [],
+      total: 6,
+      depths: [],
+    })
+    await refused(
+      content.list({ type: ['core.page', 'core.post'], orderBy: 'tree' }),
+      'invalid_input',
+      'one content type',
+    )
+  })
+
+  it('moves updatedAt forward on every change, by a millisecond at least', async () => {
+    const { content } = await site()
+    let entry = await content.create('core.post')
+    for (let i = 0; i < 5; i++) {
+      const next = await content.update(entry.id, { title: `v${i}` })
+      expect(next.updatedAt.getTime()).toBeGreaterThan(entry.updatedAt.getTime())
+      entry = next
+    }
+    const trashed = await content.trash(entry.id)
+    expect(trashed.updatedAt.getTime()).toBeGreaterThan(entry.updatedAt.getTime())
+  })
+})

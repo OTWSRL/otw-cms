@@ -3,6 +3,8 @@ import type { AdminIcon, CapabilityName, User } from '@otw/sdk'
 /** Sections core owns. Plugin sections sit between the dashboard and these, in load order. */
 const CORE_SECTIONS = {
   dashboard: { label: 'Dashboard', icon: 'dashboard' },
+  posts: { label: 'Posts', icon: 'post' },
+  pages: { label: 'Pages', icon: 'page' },
   plugins: { label: 'Plugins', icon: 'plugins' },
   users: { label: 'Users', icon: 'users' },
   settings: { label: 'Settings', icon: 'settings' },
@@ -150,7 +152,7 @@ export class AdminMenu {
       sequence,
     }))
     this.#sections = [
-      { id: 'dashboard', ...CORE_SECTIONS.dashboard },
+      ...(['dashboard', 'posts', 'pages'] as const).map((id) => ({ id, ...CORE_SECTIONS[id] })),
       ...input.active.map((id) => ({ id, label: input.label(id), icon: input.icon(id) })),
       ...(['plugins', 'users', 'settings'] as const).map((id) => ({ id, ...CORE_SECTIONS[id] })),
     ]

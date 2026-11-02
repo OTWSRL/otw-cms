@@ -388,6 +388,19 @@ post types in LearnDash, LifterLMS and Tutor.
 - **Hooks.** The `content.entry` filter sees the fields before they're saved, and its result is
   checked like any input. `content.status`, `content.saved`, `content.trashed`,
   `content.restored` and `content.deleted` run in the save's transaction.
+- **Screens.** A type with `showUi` (by default, a public one) gets WordPress's list screen
+  (views, search, the month filter, sorting, row and bulk actions, pages as a tree) and edit
+  screen (title, block editor, Excerpt, Slug, Author, the Publish box, Page Attributes), and its
+  menu entries: Posts and Pages in sections of their own, a plugin's types first in its section.
+  The save action checks the type's capabilities against the entry whatever the form sent, so a
+  contributor's Publish submits for review. A save over someone else's newer change is refused,
+  and the editor keeps what was typed in the browser to restore. Plugins add columns (loaded
+  once per page, not per row), meta boxes saved in the entry's transaction, row actions and bulk
+  actions from their admin entry.
+- **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
+  other admin screens download none of it. Bodies are checked against its blocks on every save,
+  links included, and `Blocks` from `@otw/next/site` renders them on the site with no
+  JavaScript.
 - **Cost.** Types and their capabilities are built in memory at boot: 50 types add about
   0.002 ms each.
 
@@ -423,5 +436,5 @@ methods. Payment webhooks verify their signatures and are idempotent.
 
 ## Roadmap
 
-See [docs/roadmap.md](docs/roadmap.md): content continues with its admin screens, taxonomies and
-meta, site pages and revisions, and media; then accounts and email, then the LMS plugin.
+See [docs/roadmap.md](docs/roadmap.md): content continues with taxonomies and meta, site pages and
+revisions, and media; then accounts and email, then the LMS plugin.

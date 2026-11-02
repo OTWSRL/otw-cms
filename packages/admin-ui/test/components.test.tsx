@@ -51,6 +51,51 @@ const table = (extra: Partial<Parameters<typeof ListTable<Row>>[0]> = {}) => (
 )
 
 describe('ListTable', () => {
+  it('links sortable headers, marking how the list is sorted now', () => {
+    const fragment = dom(
+      table({
+        columns: [
+          {
+            key: 'name',
+            label: 'Name',
+            sort: { url: '?orderby=name&order=desc', current: 'asc' },
+            render: (row) => row.name,
+          },
+          {
+            key: 'price',
+            label: 'Price',
+            sort: { url: '?orderby=price' },
+            render: (row) => row.price,
+          },
+          { key: 'id', label: 'Id', render: (row) => row.id },
+        ],
+      }),
+    )
+    const [name, price, id] = [...fragment.querySelectorAll('thead th')]
+    expect(name!.className).toBe('column-name column-primary sorted asc')
+    expect(name!.getAttribute('aria-sort')).toBe('ascending')
+    expect(name!.querySelector('a')?.getAttribute('href')).toBe('?orderby=name&order=desc')
+    expect(price!.className).toBe('column-price sortable')
+    expect(price!.hasAttribute('aria-sort')).toBe(false)
+    expect(id!.querySelector('a')).toBeNull()
+  })
+
+  it('leaves the checkbox off rows the user may not select', () => {
+    const fragment = dom(
+      table({
+        select: {
+          name: 'ids',
+          value: (row) => row.id,
+          label: (row) => row.name,
+          enabled: (row) => row.id === 'a',
+        },
+      }),
+    )
+    const boxes = [...fragment.querySelectorAll<HTMLInputElement>('tbody input[type=checkbox]')]
+    expect(boxes.map((box) => box.value)).toEqual(['a'])
+    expect(fragment.querySelectorAll('tbody th.check-column')).toHaveLength(2)
+  })
+
   it('renders WordPress list table markup with a primary column', () => {
     const fragment = dom(
       table({

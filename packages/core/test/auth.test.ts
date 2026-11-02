@@ -48,6 +48,22 @@ describe('users', () => {
     expect(JSON.stringify(rows)).not.toContain(PASSWORD)
   })
 
+  it('lists users by role, and finds a few by id', async () => {
+    const { auth } = await setup()
+    const editor = await auth.createUser({ email: 'e@b.co', role: 'editor', password: PASSWORD })
+    const customer = await auth.createUser({
+      email: 'c@b.co',
+      role: 'customer',
+      password: PASSWORD,
+    })
+    expect(await auth.listUsers({ roles: ['editor'] })).toEqual([editor])
+    expect(await auth.listUsers({ roles: [] })).toEqual([])
+    expect(await auth.listUsers()).toEqual([customer, editor])
+    const found = await auth.getUsers([customer.id, customer.id, 'nope', editor.id])
+    expect(found.map((user) => user.email).sort()).toEqual(['c@b.co', 'e@b.co'])
+    expect(await auth.getUsers([])).toEqual([])
+  })
+
   it.each([
     [{ email: 'not-an-email' }, 'Enter a valid email address.'],
     [{ password: 'short' }, 'Passwords need 10 to 200 characters.'],

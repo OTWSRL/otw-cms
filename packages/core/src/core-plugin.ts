@@ -1,9 +1,8 @@
-import type { PluginDefinition, SettingDefinitions, User } from '@otw/sdk'
+import type { ContentTypeDefinition, PluginDefinition, SettingDefinitions, User } from '@otw/sdk'
 import { ActionError } from '@otw/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
 import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, READ, type CapabilityStore } from './capabilities'
-import type { ContentTypeStore } from './content-types'
 import { coreMigrations } from './core-migrations'
 import type { SettingsLayoutStore } from './settings-pages'
 import type { AutoUpdateMode, UpdateService } from './updates'
@@ -84,7 +83,9 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
 }
 
 /** WordPress's posts and pages. Authors and contributors write posts; pages are editors'. */
-export function registerCoreContent(types: ContentTypeStore): void {
+export function registerCoreContent(types: {
+  register(pluginId: string, name: string, definition: ContentTypeDefinition): unknown
+}): void {
   types.register(CORE, 'post', {
     labels: { singular: 'Post', plural: 'Posts' },
     public: true,

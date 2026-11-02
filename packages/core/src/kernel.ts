@@ -6,6 +6,7 @@ import type {
   ApiRoute,
   CapabilityArgs,
   CapabilityName,
+  ContentTypeDefinition,
   Database,
   FilterContext,
   FilterName,
@@ -34,10 +35,12 @@ import type {
 import { ActionError, ForbiddenError } from '@otw/sdk'
 import {
   actionPath,
+  ADMIN_PREFIX,
   adminPath,
   createActionHandler,
   type AdminPageEntry,
   type AdminResolution,
+  type ContentScreen,
   type InternalAction,
   type SettingsResolution,
 } from './admin'
@@ -47,6 +50,8 @@ import { createAuthService, type AuthService } from './auth'
 import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
 import { createContentService, type ContentService } from './content'
+import { contentActions } from './content-actions'
+import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
 import { ContentTypeStore } from './content-types'
 import {
   CORE,
@@ -227,6 +232,8 @@ export interface Kernel {
     user: User,
   ): Promise<AdminResolution>
   adminMenu(user: User): AdminMenuSection[]
+  /** The columns, meta boxes, row actions and bulk actions plugins add to a content type's screens. */
+  contentScreens(type: string): ContentScreenExtensions
   adminUrl(name: string, params?: Record<string, string>): string
   actionUrl(pluginId: string, name: string): string
   readFlash(value: string | string[] | undefined): Flash | null
@@ -417,6 +424,48 @@ async function boot(
   })
   const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
   const content = createContentService({ db, types: contentTypes, hooks: stores.hooks })
+  const contentScreens = new ContentScreenStore(assertOpen)
+  const typesInMenu = new Map<string, number>()
+
+  /** Registers the type, and its list, Add New and edit screens and menu items when it has them. */
+  const registerContentType = (
+    pluginId: string,
+    name: string,
+    definition: ContentTypeDefinition,
+  ) => {
+    const type = contentTypes.register(pluginId, name, definition)
+    const base = type.adminPath
+    if (!base) return
+    const screen = (kind: ContentScreen, path: string) =>
+      stores.adminPages.add(`${type.name}.${kind}`, path, {
+        pluginId,
+        content: { type: type.name, screen: kind },
+      })
+    screen('list', base)
+    screen('new', `${base}/new`)
+    screen('edit', `${base}/:id`)
+    if (!type.showInMenu) return
+    // Core's types have sections of their own (Posts, Pages); a plugin's come first in its section.
+    const index = typesInMenu.get(pluginId) ?? 0
+    typesInMenu.set(pluginId, index + 1)
+    const parent = pluginId === CORE ? base.slice(ADMIN_PREFIX.length + 1) : undefined
+    const order = pluginId === CORE ? 0 : -100 + 2 * index
+    const item = { pluginId, parent, capability: type.capabilities.edit }
+    stores.menu.add({
+      ...item,
+      key: `${type.name}.list`,
+      label: `All ${type.labels.plural}`,
+      url: base,
+      order,
+    })
+    stores.menu.add({
+      ...item,
+      key: `${type.name}.new`,
+      label: `Add New ${type.labels.singular}`,
+      url: `${base}/new`,
+      order: order + 1,
+    })
+  }
 
   const registerPage = (pluginId: string, route: PageRoute<unknown>) => {
     assertOpen(`page route "${route.name}"`)
@@ -535,7 +584,7 @@ async function boot(
   }
 
   registerCoreCapabilities(stores.capabilities)
-  registerCoreContent(contentTypes)
+  registerCoreContent({ register: registerContentType })
   const actions = coreActions({
     auth,
     async activate(id) {
@@ -595,6 +644,14 @@ async function boot(
     },
   })
   for (const action of actions) registerAction(CORE, action)
+  const contentForms = contentActions({
+    content,
+    types: contentTypes,
+    screens: contentScreens,
+    can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
+    transaction: (fn) => db.transaction(() => fn()),
+  })
+  for (const action of contentForms) registerAction(CORE, action)
 
   /** These plugins and, transitively, the active plugins they require or optionally use. */
   const withDependencies = (ids: Iterable<string>): string[] => {
@@ -752,7 +809,7 @@ async function boot(
               `Register content type "${plugin.id}.${name}" in setup(), so every part of the site knows it: the admin entry is loaded only where the admin is`,
             )
           }
-          contentTypes.register(plugin.id, name, definition)
+          registerContentType(plugin.id, name, definition)
         },
       },
       admin: {
@@ -801,6 +858,26 @@ async function boot(
           return stores.adminPages.url(name, params)
         },
         actionUrl: (name) => actionPath(plugin.id, name),
+        column: (types, column) => {
+          inAdminEntry(`column "${plugin.id}.${column.name}"`)
+          contentScreens.column(plugin.id, types, column as never)
+        },
+        metaBox: (types, box) => {
+          inAdminEntry(`meta box "${plugin.id}.${box.name}"`)
+          contentScreens.metaBox(plugin.id, types, box)
+        },
+        rowAction: (types, action) => {
+          inAdminEntry(`row action "${plugin.id}.${action.name}"`)
+          contentScreens.rowAction(plugin.id, types, action)
+        },
+        bulkAction: (types, action) => {
+          inAdminEntry(`bulk action "${plugin.id}.${action.name}"`)
+          requiredCapabilities.push({
+            what: `Bulk action "${plugin.id}.${action.name}"`,
+            capability: action.capability,
+          })
+          contentScreens.bulkAction(plugin.id, types, action)
+        },
       },
       traces: {
         enable: () => {
@@ -922,6 +999,8 @@ async function boot(
     installed,
     auth,
     content,
+    contentTypes,
+    contentScreens,
   })
 }
 
@@ -957,6 +1036,8 @@ function buildKernel(input: {
   installed: ReadonlyMap<string, PluginDefinition>
   auth: AuthService
   content: ContentService
+  contentTypes: ContentTypeStore
+  contentScreens: ContentScreenStore
   origins: OriginPolicy
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
@@ -973,6 +1054,30 @@ function buildKernel(input: {
       return { kind: 'forbidden' }
     }
     return { kind: 'settings', key, title: page.title, view: pageView(page, input.settingsByKey) }
+  }
+
+  /**
+   * A content type's screens need the type's `edit` capability, as edit.php and post-new.php need
+   * `edit_posts`; an entry's edit screen needs the meta capability on that entry too.
+   */
+  const contentScreen = async (
+    screen: { type: string; screen: ContentScreen },
+    params: Record<string, string>,
+    user: User,
+  ): Promise<AdminResolution> => {
+    const type = input.contentTypes.get(screen.type)!
+    if (
+      !capabilities.can(user, 'core.access_admin') ||
+      !capabilities.can(user, type.capabilities.edit)
+    ) {
+      return { kind: 'forbidden' }
+    }
+    if (screen.screen === 'list') return { kind: 'content-list', type }
+    if (screen.screen === 'new') return { kind: 'content-edit', type, entry: null }
+    const entry = await input.content.get(params.id ?? '')
+    if (entry?.type !== type.name) return { kind: 'not-found' }
+    if (!capabilities.can(user, type.capabilities.editEntry, entry)) return { kind: 'forbidden' }
+    return { kind: 'content-edit', type, entry }
   }
 
   return {
@@ -1060,6 +1165,7 @@ function buildKernel(input: {
       if (!match) return { kind: 'not-found' }
       const entry = match.route.value
       if ('settingsPage' in entry) return settingsPage(entry.settingsPage, user)
+      if ('content' in entry) return contentScreen(entry.content, match.params, user)
       const { pluginId, page } = entry
       if (
         !capabilities.can(user, 'core.access_admin') ||
@@ -1101,6 +1207,7 @@ function buildKernel(input: {
     adminMenu: (user) =>
       stores.menu.build(user, (u, capability) => capabilities.can(u, capability)),
 
+    contentScreens: (type) => input.contentScreens.for(type),
     adminUrl: (name, params) => stores.adminPages.url(name, params),
     actionUrl: (pluginId, name) => actionPath(pluginId, name),
     readFlash: (value) => prepared.flash.decode(value),

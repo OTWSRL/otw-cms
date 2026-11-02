@@ -12,6 +12,8 @@ import {
 import { requireAdmin } from '../runtime/session'
 import { LoginShell } from './login-shell'
 import { AdminScreen, adminTitle } from './screen'
+import { ContentEditScreen } from './screens/content-edit'
+import { ContentListScreen } from './screens/content-list'
 import type { ScreenContext } from './screens/context'
 import { DashboardScreen } from './screens/dashboard'
 import { LoginScreen } from './screens/login'
@@ -108,6 +110,27 @@ const resolveScreen = cache(async (path: string, query: string): Promise<Resolve
       </AdminScreen>
     )
     return { kernel, user, title: resolution.title, body }
+  }
+  if (resolution.kind === 'content-list') {
+    const { type } = resolution
+    const body = (
+      <ContentListScreen kernel={kernel} user={user} type={type} searchParams={searchParams} />
+    )
+    return { kernel, user, title: type.labels.plural, body }
+  }
+  if (resolution.kind === 'content-edit') {
+    const { type, entry } = resolution
+    const body = (
+      <ContentEditScreen
+        kernel={kernel}
+        user={user}
+        type={type}
+        entry={entry}
+        searchParams={searchParams}
+      />
+    )
+    const title = `${entry ? 'Edit' : 'Add New'} ${type.labels.singular}`
+    return { kernel, user, title, body }
   }
   const { Component } = resolution
   const body = (

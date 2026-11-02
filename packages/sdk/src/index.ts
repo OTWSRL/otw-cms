@@ -13,6 +13,7 @@ export type { AdminIcon, AdminIconName } from './admin-icons'
 export { ADMIN_ICON_NAMES, isAdminIcon } from './admin-icons'
 export { ActionError } from './action-error'
 export { ContentError, type ContentErrorCode } from './content-error'
+export { isSafeHref } from './links'
 export { ForbiddenError } from './forbidden-error'
 export { HttpError } from './http-error'
 

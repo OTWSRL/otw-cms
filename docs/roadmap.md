@@ -24,7 +24,8 @@ Then **admin entries**: a plugin's admin code is a second entry, `./admin`, whic
 and the API routes load, so none of it reaches the site's visitors (Plugin Handbook › Admin
 screens).
 
-Now: 7, Content, in five parts. 7a, content types and their entries, is done.
+Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
+screens, are done.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -306,7 +307,7 @@ source.
 | Part | What                                                                         | WordPress's                          |
 | ---- | ---------------------------------------------------------------------------- | ------------------------------------ |
 | 7a   | `content.type()`, entries, and capabilities (own, others', published) (done) | `register_post_type`, `map_meta_cap` |
-| 7b   | Generic list and edit screens: columns, filters, panels other plugins extend | `edit.php`, `post.php`, meta boxes   |
+| 7b   | List and edit screens, the block editor; columns, boxes plugins add (done)   | `edit.php`, `post.php`, meta boxes   |
 | 7c   | Taxonomies and terms; typed, validated meta                                  | `register_taxonomy`, `register_meta` |
 | 7d   | Pages served by the site's catch-all route; revisions                        | template hierarchy, revisions        |
 | 7e   | The media library, uploads behind a storage interface                        | `upload.php`, `wp_handle_upload`     |
@@ -332,6 +333,31 @@ source.
   keeps the status for checks; restoring gives a draft. Deleting a page moves its children up.
 - **Hooks:** the `content.entry` filter, checked after it runs, and `content.status`, `.saved`,
   `.trashed`, `.restored`, `.deleted` in the save's transaction.
+
+### 7b. Screens and the editor (done)
+
+- **List** (`edit.php`): views with counts (All, Mine, each status, Trash), search over title,
+  excerpt and body text (LIKE wildcards escaped), the month filter, sorting by title or date,
+  pages of 20, pages as a tree built in SQL rather than by loading every page. Row actions and
+  bulk actions are checked against each entry; Empty Trash deletes what the user may delete.
+- **Edit** (`post.php`, `post-new.php`): WordPress's two columns and Publish box. The entry is
+  created on first save. The save action decides the status as the Publish box does
+  (contributors submit for review), refuses an author change without `edit_others_`, and refuses
+  a form older than the entry's `updatedAt`, which now moves forward by at least a millisecond
+  on every change. The editor keeps title, excerpt and body in `sessionStorage` until they're
+  saved and offers them back, like WordPress's local backup.
+- **Editor**: Tiptap 3.31.4, pinned, in a chunk only edit screens fetch (393 KB unpacked; the
+  other admin screens are unchanged). Paragraphs, headings, lists, quotes, code, separators;
+  bold, italic, strike, code, links. The server checks bodies against the same schema and
+  `isSafeHref()` on save and render; `Blocks` renders them as a server component.
+- **Plugins** add `column` (loaded once per page), `metaBox` (saved in the entry's transaction),
+  `rowAction` and `bulkAction` from their admin entry, for one type, several or `'*'`.
+- Core: Posts and Pages menu sections, `posts` and `pages` reserved as plugin ids (and `updates`,
+  which a core screen already used), `AuthService.getUsers()` and `listUsers({ roles })`.
+
+Not in 7b: Quick Edit and Bulk Edit, preview and View links (7d), plugin-defined blocks and a
+raw-HTML block, autosave to the server, screen options, editing the publish date, a site time
+zone (dates show and filter in UTC).
 
 Not in 7a: scheduled publishing and emptying the trash after 30 days (they need the job queue in
 10), custom statuses (`register_post_status`), edit locks, search in `list()`, and sharing another

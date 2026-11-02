@@ -5,6 +5,8 @@ import type {
   AdminTitleAction,
   ApiHandler,
   CapabilityName,
+  ContentType,
+  Entry,
   Logger,
   User,
 } from '@otw/sdk'
@@ -18,9 +20,17 @@ import type { SettingsPageView } from './settings-pages'
 export const ADMIN_PREFIX = '/admin'
 export const LOGIN_PATH = '/admin/login'
 
-/** A plugin's own screen, or a settings page that core renders from its sections. */
+/** Which of a content type's screens: its list (`edit.php`), Add New, or an entry's edit screen. */
+export type ContentScreen = 'list' | 'new' | 'edit'
+
+/**
+ * A plugin's own screen, a settings page that core renders from its sections, or one of a
+ * content type's screens.
+ */
 export type AdminPageEntry =
-  { pluginId: string; page: AdminPage<unknown> } | { pluginId: string; settingsPage: string }
+  | { pluginId: string; page: AdminPage<unknown> }
+  | { pluginId: string; settingsPage: string }
+  | { pluginId: string; content: { type: string; screen: ContentScreen } }
 
 export type SettingsResolution =
   | { kind: 'not-found' }
@@ -29,6 +39,9 @@ export type SettingsResolution =
 
 export type AdminResolution =
   | SettingsResolution
+  | { kind: 'content-list'; type: ContentType }
+  /** `entry` is `null` on Add New. An entry in the trash is shown, to be restored. */
+  | { kind: 'content-edit'; type: ContentType; entry: Entry | null }
   | {
       kind: 'page'
       key: string

@@ -11,12 +11,15 @@ import type {
   RequiredCapabilities,
   User,
 } from '@otw/sdk'
+import { ADMIN_PREFIX } from './admin'
 import { READ, type CapabilityStore } from './capabilities'
 
 const TYPE_NAME = /^[a-z][a-z0-9_]*$/
 const FEATURES: readonly ContentFeature[] = ['title', 'body', 'excerpt', 'author', 'position']
 const DEFAULT_SUPPORTS: readonly ContentFeature[] = ['title', 'body']
 const MAX_LABEL = 100
+/** Core's types have sections of their own (`/admin/posts`); plugins' sit under the plugin. */
+const CORE = 'core'
 
 /** As for WordPress's posts, which a post type with the default `capability_type` shares. */
 export const DEFAULT_CONTENT_ROLES: Readonly<Record<string, ContentRoleLevel>> = {
@@ -235,14 +238,20 @@ function describeType(
       )
     }
   }
+  const isPublic = definition.public ?? false
+  const showUi = definition.showUi ?? isPublic
+  const base = pluginId === CORE ? ADMIN_PREFIX : `${ADMIN_PREFIX}/${pluginId}`
   return {
     name: qualified as ContentTypeName,
     pluginId,
     labels: { singular: singular!.trim(), plural: pluralLabel!.trim() },
     description: definition.description ?? '',
-    public: definition.public ?? false,
+    public: isPublic,
     hierarchical: definition.hierarchical ?? false,
     supports: [...new Set(supports)],
+    showUi,
+    showInMenu: showUi && (definition.showInMenu ?? true),
+    adminPath: showUi ? `${base}/${plural}` : null,
     capabilities: contentCapabilities(pluginId, name, plural),
   }
 }

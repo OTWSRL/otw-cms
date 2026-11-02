@@ -2,6 +2,7 @@
 export const ADMIN_ICON_NAMES = [
   'admin',
   'dashboard',
+  'post',
   'plugins',
   'users',
   'settings',

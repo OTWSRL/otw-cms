@@ -12,6 +12,10 @@ export const ICONS: Record<AdminIconName, { d: string; holes?: true }> = {
   dashboard: {
     d: 'M1.5 13A8.5 8.5 0 0 1 18.5 13L15.5 13A5.5 5.5 0 0 0 4.5 13ZM13.56 7.24 L14.94 8.4 L10.44 13.76 L9.06 12.6ZM8 13a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z',
   },
+  // A pushpin, like Dashicons' admin-post.
+  post: {
+    d: 'M6 1.5H14V3.5H12.7L13.5 8.9C15.3 9.8 16.5 11.2 16.5 13H3.5C3.5 11.2 4.7 9.8 6.5 8.9L7.3 3.5H6ZM9.2 13H10.8V19H9.2Z',
+  },
   plugins: { d: 'M6 1.5h2v5h-2ZM12 1.5h2v5h-2ZM4 7h12v3.5a5 5 0 0 1-5 5V19H9v-3.5a5 5 0 0 1-5-5Z' },
   users: {
     d: 'M6.4 6a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0 -7.2 0ZM2.5 18.5c0-4.3 3.4-6.8 7.5-6.8s7.5 2.5 7.5 6.8Z',

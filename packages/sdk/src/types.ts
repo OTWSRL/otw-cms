@@ -393,6 +393,14 @@ export interface AdminApi {
   url(name: string, params?: Record<string, string>): string
   /** Form `action` URL for one of this plugin's admin actions. */
   actionUrl(name: string): string
+  /** Adds a column to content types' list screens. */
+  column<TData>(types: ContentTypeSelector, column: ContentColumn<TData>): void
+  /** Adds a box to content types' edit screens, like `add_meta_box()`. */
+  metaBox(types: ContentTypeSelector, box: ContentMetaBox): void
+  /** Adds a link under each entry's title on content types' list screens. */
+  rowAction(types: ContentTypeSelector, action: ContentRowAction): void
+  /** Adds a choice to content types' Bulk actions. */
+  bulkAction(types: ContentTypeSelector, action: ContentBulkAction): void
 }
 
 // ── Routes & slots ───────────────────────────────────────────────────────────
@@ -564,11 +572,21 @@ export interface EntryQuery {
   authorId?: string
   /** `null` for top-level entries only. */
   parentId?: string | null
+  /** Only these entries, like WordPress's `post__in`. */
+  ids?: readonly string[]
+  /** Words in the title, excerpt or body, like WordPress's `s`. Letters' case doesn't matter. */
+  search?: string
+  /** Dated (as `orderBy: 'date'` dates them) at or after this. */
+  after?: Date
+  /** Dated before this. */
+  before?: Date
   /**
    * `date` (the default) is when the entry was published, or created if it never was, like
-   * WordPress's post date. `updated` is when it last changed.
+   * WordPress's post date. `updated` is when it last changed. `tree`, for hierarchical types,
+   * lists parents before their children, siblings by position and title, as WordPress lists
+   * pages; `depths` then says how deep each entry is.
    */
-  orderBy?: 'date' | 'updated' | 'title' | 'position'
+  orderBy?: 'date' | 'updated' | 'title' | 'position' | 'tree'
   /** Defaults to newest first for dates, A to Z for `title`, lowest first for `position`. */
   order?: 'asc' | 'desc'
   /** 1 to 100. Defaults to 20. */
@@ -580,6 +598,15 @@ export interface EntryQuery {
 export interface EntryList {
   entries: Entry[]
   total: number
+  /** With `orderBy: 'tree'`: each entry's number of ancestors, in the same order. */
+  depths?: number[]
+}
+
+/** A month that has entries, for a filter such as WordPress's "All dates". */
+export interface EntryMonth {
+  year: number
+  /** 1 to 12. */
+  month: number
 }
 
 /**
@@ -613,6 +640,13 @@ export interface ContentTypeDefinition {
   hierarchical?: boolean
   /** Defaults to `['title', 'body']`, as in WordPress. */
   supports?: readonly ContentFeature[]
+  /** It has list and edit screens in the admin. Defaults to `public`, as WordPress's `show_ui`. */
+  showUi?: boolean
+  /**
+   * Its screens are in the admin menu: Posts and Pages in their own sections, a plugin's types in
+   * the plugin's section. Defaults to `showUi`.
+   */
+  showInMenu?: boolean
   /**
    * Which roles get its capabilities, and at what level. Defaults to WordPress's, as for posts:
    * `{ editor: 'editor', author: 'author', contributor: 'contributor' }`. Administrators have
@@ -657,7 +691,90 @@ export interface ContentType {
   public: boolean
   hierarchical: boolean
   supports: readonly ContentFeature[]
+  showUi: boolean
+  showInMenu: boolean
+  /**
+   * Its list screen, such as `/admin/posts` or `/admin/lms/courses`, when it has screens. Add New
+   * is `${adminPath}/new` and an entry's edit screen `${adminPath}/${id}`.
+   */
+  adminPath: string | null
   capabilities: ContentTypeCapabilities
+}
+
+/** What a content screen's extensions are added to: one type, several, or every type with screens. */
+export type ContentTypeSelector = ContentTypeName | readonly ContentTypeName[] | '*'
+
+/**
+ * A column on a content type's list screen, like `manage_{$post_type}_posts_columns`. `load` runs
+ * once for the page of entries shown, so a column costs one query, not one per row as WordPress's
+ * `manage_posts_custom_column` invites.
+ */
+export interface ContentColumn<TData = unknown> {
+  /** Unique within the plugin. */
+  name: string
+  label: string
+  /**
+   * The column it follows: `title`, `author`, `date` or another plugin's `pluginId.name`.
+   * Defaults to before the date.
+   */
+  after?: string
+  load?: (
+    entries: readonly Entry[],
+    context: { user: User; type: ContentType },
+  ) => TData | Promise<TData>
+  render: (entry: Entry, data: TData) => ReactNode
+}
+
+/** What a meta box's component receives. `entry` is `null` on Add New, before the first save. */
+export interface ContentMetaBoxProps {
+  entry: Entry | null
+  type: ContentType
+  user: User
+}
+
+/**
+ * A box on a content type's edit screen, like `add_meta_box()`. Its fields are part of the entry's
+ * form; name them after the plugin (`seo.title`) so they don't clash.
+ */
+export interface ContentMetaBox {
+  /** Unique within the plugin. */
+  name: string
+  title: string
+  /** Under the editor (`normal`, the default), or in the sidebar below Publish (`side`). */
+  context?: 'normal' | 'side'
+  /** Lower comes first. Defaults to 10. */
+  order?: number
+  component: (props: ContentMetaBoxProps) => ReactNode | Promise<ReactNode>
+  /**
+   * Saves the box's fields once the entry is written, in the same transaction, as `save_post`
+   * handlers read `$_POST`. Runs only when the user may edit the entry.
+   */
+  save?: (context: { entry: Entry; form: FormData; user: User }) => void | Promise<void>
+}
+
+/** A link under an entry's title on the list screen, like `post_row_actions`. */
+export interface ContentRowAction {
+  /** Unique within the plugin. */
+  name: string
+  /** The link's text and address, or `null` to leave it out for this entry and user. */
+  link: (entry: Entry, user: User) => { label: string; url: string } | null
+}
+
+/**
+ * A choice in the list screen's Bulk actions, like `bulk_actions-edit-{$post_type}` with its
+ * handler. The CMS checks `capability` first; the handler checks each entry.
+ */
+export interface ContentBulkAction {
+  /** Unique within the plugin. */
+  name: string
+  label: string
+  capability: CapabilityName
+  /** Returns the notice to show, such as "3 courses archived." */
+  handler: (context: {
+    entries: Entry[]
+    type: ContentType
+    user: User
+  }) => string | Promise<string>
 }
 
 /**
@@ -690,6 +807,19 @@ export interface ContentApi {
     options?: { parentId?: string | null },
   ): Promise<Entry | null>
   list(query: EntryQuery): Promise<EntryList>
+  /**
+   * How many entries of the type have each status, like `wp_count_posts()`; with `authorId`, only
+   * that author's.
+   */
+  count(
+    type: ContentTypeName,
+    options?: { authorId?: string },
+  ): Promise<Record<EntryStatus, number>>
+  /** The months with entries in these statuses (by default all but the trash), newest first. */
+  months(
+    type: ContentTypeName,
+    options?: { status?: readonly EntryStatus[] },
+  ): Promise<EntryMonth[]>
   /** Moves an entry to the trash, keeping its status for capability checks, like `wp_trash_post()`. */
   trash(id: string): Promise<Entry>
   /** Takes an entry out of the trash as a draft, as WordPress has done since 5.6. */

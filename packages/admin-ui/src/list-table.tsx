@@ -15,6 +15,11 @@ export interface Column<T> {
   primary?: boolean
   /** Right-aligned, with tabular figures: prices, totals, counts. */
   numeric?: boolean
+  /**
+   * Makes the header a link that sorts by this column (`sortable`): `url` sorts it, and `current`
+   * says how the list is sorted by it now, if it is.
+   */
+  sort?: { url: string; current?: 'asc' | 'desc' }
   render(row: T): ReactNode
 }
 
@@ -44,10 +49,15 @@ export function ListTable<T>({
   /** `active` or `inactive` highlight a row, as on the plugins screen. */
   rowClassName?(row: T): string | undefined
   /**
-   * A checkbox per row for bulk actions, named `name` and holding `value(row)`. Put the table and
-   * the bulk controls in one form.
+   * A checkbox per row for bulk actions, named `name` and holding `value(row)`, on the rows
+   * `enabled` allows. Put the table and the bulk controls in one form.
    */
-  select?: { name: string; value(row: T): string; label(row: T): string }
+  select?: {
+    name: string
+    value(row: T): string
+    label(row: T): string
+    enabled?(row: T): boolean
+  }
   /** Alternate row shading. The plugins screen turns it off to show active rows instead. */
   striped?: boolean
   /** Extra classes on the table, such as `plugins`. */
@@ -57,6 +67,11 @@ export function ListTable<T>({
   const primary = columns.find((column) => column.primary) ?? columns[0]
   const columnClass = (column: Column<T>) =>
     cx(`column-${column.key}`, column === primary && 'column-primary', column.numeric && 'num')
+  const headerClass = (column: Column<T>) =>
+    cx(
+      columnClass(column),
+      column.sort && (column.sort.current ? `sorted ${column.sort.current}` : 'sortable'),
+    )
 
   return (
     <table className={cx('wp-list-table widefat', striped && 'striped', className)}>
@@ -69,8 +84,29 @@ export function ListTable<T>({
             </td>
           )}
           {columns.map((column) => (
-            <th key={column.key} scope="col" className={columnClass(column)}>
-              {column.label}
+            <th
+              key={column.key}
+              scope="col"
+              className={headerClass(column)}
+              aria-sort={
+                column.sort?.current === 'asc'
+                  ? 'ascending'
+                  : column.sort?.current === 'desc'
+                    ? 'descending'
+                    : undefined
+              }
+            >
+              {column.sort ? (
+                <a href={column.sort.url}>
+                  <span>{column.label}</span>
+                  <span className="sorting-indicators" aria-hidden="true">
+                    <span className="sorting-indicator asc" />
+                    <span className="sorting-indicator desc" />
+                  </span>
+                </a>
+              ) : (
+                column.label
+              )}
             </th>
           ))}
         </tr>
@@ -87,12 +123,14 @@ export function ListTable<T>({
               <tr key={rowKey(row)} className={rowClassName?.(row)}>
                 {select && (
                   <th scope="row" className="check-column">
-                    <input
-                      type="checkbox"
-                      name={select.name}
-                      value={select.value(row)}
-                      aria-label={`Select ${select.label(row)}`}
-                    />
+                    {(select.enabled?.(row) ?? true) && (
+                      <input
+                        type="checkbox"
+                        name={select.name}
+                        value={select.value(row)}
+                        aria-label={`Select ${select.label(row)}`}
+                      />
+                    )}
                   </th>
                 )}
                 {columns.map((column) => (

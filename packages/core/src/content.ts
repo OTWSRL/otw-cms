@@ -11,7 +11,23 @@ import type {
   EntryStatus,
 } from '@otw/sdk'
 import { ContentError } from '@otw/sdk'
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, notInArray, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
+import { cleanBlocks } from './blocks'
 import { inSentence, type ContentTypeStore } from './content-types'
 import { entries, users } from './core-schema'
 import type { DatabaseContext } from './database'
@@ -48,11 +64,19 @@ const MAX_TITLE = 500
 const MAX_EXCERPT = 10_000
 const MAX_BODY_BYTES = 2_000_000
 const MAX_POSITION = 2_147_483_647
+const MAX_SEARCH_WORDS = 10
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
 /** Two saves can pick the same free slug; the unique index stops the second, which tries again. */
 const SLUG_ATTEMPTS = 5
 const CLOCK_SKEW_MS = 60_000
+
+/**
+ * A changed entry's `updated_at`: now, but always at least a millisecond after the last change,
+ * so it orders changes even when the clock steps back, and the edit screen's stale-save check,
+ * which compares it to the millisecond, sees every change.
+ */
+const TOUCHED = sql`greatest(now(), ${entries.updatedAt} + interval '1 millisecond')`
 
 const NEW_ENTRY: EntryFields = {
   status: 'draft',
@@ -209,7 +233,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
           const [row] = previous
             ? await tx
                 .update(entries)
-                .set({ ...values, updatedAt: sql`now()` })
+                .set({ ...values, updatedAt: TOUCHED })
                 .where(eq(entries.id, id))
                 .returning()
             : await tx
@@ -237,6 +261,62 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
   }
 
   /**
+   * A page of one type's entries in tree order, as WordPress lists pages: every entry of the type
+   * takes its place under its parent (an entry whose parent is gone starts a branch), siblings by
+   * position, title and id; then the query's filters pick the rows. Two queries: the order and
+   * depths, then the entries.
+   */
+  const listTree = async (
+    type: string,
+    where: SQL,
+    limit: number,
+    offset: number,
+  ): Promise<EntryList> => {
+    const result = await db.current.execute(sql`
+      WITH RECURSIVE ranked AS (
+        SELECT id, parent_id,
+          row_number() OVER (PARTITION BY parent_id ORDER BY position, lower(title), id) AS rank
+        FROM cms_entries WHERE type = ${type}
+      ), tree AS (
+        SELECT id, ARRAY[rank] AS path, ARRAY[id] AS line FROM ranked
+          WHERE parent_id IS NULL OR parent_id NOT IN (SELECT id FROM ranked)
+        UNION ALL
+        SELECT r.id, t.path || r.rank, t.line || r.id FROM ranked r
+          JOIN tree t ON r.parent_id = t.id WHERE NOT r.id = ANY (t.line)
+      )
+      SELECT tree.id, cardinality(tree.path) - 1 AS depth, count(*) OVER () AS total
+      FROM tree JOIN cms_entries ON cms_entries.id = tree.id
+      WHERE ${where}
+      ORDER BY tree.path
+      LIMIT ${limit} OFFSET ${offset}
+    `)
+    const page = rowsOf(result) as { id: string; depth: number | string; total: number | string }[]
+    if (page.length === 0) {
+      const [count] = await db.current
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(entries)
+        .where(where)
+      return { entries: [], total: count?.total ?? 0, depths: [] }
+    }
+    const rows = await db.current
+      .select()
+      .from(entries)
+      .where(
+        inArray(
+          entries.id,
+          page.map((row) => row.id),
+        ),
+      )
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const shown = page.filter((row) => byId.has(row.id))
+    return {
+      entries: shown.map((row) => byId.get(row.id)!),
+      total: Number(page[0]!.total),
+      depths: shown.map((row) => Number(row.depth)),
+    }
+  }
+
+  /**
    * Gives a deleted entry's children its parent, as `wp_delete_post()` does, renaming any whose
    * slug is taken at that level.
    */
@@ -253,7 +333,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
         : child.slug
       await db.current
         .update(entries)
-        .set({ parentId: entry.parentId, slug, updatedAt: sql`now()` })
+        .set({ parentId: entry.parentId, slug, updatedAt: TOUCHED })
         .where(eq(entries.id, child.id))
     }
   }
@@ -313,8 +393,10 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
     },
 
     async list(query) {
-      const { where, limit, offset, orderBy } = listQuery(query)
-      if (where === null) return { entries: [], total: 0 }
+      const { where, limit, offset, orderBy, tree } = listQuery(query)
+      if (where === null)
+        return tree ? { entries: [], total: 0, depths: [] } : { entries: [], total: 0 }
+      if (tree) return listTree(tree, where, limit, offset)
       const rows = await db.current
         .select({
           ...getTableColumns(entries),
@@ -338,6 +420,41 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
       } satisfies EntryList
     },
 
+    async count(type, { authorId } = {}) {
+      const counts = Object.fromEntries(STATUSES.map((status) => [status, 0])) as Record<
+        EntryStatus,
+        number
+      >
+      if (authorId !== undefined && !UUID.test(authorId)) return counts
+      const rows = await db.current
+        .select({ status: entries.status, count: sql<number>`count(*)`.mapWith(Number) })
+        .from(entries)
+        .where(
+          and(
+            eq(entries.type, type),
+            authorId === undefined ? undefined : eq(entries.authorId, authorId),
+          ),
+        )
+        .groupBy(entries.status)
+      for (const row of rows) counts[row.status] = row.count
+      return counts
+    },
+
+    async months(type, { status = WRITABLE } = {}) {
+      checkStatuses(status)
+      if (status.length === 0) return []
+      // In UTC, as the list's date filter takes it, until the site has a time zone setting.
+      const month = sql`date_trunc('month', ${SORTS.date} AT TIME ZONE 'UTC')`
+      const rows = await db.current
+        .selectDistinct({
+          year: sql<number>`extract(year from ${month})`.mapWith(Number),
+          month: sql<number>`extract(month from ${month})`.mapWith(Number),
+        })
+        .from(entries)
+        .where(and(eq(entries.type, type), inArray(entries.status, [...status])))
+      return rows.sort((a, b) => b.year - a.year || b.month - a.month)
+    },
+
     trash: (id) =>
       db.transaction(async () => {
         const previous = await lock(id)
@@ -348,7 +465,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
             status: 'trash',
             trashedFrom: previous.status,
             trashedAt: sql`now()`,
-            updatedAt: sql`now()`,
+            updatedAt: TOUCHED,
           })
           .where(eq(entries.id, previous.id))
           .returning()
@@ -363,7 +480,7 @@ export function createContentService({ db, types, hooks }: ContentServiceOptions
         if (previous.status !== 'trash') return previous
         const [entry] = await db.current
           .update(entries)
-          .set({ status: 'draft', trashedFrom: null, trashedAt: null, updatedAt: sql`now()` })
+          .set({ status: 'draft', trashedFrom: null, trashedAt: null, updatedAt: TOUCHED })
           .where(eq(entries.id, previous.id))
           .returning()
         await announce(entry!, previous)
@@ -441,15 +558,9 @@ function cleanExcerpt(excerpt: unknown): string {
   return clean
 }
 
-/** A list of blocks that survives JSON, and Postgres's: no NUL characters. */
+/** Blocks the editor's schema allows, that survive JSON and Postgres's text: no NUL characters. */
 function cleanBody(body: unknown): Block[] {
   if (!Array.isArray(body)) invalid('The body must be a list of blocks')
-  for (const block of body) {
-    const type: unknown = (block as Partial<Block> | null)?.type
-    if (typeof block !== 'object' || Array.isArray(block) || typeof type !== 'string' || !type) {
-      invalid('Every block in the body needs a type')
-    }
-  }
   let json: string
   try {
     json = JSON.stringify(body)
@@ -458,7 +569,7 @@ function cleanBody(body: unknown): Block[] {
   }
   if (Buffer.byteLength(json) > MAX_BODY_BYTES) invalid('The body is too large')
   if (json.includes('\\u0000')) invalid('The body cannot contain NUL characters')
-  return JSON.parse(json) as Block[]
+  return cleanBlocks(JSON.parse(json))
 }
 
 function cleanId(id: unknown, what: string): string | null {
@@ -484,6 +595,39 @@ function cleanDate(date: unknown): Date | null {
 }
 
 /** The `WHERE`, page and order a query asks for; `where` is `null` when nothing can match. */
+function checkStatuses(statuses: readonly EntryStatus[]): void {
+  const unknown = statuses.filter((status) => !STATUSES.includes(status))
+  if (unknown.length > 0) invalid(`Unknown status "${String(unknown[0])}"`)
+}
+
+/** `%`, `_` and `\\` match themselves in a LIKE pattern. */
+function likeTerm(term: string): string {
+  return `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+}
+
+/** Every word must be in the title, the excerpt or the body's text, as WordPress searches. */
+function searchCondition(search: string): SQL | undefined {
+  if (typeof search !== 'string') invalid('Search for text')
+  const words = search.trim().split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_WORDS)
+  if (words.length === 0) return undefined
+  const text = sql`jsonb_path_query_array(${entries.body}, 'lax $.**.text')::text`
+  return and(
+    ...words.map((word) => {
+      const pattern = likeTerm(word)
+      return or(
+        ilike(entries.title, pattern),
+        ilike(entries.excerpt, pattern),
+        sql`${text} ILIKE ${pattern}`,
+      )
+    }),
+  )
+}
+
+function dateBound(value: unknown, what: string): Date {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) invalid(`${what} must be a date`)
+  return value
+}
+
 function listQuery(query: EntryQuery) {
   const typeNames: readonly string[] = typeof query.type === 'string' ? [query.type] : query.type
   if (!Array.isArray(typeNames) || typeNames.length === 0) invalid('Name at least one content type')
@@ -493,8 +637,7 @@ function listQuery(query: EntryQuery) {
       : typeof query.status === 'string'
         ? [query.status]
         : query.status
-  const unknown = statuses.filter((status) => !STATUSES.includes(status))
-  if (unknown.length > 0) invalid(`Unknown status "${String(unknown[0])}"`)
+  checkStatuses(statuses)
 
   const limit = query.limit ?? DEFAULT_LIMIT
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
@@ -504,17 +647,23 @@ function listQuery(query: EntryQuery) {
   if (!Number.isSafeInteger(offset) || offset < 0) invalid('The offset must be 0 or more')
 
   const orderBy = query.orderBy ?? 'date'
-  if (!(orderBy in SORTS)) invalid(`Cannot order entries by "${String(orderBy)}"`)
+  if (orderBy !== 'tree' && !(orderBy in SORTS)) {
+    invalid(`Cannot order entries by "${String(orderBy)}"`)
+  }
+  if (orderBy === 'tree' && typeNames.length !== 1) invalid('List one content type as a tree')
   const ascending =
     (query.order ?? (orderBy === 'title' || orderBy === 'position' ? 'asc' : 'desc')) === 'asc'
   const direction = ascending ? asc : desc
 
-  const { authorId, parentId } = query
+  const { authorId, parentId, search, after, before } = query
+  if (query.ids !== undefined && !Array.isArray(query.ids)) invalid('ids must be a list')
+  const ids = query.ids?.filter((id) => typeof id === 'string' && UUID.test(id))
   // Ids that can't exist match nothing, as a filter by a stale link would.
   const impossible =
     statuses.length === 0 ||
     (authorId !== undefined && !UUID.test(authorId)) ||
-    (parentId !== undefined && parentId !== null && !UUID.test(parentId))
+    (parentId !== undefined && parentId !== null && !UUID.test(parentId)) ||
+    ids?.length === 0
   const where = impossible
     ? null
     : and(
@@ -526,8 +675,19 @@ function listQuery(query: EntryQuery) {
           : parentId === null
             ? isNull(entries.parentId)
             : eq(entries.parentId, parentId),
+        ids === undefined ? undefined : inArray(entries.id, ids),
+        search === undefined ? undefined : searchCondition(search),
+        after === undefined ? undefined : gte(SORTS.date, dateBound(after, 'after')),
+        before === undefined ? undefined : lt(SORTS.date, dateBound(before, 'before')),
       )!
-  return { where, limit, offset, orderBy: [direction(SORTS[orderBy]), direction(entries.id)] }
+  const sort = orderBy === 'tree' ? SORTS.date : SORTS[orderBy]
+  return {
+    where,
+    limit,
+    offset,
+    orderBy: [direction(sort), direction(entries.id)],
+    tree: orderBy === 'tree' ? typeNames[0]! : null,
+  }
 }
 
 function isUniqueViolation(error: unknown): boolean {

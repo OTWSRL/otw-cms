@@ -2,4 +2,5 @@
 export { getKernel } from '../runtime/kernel'
 export { getCurrentUser } from '../runtime/session'
 export { SitePage, generateSiteMetadata, type SiteRouteProps } from './page'
+export { Blocks } from './blocks'
 export { Slot } from './slot'

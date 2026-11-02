@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { ADMIN, mainMenu, notice, signIn, submenu } from './helpers'
+import { mainMenu, notice, signInAsAdmin, submenu } from './helpers'
 
 /*
  * The admin at WordPress's three layouts, on the device projects in playwright.config.ts:
@@ -21,22 +21,11 @@ const SCREENS = [
   '/admin/commerce/products',
   '/admin/commerce/products/new',
   '/admin/commerce/orders',
+  '/admin/posts',
+  '/admin/posts/new',
+  '/admin/pages',
+  '/admin/pages/new',
 ]
-
-/** Sets up the administrator when this spec runs on its own. */
-async function signInAsAdmin(page: Page) {
-  await page.goto('/admin/setup')
-  if (page.url().endsWith('/admin/setup')) {
-    await page.getByLabel('Name').fill(ADMIN.name)
-    await page.getByLabel('Email').fill(ADMIN.email)
-    await page.getByLabel('Password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Create administrator' }).click()
-    await notice(page, 'Your site is ready.')
-    return
-  }
-  await signIn(page, ADMIN)
-  await expect(page).toHaveURL(/\/admin(\?|$)/)
-}
 
 async function sidewaysScroll(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)

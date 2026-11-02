@@ -26,6 +26,10 @@
     "@otw/admin-ui": "workspace:*",
     "@otw/core": "workspace:*",
     "@otw/sdk": "workspace:*",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/react": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1",
     "server-only": "^0.0.1"
