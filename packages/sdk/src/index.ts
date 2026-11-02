@@ -5,6 +5,7 @@ import type {
   EntryFields,
   EntryStatus,
   MediaItem,
+  OutgoingMail,
   PluginContext,
   PluginDefinition,
   User,
@@ -74,6 +75,11 @@ export interface Filters {
    * `upload_mimes`. Remove types here; added ones are checked only by extension.
    */
   'media.mimes': [Record<string, string>, { by: string | null }]
+  /**
+   * An email about to be sent, like `wp_mail`: change its recipients, subject, bodies or sender.
+   * It's checked again after the filters.
+   */
+  'mail.message': [OutgoingMail, Record<string, never>]
 }
 
 /** Action name -> payload. */
@@ -108,6 +114,10 @@ export interface Actions {
   'media.updated': { item: MediaItem; previous: MediaItem }
   /** A file was deleted: `delete_attachment`. Its files go once the transaction commits. */
   'media.deleted': { item: MediaItem }
+  /** An email was handed to the transport: `wp_mail_succeeded`. */
+  'mail.sent': { message: OutgoingMail }
+  /** An email couldn't be sent, or there's no transport: `wp_mail_failed`. */
+  'mail.failed': { message: OutgoingMail; error: string }
 }
 
 /** Service name -> the API the providing plugin exposes to others. */
@@ -148,6 +158,11 @@ export interface Settings {
   'media.large_size_h': string
   /** Uploads go in year and month folders, `2026/11/`, as WordPress's do by default. */
   'media.uploads_use_yearmonth_folders': boolean
+  /**
+   * Who the site's email comes from, such as `My Site <hello@example.com>`. Empty leaves it to
+   * the mail plugin. `MAIL_FROM` overrides it.
+   */
+  'mail.from': string
 }
 
 /** Capability name -> `true`. Admin pages and actions each require one. */

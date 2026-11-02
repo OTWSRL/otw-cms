@@ -9,6 +9,7 @@ import type {
   ContentTemplate,
   ContentTypeDefinition,
   ContentView,
+  MailTransport,
   MediaStorage,
   Database,
   TaxonomyDefinition,
@@ -59,6 +60,7 @@ import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
 import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
+import { createMailService, type MailService } from './mail'
 import { localStorage, UPLOADS_PATH } from './media-storage'
 import { contentActions } from './content-actions'
 import { ContentScreenStore, type ContentScreenExtensions } from './content-screens'
@@ -239,6 +241,8 @@ export interface Kernel {
   readonly content: ContentService
   /** The media library. */
   readonly media: MediaService
+  /** Sending email, through the transport a plugin provides. */
+  readonly mail: MailService
   /** The largest file one upload may be, in bytes. */
   readonly maxUploadBytes: number
   /** Answers a request for an upload, `/uploads/{key}`, from the storage. */
@@ -511,6 +515,27 @@ async function boot(
     byMonth: () => values['media.uploads_use_yearmonth_folders'] ?? true,
     maxBytes: maxUploadBytes,
   })
+  let mailTransport: { pluginId: string; transport: MailTransport } | null = null
+  const mail = createMailService({
+    hooks: stores.hooks,
+    logger,
+    from: () => values['mail.from'] ?? '',
+    transport: () => mailTransport?.transport ?? null,
+    production: (options.env ?? process.env).NODE_ENV === 'production',
+  })
+  /** A plugin's mail transport: one, as one SMTP plugin replaces wp_mail()'s mailer. */
+  const provideTransport = (pluginId: string, transport: MailTransport) => {
+    assertOpen(`mail transport from "${pluginId}"`)
+    if (mailTransport) {
+      throw new Error(
+        `Plugin "${pluginId}" provides a mail transport, but "${mailTransport.pluginId}" already does; only one can`,
+      )
+    }
+    if (!transport || typeof transport.send !== 'function') {
+      throw new TypeError(`The mail transport from "${pluginId}" needs a send() method`)
+    }
+    mailTransport = { pluginId, transport }
+  }
   /** A plugin's storage, checked as far as it can be before it's used. */
   const provideStorage = (pluginId: string, storage: MediaStorage) => {
     assertOpen(`media storage from "${pluginId}"`)
@@ -1009,6 +1034,17 @@ async function boot(
           provideStorage(plugin.id, storage)
         },
       },
+      mail: {
+        ...mail,
+        transport: (transport) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Provide the mail transport in setup(): the site sends email too, where the admin entry isn't loaded`,
+            )
+          }
+          provideTransport(plugin.id, transport)
+        },
+      },
       admin: {
         page: (page) => {
           inAdminEntry(`admin page "${plugin.id}.${page.name}"`)
@@ -1232,6 +1268,7 @@ async function boot(
     media,
     mediaStorage,
     maxUploadBytes,
+    mail,
   })
 }
 
@@ -1275,6 +1312,7 @@ function buildKernel(input: {
   media: MediaService
   mediaStorage: () => MediaStorage
   maxUploadBytes: number
+  mail: MailService
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
   const { options, logger, db } = prepared
@@ -1411,6 +1449,7 @@ function buildKernel(input: {
     auth: input.auth,
     content: input.content,
     media: input.media,
+    mail: input.mail,
     maxUploadBytes: input.maxUploadBytes,
     serveUpload: (request, key) => serveUpload(input.mediaStorage(), key, request),
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),

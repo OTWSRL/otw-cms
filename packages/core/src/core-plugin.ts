@@ -17,6 +17,7 @@ import { coreMigrations } from './core-migrations'
 import type { SettingsLayoutStore } from './settings-pages'
 import type { AutoUpdateMode, UpdateService } from './updates'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
+import { isMailbox } from './mail'
 import { CORE_VERSION } from './version'
 
 export const CORE = 'core'
@@ -112,6 +113,18 @@ const coreSettings: SettingDefinitions = {
     type: 'boolean',
     label: 'Organize my uploads into month- and year-based folders',
     default: true,
+  },
+  'mail.from': {
+    type: 'text',
+    label: 'Send email from',
+    description:
+      'Who the site’s email comes from, such as My Site <hello@example.com>. Leave it empty to use the mail plugin’s own sender.',
+    env: 'MAIL_FROM',
+    maxLength: 320,
+    validate: (value) =>
+      value === '' || isMailbox(value)
+        ? null
+        : 'Use an address, such as My Site <hello@example.com>',
   },
   'site.locale': {
     type: 'text',
@@ -220,6 +233,12 @@ export function registerCoreSettings(layout: SettingsLayoutStore): void {
     page: 'core.general',
     title: 'Site',
     fields: ['site.title', 'site.url', 'site.locale'],
+  })
+  layout.section(CORE, {
+    name: 'email',
+    page: 'core.general',
+    title: 'Email',
+    fields: ['mail.from'],
   })
   // WordPress's Settings › Reading.
   layout.page(

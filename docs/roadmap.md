@@ -24,10 +24,11 @@ Then **admin entries**: a plugin's admin code is a second entry, `./admin`, whic
 and the API routes load, so none of it reaches the site's visitors (Plugin Handbook › Admin
 screens).
 
-Now: 7, Content, in five parts. 7a, content types and their entries, and 7b, their admin
-screens, are done, and so are 7c, taxonomies and custom fields, 7d, site pages and revisions,
-and 7e, the media library with images in the editor and featured images. Milestone 7 is
-complete.
+Milestone 7, Content, is complete: content types and entries, their screens and the block
+editor, taxonomies and custom fields, site pages and revisions, and the media library.
+
+Now: 8, Accounts and email, in three parts. 8a, email, is done; next, 8b, accounts on the
+site, then 8c, profiles and user meta.
 
 The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
@@ -465,6 +466,25 @@ type's capabilities (`capability_type => 'post'`).
 
 Customer sign-up and sign-in on the storefront, password reset, profile screens with fields
 plugins add (`show_user_profile`), user meta, and a mail transport with filters (`wp_mail`).
+
+| Part | What                                                                    | WordPress's                               |
+| ---- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| 8a   | `cms.mail.send()`, a transport from one plugin, hooks (done)            | `wp_mail()`, SMTP plugins                 |
+| 8b   | Sign-up with a verified email, sign-in, lost password, `/account`       | `wp-login.php`, WooCommerce's My Account  |
+| 8c   | User meta, Profile and Edit User screens, account sections from plugins | `profile.php`, `user-edit.php`, user meta |
+
+### 8a. Email (done)
+
+- `cms.mail.send(message)`, like `wp_mail()`: `to` (up to 50), `subject`, `text`, `html`, `from`,
+  `replyTo`; checked before and after the `mail.message` filter (addresses, and no line breaks
+  where a header goes). Returns `false` when it can't be sent, logging why, with `mail.failed`;
+  `mail.sent` after. `canSend()` says whether a transport is set up.
+- **No mailer in core**, as chosen: one plugin provides the transport (`cms.mail.transport()`),
+  as WordPress's SMTP plugins replace PHPMailer. Without one, the log says nothing was sent, with
+  the text outside production only (it can hold reset links).
+- Settings › General › **Send email from** (`mail.from`, `MAIL_FROM`).
+- **Mail to files** (`@otw/plugin-mail-file`), a first-party transport for development and tests:
+  each email as a JSON file in `MAIL_FILE_DIR`. The reference site uses it.
 
 ## 9. LMS plugin
 

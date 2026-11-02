@@ -1,0 +1,19 @@
+{
+  "name": "@otw/plugin-mail-file",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "peerDependencies": {
+    "@otw/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@otw/sdk": "workspace:*",
+    "@otw/testing": "workspace:*"
+  }
+}

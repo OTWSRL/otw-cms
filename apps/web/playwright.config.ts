@@ -51,6 +51,7 @@ export default defineConfig({
       env: {
         CMS_DATA_DIR: '.data/e2e',
         CMS_UPLOADS_DIR: '.data/e2e-uploads',
+        MAIL_FILE_DIR: '.data/e2e-mail',
         DATABASE_URL: '',
         STRIPE_SECRET_KEY: '',
         STRIPE_WEBHOOK_SECRET: '',

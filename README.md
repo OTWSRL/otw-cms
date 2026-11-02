@@ -458,6 +458,15 @@ post types in LearnDash, LifterLMS and Tutor.
 - **Cost.** Types and their capabilities are built in memory at boot: 50 types add about
   0.002 ms each.
 
+## Email
+
+`cms.mail.send()` is `wp_mail()`: checked messages (addresses, no line breaks in headers), the
+`mail.message` filter, and `mail.sent` / `mail.failed`; it returns `false` rather than throwing
+when delivery fails. Core has no mailer: one plugin provides the transport
+(`cms.mail.transport()`), and without one the log says what wasn't sent (the text only outside
+production). Settings › General › Send email from (`MAIL_FROM`). `@otw/plugin-mail-file` writes
+each email to a folder, for development and the reference site's tests.
+
 ## Security model
 
 Plugins run in-process with full access, the same trust model as WordPress and npm. Declared

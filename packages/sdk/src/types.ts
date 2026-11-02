@@ -1422,6 +1422,56 @@ export interface MediaApi {
   months(): Promise<string[]>
 }
 
+// ── Mail ─────────────────────────────────────────────────────────────────────
+
+/** An email to send, like `wp_mail()`'s arguments. */
+export interface MailMessage {
+  /** One address or several: `ada@example.com` or `Ada Admin <ada@example.com>`. */
+  to: string | readonly string[]
+  subject: string
+  /** The plain-text body, which every email has. */
+  text: string
+  /** An HTML body as well, for mail programs that show it. */
+  html?: string
+  /** Defaults to Settings › General's "Send email from". */
+  from?: string
+  replyTo?: string
+}
+
+/** A message as the transport receives it: checked, with its recipients as a list. */
+export interface OutgoingMail {
+  /** `null` when the site has no sender set: the transport uses its own. */
+  from: string | null
+  to: string[]
+  subject: string
+  text: string
+  html: string | null
+  replyTo: string | null
+}
+
+/**
+ * How email leaves the site: SMTP, Postmark, Resend, SES. A plugin provides it, as WordPress's
+ * SMTP plugins replace `wp_mail()`'s PHPMailer.
+ */
+export interface MailTransport {
+  /** Sends the message, or throws with a reason for the log. */
+  send(message: OutgoingMail): Promise<void>
+}
+
+/** `cms.mail`: sending email, like `wp_mail()`. */
+export interface MailApi {
+  /**
+   * Sends an email through the site's transport. Like `wp_mail()`, it doesn't throw for a
+   * delivery problem: it returns `false`, logs why, and runs the `mail.failed` action. A message
+   * that isn't valid (an address that isn't one, a line break in the subject) throws.
+   */
+  send(message: MailMessage): Promise<boolean>
+  /** Whether a plugin has provided a transport, so email can leave the site. */
+  canSend(): boolean
+  /** Sends the site's email through `transport`. In `setup()` only, by one plugin at most. */
+  transport(transport: MailTransport): void
+}
+
 // ── Tracing ──────────────────────────────────────────────────────────────────
 
 /** What a span in a request's trace timed. */
@@ -1523,6 +1573,7 @@ export interface PluginContext {
   readonly admin: AdminApi
   readonly content: ContentApi
   readonly media: MediaApi
+  readonly mail: MailApi
   readonly traces: TracesApi
   readonly logger: Logger
   /**

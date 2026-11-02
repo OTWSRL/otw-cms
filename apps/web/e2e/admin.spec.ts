@@ -142,6 +142,7 @@ test('plugins add pages under Settings and sections to each other’s pages', as
     'Media',
     'Shop',
     'Payments',
+    'Mail to files',
   ])
   await settings.getByRole('link', { name: 'Payments' }).click()
   await expect(page).toHaveURL('/admin/commerce/settings/payments')

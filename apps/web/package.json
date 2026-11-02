@@ -18,6 +18,7 @@
     "@otw/next": "workspace:*",
     "@otw/plugin-commerce": "workspace:*",
     "@otw/plugin-commerce-stripe": "workspace:*",
+    "@otw/plugin-mail-file": "workspace:*",
     "@otw/sdk": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
