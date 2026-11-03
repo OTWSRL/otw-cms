@@ -24,6 +24,21 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+  # The packages as npm would publish them, in a site made by the packed scaffolder: what the
+  # workspace hides, such as a type package only in devDependencies, fails here instead of on npm.
+  packed-site:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/packed-site.mjs
+
   e2e:
     needs: check
     runs-on: ubuntu-latest

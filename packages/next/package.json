@@ -60,6 +60,7 @@
     "@tiptap/pm": "3.31.4",
     "@tiptap/react": "3.31.4",
     "@tiptap/starter-kit": "3.31.4",
+    "@types/pg": "^8.23.1",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1",
     "server-only": "^0.0.1"
@@ -70,7 +71,6 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.2.0",
     "happy-dom": "^21.0.4",
