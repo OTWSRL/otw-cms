@@ -1,10 +1,36 @@
 {
   "name": "@otwdesign/core",
   "version": "1.0.0",
-  "private": true,
+  "description": "The kernel of OTW CMS: content, revisions, users, roles, hooks, media, mail, settings, migrations and the plugin loader, on PostgreSQL.",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "postgresql"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

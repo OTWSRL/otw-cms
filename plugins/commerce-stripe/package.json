@@ -1,11 +1,39 @@
 {
   "name": "@otwdesign/plugin-commerce-stripe",
   "version": "1.0.0",
-  "private": true,
+  "description": "Card payments through Stripe Checkout for OTW CMS Commerce, confirmed by Stripe's signed webhooks.",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "plugins/commerce-stripe"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/plugins/commerce-stripe#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "plugin",
+    "stripe",
+    "payments"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./admin": "./src/admin.tsx"
+  },
+  "files": [
+    "src",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

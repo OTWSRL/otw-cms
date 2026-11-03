@@ -1,13 +1,40 @@
 {
   "name": "@otwdesign/cli",
   "version": "1.0.0",
-  "private": true,
+  "description": "The cms command for OTW CMS sites: generate, migrate, update and serve.",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "cli"
+  ],
   "type": "module",
   "bin": {
     "cms": "./bin/cms.js"
   },
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "bin",
+    "src",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

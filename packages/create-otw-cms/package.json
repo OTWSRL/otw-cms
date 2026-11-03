@@ -1,18 +1,42 @@
 {
   "name": "create-otw-cms",
   "version": "1.0.0",
-  "private": true,
+  "description": "Create an OTW CMS site: npm create otw-cms@latest my-site",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "packages/create-otw-cms"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/packages/create-otw-cms#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "nextjs",
+    "create"
+  ],
   "type": "module",
   "bin": {
     "create-otw-cms": "./bin/create-otw-cms.js"
   },
+  "exports": {
+    ".": "./src/scaffold.js"
+  },
   "files": [
     "bin",
     "src",
-    "template"
+    "template",
+    "NOTICE"
   ],
-  "exports": {
-    ".": "./src/scaffold.js"
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

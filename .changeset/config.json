@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "access": "public",
+  "baseBranch": "main",
+  "fixed": [
+    [
+      "@otwdesign/sdk",
+      "@otwdesign/core",
+      "@otwdesign/admin-ui",
+      "@otwdesign/next",
+      "@otwdesign/cli",
+      "@otwdesign/testing",
+      "create-otw-cms"
+    ]
+  ],
+  "linked": [],
+  "updateInternalDependencies": "patch",
+  "ignore": [],
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
+}

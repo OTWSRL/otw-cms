@@ -17,9 +17,13 @@
     "test": "vitest run --testTimeout=15000",
     "test:watch": "vitest --testTimeout=15000",
     "test:e2e": "pnpm --filter @otwdesign/web test:e2e",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
+    "changeset": "changeset",
+    "version-packages": "changeset version && node scripts/sync-core-version.mjs",
+    "release": "changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^16.4.3",
     "@types/node": "^24.0.0",

@@ -232,9 +232,7 @@ first, as `_deprecated_function()` does, and goes in the next major.
 
 ### Not in this milestone
 
-Publishing: the packages are still private, and a release needs a pipeline that versions the
-core packages together and publishes them with provenance. A `deprecated()` helper for the
-policy above. `--link` sites see two copies of shared dependencies such as `drizzle-orm`, which
+A `deprecated()` helper for the policy above. `--link` sites see two copies of shared dependencies such as `drizzle-orm`, which
 only matters to the type checker.
 
 ## 6. Updates from the admin (done)

@@ -1,10 +1,37 @@
 {
   "name": "@otwdesign/admin-ui",
   "version": "1.0.0",
-  "private": true,
+  "description": "React components for OTW CMS admin screens: list tables, postboxes, forms, notices and buttons.",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "packages/admin-ui"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/packages/admin-ui#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "admin",
+    "react"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

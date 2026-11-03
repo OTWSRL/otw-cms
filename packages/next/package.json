@@ -1,7 +1,24 @@
 {
   "name": "@otwdesign/next",
   "version": "1.0.0",
-  "private": true,
+  "description": "OTW CMS on Next.js: the admin, the site's pages, the plugin API routes, uploads, and withCms() for next.config.",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "packages/next"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/packages/next#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "nextjs",
+    "react"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -16,6 +33,18 @@
     "./tracing": "./src/tracing.ts",
     "./uploads": "./src/uploads.ts",
     "./instrumentation": "./src/instrumentation.ts"
+  },
+  "files": [
+    "src",
+    "config.js",
+    "config.d.ts",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

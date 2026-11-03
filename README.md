@@ -542,7 +542,24 @@ methods. Payment webhooks verify their signatures and are idempotent.
 - **First-run setup** is open to whoever reaches a fresh install first, as in WordPress. Run setup
   before exposing a new site.
 
+## Releasing
+
+The packages are on npm as `@otwdesign/*`, with the scaffolder as `create-otw-cms`. The core
+packages and the scaffolder share one version; each plugin has its own (see
+[.changeset/README.md](.changeset/README.md)).
+
+- With a change that should reach npm, add a changeset: `pnpm changeset`.
+- After CI passes on `main`, the release workflow opens or updates the "Version Packages" pull
+  request. Merging it publishes the new versions through npm trusted publishing, with provenance:
+  no npm token is stored anywhere.
+- `pnpm version-packages` is the version step on its own: `changeset version`, then
+  `CORE_VERSION` follows core's `package.json`.
+
 ## Roadmap
 
 See [docs/roadmap.md](docs/roadmap.md): content continues with taxonomies and meta, site pages and
 revisions, and media; then accounts and email, then the LMS plugin.
+
+## License
+
+Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Copyright 2026 OTW SRL.

@@ -1,10 +1,37 @@
 {
   "name": "@otwdesign/sdk",
   "version": "1.0.0",
-  "private": true,
+  "description": "The plugin API of OTW CMS: definePlugin(), hooks, content types, settings, capabilities and the types plugins build on.",
+  "license": "Apache-2.0",
+  "author": "OTW SRL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OTWSRL/otw-cms.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/OTWSRL/otw-cms/tree/main/packages/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/OTWSRL/otw-cms/issues"
+  },
+  "keywords": [
+    "otw-cms",
+    "cms",
+    "plugin",
+    "nextjs"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."
