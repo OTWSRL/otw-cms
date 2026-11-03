@@ -24,7 +24,8 @@ plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
 ```
 
 Plugins that aren't part of the CMS live in repositories of their own, next to this one, and link
-to its packages until they're on npm: `../otw-plugin-performance` is the first.
+to its packages until they're on npm: `../otw-plugin-performance`, and `../otw-plugin-lms`
+(courses, sold through Commerce).
 
 ## Commands
 

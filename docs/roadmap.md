@@ -558,11 +558,42 @@ users: the server's time to first byte (median of seven) and what the browser wa
   picker and a searchable Parent box for sites with thousands of authors or pages, and timings
   against a Postgres server over the network.
 
-## 9. LMS plugin
+## 9. LMS plugin (done)
 
-Courses and lessons as content types, enrollment on `commerce.order.paid`, an instructor role
-limited to their own courses through meta capabilities, a learner dashboard, course settings and
-a section on Commerce's pages. The second proof that big plugins extend each other.
+Courses and lessons, enrollment on `commerce.order.paid`, an instructor role limited to their own
+courses through meta capabilities, a learner dashboard, course settings and sections on Commerce's
+pages: the second proof that big plugins extend each other. It's a repository of its own,
+`../otw-plugin-lms` (`@otw/plugin-lms`), linked to this checkout, and needs nothing new from core
+or Commerce: everything below is built on extension points they already had.
+
+- **Courses and lessons** are content types with core's screens. A lesson's `lms.course` field
+  puts it in a course, its Order places it; the Course box offers only courses its editor teaches
+  (`lms.teach_course`). A course's access is open, free, paid or closed (LearnDash's), and its
+  lessons open in order unless it says otherwise; sample lessons open for everyone.
+- **The site's pages** are the plugin's routes, not core's content pages, because who's looking
+  decides what they show (core's templates don't get the viewer): `/courses`, the course, its
+  lessons (a locked lesson's body never leaves the server), `/my-courses`, and previews by id.
+  Enroll, Buy and Mark complete post forms to its API, which counts a session only with the site's
+  Origin.
+- **Selling** is Commerce's `commerce.purchasables` registry, with the buyer recorded by the
+  plugin: courses are priced only inside its own checkout, which runs Commerce's `checkout()` for
+  the signed-in person, so `commerce.order.created` records whose order it is and
+  `commerce.order.paid` enrolls them, idempotently, in Commerce's transaction. Commerce's own
+  checkout can't sell a course. The order screen gets a Courses box (`commerce.admin.order`),
+  Commerce's menu a Course sales screen (`menu.parent`).
+- **Progress and the dashboard**: a learner's courses and progress, the account page's Courses
+  section (`account.sections`), and `lms.lesson.completed` / `lms.course.completed` for other
+  plugins. An index of which course each lesson is in (`lms_lessons`, kept from `content.saved`)
+  makes a page of courses' counts and progress one query each: measured, `/my-courses` runs the
+  same queries for 2 courses as for 8.
+- **Instructors** are authors of their own courses, or contributors until Courses › Settings lets
+  them publish; `lms.enroll_students` keeps paid courses' giving away to editors.
+
+Left for later, each needing core: the viewer in content templates, and a site's own address for
+a type (`rewrite['slug']`), so courses could be core's content pages; a customer on Commerce's
+orders; `cms.users` lookups by email and for a page of users (the plugin joins `cms_users` for
+now); a slot on the order-received page. Quizzes, certificates, drip content, and refunds that
+unenroll.
 
 ## 10. Operations
 
