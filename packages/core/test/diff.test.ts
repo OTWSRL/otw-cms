@@ -1,4 +1,4 @@
-import type { Revision } from '@otw/sdk'
+import type { Revision } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { bodyLines, diffLines, diffRevisions } from '../src/diff'
 

@@ -46,7 +46,7 @@ export function defineAdmin(
 /*
  * Extension points. They are declared here, in the entry module, so plugins can augment them:
  *
- *   declare module '@otw/sdk' {
+ *   declare module '@otwdesign/sdk' {
  *     interface Registries { 'commerce.gateways': PaymentGateway }
  *     interface Filters { 'commerce.cart.totals': [CartTotals, { lines: QuotedLine[] }] }
  *     interface Actions { 'commerce.order.paid': { order: Order } }

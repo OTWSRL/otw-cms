@@ -1,4 +1,4 @@
-import type { Database, PluginDefinition } from '@otw/sdk'
+import type { Database, PluginDefinition } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import semver from 'semver'
 import { pluginStates } from './core-schema'

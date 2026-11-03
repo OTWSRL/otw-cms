@@ -1,4 +1,4 @@
-import type { Database } from '@otw/sdk'
+import type { Database } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { DatabaseContext } from '../src/database'

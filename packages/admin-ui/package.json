@@ -1,6 +1,6 @@
 {
-  "name": "@otw/admin-ui",
-  "version": "0.1.0",
+  "name": "@otwdesign/admin-ui",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@otw/sdk": "workspace:*"
+    "@otwdesign/sdk": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.0.0"

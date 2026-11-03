@@ -1,5 +1,5 @@
-import { Button, ListTable, TableNav, type Column } from '@otw/admin-ui'
-import type { Kernel } from '@otw/core'
+import { Button, ListTable, TableNav, type Column } from '@otwdesign/admin-ui'
+import type { Kernel } from '@otwdesign/core'
 import type {
   ContentTypeName,
   Entry,
@@ -8,7 +8,7 @@ import type {
   MediaQuery,
   SearchParams,
   User,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import type { ReactNode } from 'react'
 import { firstParam } from '../../runtime/search-params'
 import { AdminScreen } from '../screen'

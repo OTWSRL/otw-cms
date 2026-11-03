@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { MetaDefinition, MetaField } from '@otw/sdk'
+import type { MetaDefinition, MetaField } from '@otwdesign/sdk'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { MetaFields } from '../src/admin/screens/meta-fields'

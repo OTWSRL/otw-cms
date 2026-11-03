@@ -1,8 +1,8 @@
-import { defineAdmin, type PluginContext } from '@otw/sdk'
+import { defineAdmin, type PluginContext } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, memoryLogger, plugin } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Capabilities {
     'shelf.manage': true
   }

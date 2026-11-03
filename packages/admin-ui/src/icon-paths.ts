@@ -1,4 +1,4 @@
-import type { AdminIconName } from '@otw/sdk'
+import type { AdminIconName } from '@otwdesign/sdk'
 
 /**
  * Drawn for this project on a 20 × 20 grid, like Dashicons. `holes` icons fill even-odd, so a

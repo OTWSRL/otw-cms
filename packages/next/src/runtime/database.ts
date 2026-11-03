@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import type { Database } from '@otw/sdk'
+import type { Database } from '@otwdesign/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle as drizzlePostgres } from 'drizzle-orm/node-postgres'
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
 import { Pool, type PoolClient } from 'pg'
-import { traceQueries, type Env } from '@otw/core'
+import { traceQueries, type Env } from '@otwdesign/core'
 
 /** An open database and how to close it. */
 export interface DatabaseHandle {

@@ -1,4 +1,4 @@
-import type { ImageSize } from '@otw/sdk'
+import type { ImageSize } from '@otwdesign/sdk'
 import sharp, { type Metadata, type Sharp } from 'sharp'
 
 /** Above this, an image is scaled down for the site, keeping the original: `big_image_size_threshold`. */

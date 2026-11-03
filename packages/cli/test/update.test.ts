@@ -15,7 +15,7 @@ import {
 
 type Peers = Record<string, string>
 
-/** Versions with their peer dependencies; a string is shorthand for a range on @otw/sdk. */
+/** Versions with their peer dependencies; a string is shorthand for a range on @otwdesign/sdk. */
 function packument(name: string, versions: Record<string, string | Peers | null>): Packument {
   return {
     name,
@@ -25,7 +25,7 @@ function packument(name: string, versions: Record<string, string | Peers | null>
         {
           version,
           ...(peers
-            ? { peerDependencies: typeof peers === 'string' ? { '@otw/sdk': peers } : peers }
+            ? { peerDependencies: typeof peers === 'string' ? { '@otwdesign/sdk': peers } : peers }
             : {}),
         },
       ]),
@@ -35,34 +35,39 @@ function packument(name: string, versions: Record<string, string | Peers | null>
 
 const core = (...versions: string[]) =>
   Object.fromEntries(
-    ['@otw/next', '@otw/cli'].map((name) => [
+    ['@otwdesign/next', '@otwdesign/cli'].map((name) => [
       name,
       packument(name, Object.fromEntries(versions.map((v) => [v, null]))),
     ]),
   )
 
-const COMMERCE = '@otw/plugin-commerce'
-const STRIPE = '@otw/plugin-commerce-stripe'
+const COMMERCE = '@otwdesign/plugin-commerce'
+const STRIPE = '@otwdesign/plugin-commerce-stripe'
 
 /** Core 0.1.0 with Commerce and Stripe, which needs Commerce. */
 const site = (extra: Partial<SitePackages> = {}): SitePackages => ({
   specs: {
-    '@otw/next': '^0.1.0',
-    '@otw/cli': '^0.1.0',
+    '@otwdesign/next': '^0.1.0',
+    '@otwdesign/cli': '^0.1.0',
     [COMMERCE]: '^0.1.0',
     [STRIPE]: '^0.1.0',
   },
-  installed: { '@otw/next': '0.1.0', '@otw/cli': '0.1.0', [COMMERCE]: '0.1.0', [STRIPE]: '0.1.0' },
+  installed: {
+    '@otwdesign/next': '0.1.0',
+    '@otwdesign/cli': '0.1.0',
+    [COMMERCE]: '0.1.0',
+    [STRIPE]: '0.1.0',
+  },
   peers: {
-    [COMMERCE]: { '@otw/sdk': '^0.1.0' },
-    [STRIPE]: { '@otw/sdk': '^0.1.0', [COMMERCE]: '^0.1.0' },
+    [COMMERCE]: { '@otwdesign/sdk': '^0.1.0' },
+    [STRIPE]: { '@otwdesign/sdk': '^0.1.0', [COMMERCE]: '^0.1.0' },
   },
   plugins: [COMMERCE, STRIPE],
   ...extra,
 })
 
 const stripe = (versions: Record<string, Peers>) => packument(STRIPE, versions)
-const withCommerce = (range: string): Peers => ({ '@otw/sdk': '^0.1.0', [COMMERCE]: range })
+const withCommerce = (range: string): Peers => ({ '@otwdesign/sdk': '^0.1.0', [COMMERCE]: range })
 
 describe('planUpdate', () => {
   it('moves core within its caret range and each plugin to its newest that supports it', () => {
@@ -84,8 +89,8 @@ describe('planUpdate', () => {
       { name: STRIPE, from: '0.1.0', to: '0.1.1', latest: '0.1.1', compatible: 'yes' },
     ])
     expect(plan.changes.map(({ name, to }) => `${name}@${to}`)).toEqual([
-      '@otw/next@0.1.4',
-      '@otw/cli@0.1.4',
+      '@otwdesign/next@0.1.4',
+      '@otwdesign/cli@0.1.4',
       `${COMMERCE}@0.1.2`,
       `${STRIPE}@0.1.1`,
     ])
@@ -151,29 +156,35 @@ describe('planUpdate', () => {
   it('stays within patch releases for automatic updates', () => {
     const installed = site({
       installed: {
-        '@otw/next': '1.2.0',
-        '@otw/cli': '1.2.0',
+        '@otwdesign/next': '1.2.0',
+        '@otwdesign/cli': '1.2.0',
         [COMMERCE]: '1.0.0',
         [STRIPE]: '1.0.0',
       },
-      peers: { [COMMERCE]: { '@otw/sdk': '^1.0.0' }, [STRIPE]: { '@otw/sdk': '^1.0.0' } },
+      peers: {
+        [COMMERCE]: { '@otwdesign/sdk': '^1.0.0' },
+        [STRIPE]: { '@otwdesign/sdk': '^1.0.0' },
+      },
     })
     const packuments = {
       ...core('1.2.0', '1.2.3', '1.3.0'),
       [COMMERCE]: packument(COMMERCE, { '1.0.0': '^1.0.0', '1.0.1': '^1.0.0', '1.1.0': '^1.0.0' }),
-      [STRIPE]: stripe({ '1.0.0': { '@otw/sdk': '^1.0.0' }, '1.0.4': { '@otw/sdk': '^1.0.0' } }),
+      [STRIPE]: stripe({
+        '1.0.0': { '@otwdesign/sdk': '^1.0.0' },
+        '1.0.4': { '@otwdesign/sdk': '^1.0.0' },
+      }),
     }
     const changes = (plan: ReturnType<typeof planUpdate>) =>
       plan.changes.map(({ name, to }) => `${name}@${to}`)
     expect(changes(planUpdate(installed, packuments))).toEqual([
-      '@otw/next@1.3.0',
-      '@otw/cli@1.3.0',
+      '@otwdesign/next@1.3.0',
+      '@otwdesign/cli@1.3.0',
       `${COMMERCE}@1.1.0`,
       `${STRIPE}@1.0.4`,
     ])
     expect(changes(planUpdate(installed, packuments, { patchOnly: true }))).toEqual([
-      '@otw/next@1.2.3',
-      '@otw/cli@1.2.3',
+      '@otwdesign/next@1.2.3',
+      '@otwdesign/cli@1.2.3',
       `${COMMERCE}@1.0.1`,
       `${STRIPE}@1.0.4`,
     ])
@@ -228,7 +239,10 @@ describe('planUpdate', () => {
   })
 
   it('blocks a core update that would strand a plugin left out of the update', () => {
-    const plan = planUpdate(site(), core('0.1.0', '0.2.0'), { only: ['@otw/next'], major: true })
+    const plan = planUpdate(site(), core('0.1.0', '0.2.0'), {
+      only: ['@otwdesign/next'],
+      major: true,
+    })
     expect(plan.plugins).toEqual([])
     expect(plan.blockers).toEqual([
       `${COMMERCE} 0.1.0 doesn't support core 0.2.0; update it too, or it would be switched off.`,
@@ -257,13 +271,13 @@ describe('planUpdate', () => {
 
   it('refuses to split core packages across versions', () => {
     const plan = planUpdate(site(), {
-      '@otw/next': packument('@otw/next', { '0.1.0': null, '0.1.1': null }),
-      '@otw/cli': packument('@otw/cli', { '0.1.0': null }),
+      '@otwdesign/next': packument('@otwdesign/next', { '0.1.0': null, '0.1.1': null }),
+      '@otwdesign/cli': packument('@otwdesign/cli', { '0.1.0': null }),
       [COMMERCE]: packument(COMMERCE, { '0.1.0': '^0.1.0' }),
       [STRIPE]: stripe({ '0.1.0': withCommerce('^0.1.0') }),
     })
     expect(plan.blockers).toEqual([
-      '@otw/cli 0.1.1 is not published, and core packages update together.',
+      '@otwdesign/cli 0.1.1 is not published, and core packages update together.',
     ])
   })
 
@@ -271,8 +285,8 @@ describe('planUpdate', () => {
     const plan = planUpdate(
       site({
         specs: {
-          '@otw/next': 'workspace:*',
-          '@otw/cli': 'workspace:*',
+          '@otwdesign/next': 'workspace:*',
+          '@otwdesign/cli': 'workspace:*',
           [COMMERCE]: 'file:../commerce',
           [STRIPE]: 'link:../stripe',
         },
@@ -280,24 +294,21 @@ describe('planUpdate', () => {
       {},
     )
     expect(plan).toMatchObject({ core: null, changes: [], plugins: [], blockers: [] })
-    expect(plan.linked).toEqual(['@otw/next', '@otw/cli', COMMERCE, STRIPE])
+    expect(plan.linked).toEqual(['@otwdesign/next', '@otwdesign/cli', COMMERCE, STRIPE])
   })
 
   it('says to install first when a package is missing from node_modules', () => {
     expect(() => planUpdate(site({ installed: {} }), core('0.1.0'))).toThrow(
-      '@otw/next is not installed',
+      '@otwdesign/next is not installed',
     )
   })
 })
 
 describe('resolveTargets', () => {
   it('takes package names, first-party short names, and "core"', () => {
-    expect(resolveTargets(site(), ['commerce-stripe', COMMERCE, 'core', '@otw/cli'])).toEqual([
-      STRIPE,
-      COMMERCE,
-      '@otw/next',
-      '@otw/cli',
-    ])
+    expect(resolveTargets(site(), ['commerce-stripe', COMMERCE, 'core', '@otwdesign/cli'])).toEqual(
+      [STRIPE, COMMERCE, '@otwdesign/next', '@otwdesign/cli'],
+    )
   })
 
   it('finds a third-party plugin by its name without the scope, unless that’s ambiguous', () => {
@@ -332,7 +343,7 @@ describe('npmView', () => {
       '/sites/shop',
       answering(
         JSON.stringify([
-          { version: '0.1.0', peerDependencies: { '@otw/sdk': '^0.1.0' } },
+          { version: '0.1.0', peerDependencies: { '@otwdesign/sdk': '^0.1.0' } },
           { version: '0.1.1' },
         ]),
       ),
@@ -340,7 +351,7 @@ describe('npmView', () => {
     expect(await view('@acme/lms', '0.1.0')).toEqual({
       name: '@acme/lms',
       versions: {
-        '0.1.0': { version: '0.1.0', peerDependencies: { '@otw/sdk': '^0.1.0' } },
+        '0.1.0': { version: '0.1.0', peerDependencies: { '@otwdesign/sdk': '^0.1.0' } },
         '0.1.1': { version: '0.1.1' },
       },
     })
@@ -406,24 +417,24 @@ describe('writeChanges', () => {
         {
           name: 'site',
           scripts: { build: 'cms generate && next build' },
-          dependencies: { '@otw/next': '^0.1.0', '@acme/lms': '1.0.0', next: '^16.4.0' },
-          devDependencies: { '@otw/cli': '~0.1.0' },
+          dependencies: { '@otwdesign/next': '^0.1.0', '@acme/lms': '1.0.0', next: '^16.4.0' },
+          devDependencies: { '@otwdesign/cli': '~0.1.0' },
         },
         null,
         4,
       )}\n`,
     )
     await writeChanges(root, [
-      { name: '@otw/next', from: '0.1.0', to: '0.1.4' },
-      { name: '@otw/cli', from: '0.1.0', to: '0.1.4' },
+      { name: '@otwdesign/next', from: '0.1.0', to: '0.1.4' },
+      { name: '@otwdesign/cli', from: '0.1.0', to: '0.1.4' },
       { name: '@acme/lms', from: '1.0.0', to: '1.1.0' },
     ])
     const written = await readFile(join(root, 'package.json'), 'utf8')
     expect(JSON.parse(written)).toEqual({
       name: 'site',
       scripts: { build: 'cms generate && next build' },
-      dependencies: { '@otw/next': '^0.1.4', '@acme/lms': '1.1.0', next: '^16.4.0' },
-      devDependencies: { '@otw/cli': '~0.1.4' },
+      dependencies: { '@otwdesign/next': '^0.1.4', '@acme/lms': '1.1.0', next: '^16.4.0' },
+      devDependencies: { '@otwdesign/cli': '~0.1.4' },
     })
     expect(written).toMatch(/^ {4}"name"/m)
   })

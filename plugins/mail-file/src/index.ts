@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { definePlugin, type MailTransport, type PluginDefinition } from '@otw/sdk'
+import { definePlugin, type MailTransport, type PluginDefinition } from '@otwdesign/sdk'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Settings {
     /** The folder emails are written to, relative to the site: `MAIL_FILE_DIR`. */
     'mail-file.dir': string
@@ -39,10 +39,10 @@ export function fileTransport(dir: string): MailTransport {
 export function createMailFilePlugin(): PluginDefinition {
   return definePlugin({
     id: 'mail-file',
-    version: '0.1.0',
+    version: '1.0.0',
     name: 'Mail to files',
     description: 'Writes each email to a folder instead of sending it. For development and tests.',
-    requires: { core: '^0.1.0' },
+    requires: { core: '^1.0.0' },
     settings: {
       'mail-file.dir': {
         type: 'text',

@@ -1,5 +1,5 @@
-import type { CapabilityName, User } from '@otw/sdk'
-import { ActionError, ContentError, ForbiddenError } from '@otw/sdk'
+import type { CapabilityName, User } from '@otwdesign/sdk'
+import { ActionError, ContentError, ForbiddenError } from '@otwdesign/sdk'
 import type { InternalAction } from './admin'
 import { metaChanges } from './account-actions'
 import type { AccountService } from './accounts'

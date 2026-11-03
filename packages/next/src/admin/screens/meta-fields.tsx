@@ -1,6 +1,6 @@
-import { FormField, FormTable } from '@otw/admin-ui'
-import { metaOptions } from '@otw/core'
-import type { MetaField, UserMetaField } from '@otw/sdk'
+import { FormField, FormTable } from '@otwdesign/admin-ui'
+import { metaOptions } from '@otwdesign/core'
+import type { MetaField, UserMetaField } from '@otwdesign/sdk'
 
 /** An entry's custom field or a user's field: both are shown the same way. */
 type Field = MetaField | UserMetaField

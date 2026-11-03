@@ -6,7 +6,7 @@ import type {
   UpdateJob,
   UpdateOverview,
   UpdateRequest,
-} from '@otw/core'
+} from '@otwdesign/core'
 import type { UpdatePlan, UpdateScope } from '../update.ts'
 import { ControlError } from './control.ts'
 

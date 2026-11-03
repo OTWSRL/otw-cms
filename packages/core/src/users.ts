@@ -5,11 +5,11 @@ import type {
   UserMetaField,
   UserMetaValues,
   UsersApi,
-} from '@otw/sdk'
-import { ContentError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ContentError } from '@otwdesign/sdk'
 import { eq, inArray } from 'drizzle-orm'
 import type { AccountService } from './accounts'
-import type { MetaDefinition } from '@otw/sdk'
+import type { MetaDefinition } from '@otwdesign/sdk'
 import { MetaStore } from './content-meta'
 import { users } from './core-schema'
 import type { DatabaseContext } from './database'

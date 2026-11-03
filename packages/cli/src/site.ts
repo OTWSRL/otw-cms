@@ -1,8 +1,8 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Env } from '@otw/core'
-import type { Site } from '@otw/next'
+import type { Env } from '@otwdesign/core'
+import type { Site } from '@otwdesign/next'
 import nextEnv from '@next/env'
 import { generate, siteModulePath } from './generate.ts'
 

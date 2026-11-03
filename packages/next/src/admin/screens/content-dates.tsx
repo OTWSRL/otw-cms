@@ -1,4 +1,4 @@
-import type { Entry } from '@otw/sdk'
+import type { Entry } from '@otwdesign/sdk'
 
 /**
  * A date in the site's locale. In UTC, and saying so, until the site has a time zone setting;

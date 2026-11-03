@@ -1,4 +1,4 @@
-import { FormButton, ListTable, Notice, SubmitButton } from '@otw/admin-ui'
+import { FormButton, ListTable, Notice, SubmitButton } from '@otwdesign/admin-ui'
 import type {
   Kernel,
   PluginUpdate,
@@ -6,7 +6,7 @@ import type {
   UpdateCheck,
   UpdateJob,
   UpdateOverview,
-} from '@otw/core'
+} from '@otwdesign/core'
 import { AutoRefresh } from '../auto-refresh'
 import { AdminScreen } from '../screen'
 import { updateOverview } from '../update-overview'
@@ -14,7 +14,7 @@ import type { ScreenContext } from './context'
 
 type Serve = Extract<UpdateOverview, { channel: 'serve' }>
 
-const CORE_PACKAGE = '@otw/next'
+const CORE_PACKAGE = '@otwdesign/next'
 
 const COMPATIBILITY: Record<PluginUpdate['compatible'], string> = {
   yes: 'Yes (according to its author)',

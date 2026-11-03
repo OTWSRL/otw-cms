@@ -1,5 +1,5 @@
-import type { PageProps, User } from '@otw/sdk'
-import { ForbiddenError, PageRedirect } from '@otw/sdk'
+import type { PageProps, User } from '@otwdesign/sdk'
+import { ForbiddenError, PageRedirect } from '@otwdesign/sdk'
 import { describe, expect, it, vi } from 'vitest'
 import { bootKernel, plugin, signIn } from './helpers'
 

@@ -1,4 +1,4 @@
-import type { AdminDefinition, PluginDefinition } from '@otw/sdk'
+import type { AdminDefinition, PluginDefinition } from '@otwdesign/sdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Registry from '../src/site-registry'
 import type { Site, SiteTemplates } from '../src/site-registry'

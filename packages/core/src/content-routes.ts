@@ -1,4 +1,4 @@
-import type { ContentType, Taxonomy, Term } from '@otw/sdk'
+import type { ContentType, Taxonomy, Term } from '@otwdesign/sdk'
 
 /** Paths the CMS's own routes and Next.js use: content can't live under them. */
 const RESERVED = ['api', '_next', 'admin', 'uploads']

@@ -1,4 +1,4 @@
-import type { Migration } from '@otw/sdk'
+import type { Migration } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 
 // Hand-written to match core-schema.ts; the integration tests run every query against it.

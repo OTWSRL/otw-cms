@@ -1,4 +1,4 @@
-import type { OutgoingMail } from '@otw/sdk'
+import type { OutgoingMail } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'

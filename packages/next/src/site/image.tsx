@@ -1,4 +1,4 @@
-import type { MediaItem } from '@otw/sdk'
+import type { MediaItem } from '@otwdesign/sdk'
 
 /** WordPress's `max_srcset_image_width`: wider sizes are left out of `srcset`. */
 const MAX_SRCSET_WIDTH = 2048

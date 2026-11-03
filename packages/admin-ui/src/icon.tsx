@@ -1,4 +1,4 @@
-import type { AdminIcon as AdminIconValue } from '@otw/sdk'
+import type { AdminIcon as AdminIconValue } from '@otwdesign/sdk'
 import { ICONS } from './icon-paths'
 
 /**

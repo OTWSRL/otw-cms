@@ -1,5 +1,5 @@
-import { availableUpdates, CORE_VERSION, type Kernel } from '@otw/core'
-import type { User } from '@otw/sdk'
+import { availableUpdates, CORE_VERSION, type Kernel } from '@otwdesign/core'
+import type { User } from '@otwdesign/sdk'
 import { cookies } from 'next/headers'
 import type { ReactNode } from 'react'
 import { AdminBar } from './admin-bar'

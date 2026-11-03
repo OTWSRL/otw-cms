@@ -1,6 +1,6 @@
 import { isSiteOrigin, type OriginPolicy } from './origins'
-import type { ApiContext, ApiHandler, HttpMethod, Logger, User } from '@otw/sdk'
-import { ForbiddenError, HttpError } from '@otw/sdk'
+import type { ApiContext, ApiHandler, HttpMethod, Logger, User } from '@otwdesign/sdk'
+import { ForbiddenError, HttpError } from '@otwdesign/sdk'
 import type { Router } from './router'
 import { sessionTokenFromHeader } from './session-cookie'
 import { traced } from './tracing'

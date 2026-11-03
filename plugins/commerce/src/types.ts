@@ -1,4 +1,4 @@
-import type { RegistryItem, User } from '@otw/sdk'
+import type { RegistryItem, User } from '@otwdesign/sdk'
 
 /** Money is always an integer in the currency's minor unit (cents for USD). */
 export type Money = number
@@ -179,7 +179,7 @@ export interface CommerceService {
   parseMoney(input: string): Money | null
 }
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Registries {
     /** Payment methods offered at checkout. Commerce adds "Pay later" unless it's switched off. */
     'commerce.gateways': PaymentGateway

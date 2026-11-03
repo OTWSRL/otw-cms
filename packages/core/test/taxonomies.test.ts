@@ -1,11 +1,17 @@
-import type { CapabilityName, MetaCapabilityName, TaxonomyDefinition, Term, User } from '@otw/sdk'
+import type {
+  CapabilityName,
+  MetaCapabilityName,
+  TaxonomyDefinition,
+  Term,
+  User,
+} from '@otwdesign/sdk'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { CapabilityStore } from '../src/capabilities'
 import { ContentTypeStore } from '../src/content-types'
 import { registerCoreCapabilities, registerCoreContent } from '../src/core-plugin'
 import { TaxonomyStore } from '../src/taxonomies'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Taxonomies {
     'shelf.genre': true
   }

@@ -11,8 +11,8 @@ import type {
   EntryStatus,
   MetaCapabilityName,
   User,
-} from '@otw/sdk'
-import { ActionError, ContentError, ForbiddenError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ActionError, ContentError, ForbiddenError } from '@otwdesign/sdk'
 import { safeRedirectPath, type InternalAction } from './admin'
 import type { ContentService } from './content'
 import type { ContentScreenStore } from './content-screens'

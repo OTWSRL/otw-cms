@@ -1,7 +1,7 @@
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createTestKernel, type TestKernel } from '@otw/testing'
+import { createTestKernel, type TestKernel } from '@otwdesign/testing'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createMailFilePlugin, fileTransport } from '../src'
 

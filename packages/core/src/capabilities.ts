@@ -1,4 +1,9 @@
-import type { CapabilityDefinition, RequiredCapabilities, RoleDefinition, User } from '@otw/sdk'
+import type {
+  CapabilityDefinition,
+  RequiredCapabilities,
+  RoleDefinition,
+  User,
+} from '@otwdesign/sdk'
 
 export const ADMINISTRATOR = 'administrator'
 

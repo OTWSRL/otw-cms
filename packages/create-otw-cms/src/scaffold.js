@@ -10,8 +10,8 @@ export const TEMPLATE = resolve(HERE, '../template')
 /** @typedef {'pnpm' | 'npm' | 'yarn' | 'bun'} PackageManager */
 
 /** The CMS's packages, released together with this scaffolder under one version. */
-const CORE = ['@otw/next', '@otw/sdk', '@otw/admin-ui']
-const CORE_DEV = ['@otw/cli']
+const CORE = ['@otwdesign/next', '@otwdesign/sdk', '@otwdesign/admin-ui']
+const CORE_DEV = ['@otwdesign/cli']
 
 /** Versions of what a site needs besides the CMS, tested with this release. */
 const THIRD_PARTY = {
@@ -32,12 +32,12 @@ const THIRD_PARTY_DEV = {
 }
 
 /**
- * `commerce` means the first-party `@otw/plugin-commerce`; anything else is a package name.
+ * `commerce` means the first-party `@otwdesign/plugin-commerce`; anything else is a package name.
  *
  * @param {string} name
  */
 export function pluginPackage(name) {
-  return name.startsWith('@') || name.includes('/') ? name : `@otw/plugin-${name}`
+  return name.startsWith('@') || name.includes('/') ? name : `@otwdesign/plugin-${name}`
 }
 
 // npm's rules for new package names; they end up in package.json and generated source.
@@ -131,7 +131,7 @@ async function linkTurbopackRoot(target, repo) {
   let shared = 0
   while (shared < a.length && a[shared] === b[shared]) shared++
   const root = a.slice(0, shared).join(sep) || sep
-  const config = `import { withCms } from '@otw/next/config'
+  const config = `import { withCms } from '@otwdesign/next/config'
 
 // Linked to a checkout of the CMS (create-otw-cms --link), so Turbopack's root must hold both.
 const root = ${JSON.stringify(root)}

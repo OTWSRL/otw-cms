@@ -8,8 +8,8 @@ import type {
   SettingDefinitions,
   TaxonomyDefinition,
   User,
-} from '@otw/sdk'
-import { ActionError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ActionError } from '@otwdesign/sdk'
 import { ADMIN_PREFIX, LOGIN_PATH, safeRedirectPath, type InternalAction } from './admin'
 import { ACCOUNT_PATH } from './accounts'
 import { AuthError, type AuthService } from './auth'

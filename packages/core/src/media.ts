@@ -10,8 +10,8 @@ import type {
   MediaStorage,
   MediaUpload,
   MediaUploadOptions,
-} from '@otw/sdk'
-import { MediaError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { MediaError } from '@otwdesign/sdk'
 import {
   and,
   asc,

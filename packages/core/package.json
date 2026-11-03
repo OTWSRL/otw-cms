@@ -1,6 +1,6 @@
 {
-  "name": "@otw/core",
-  "version": "0.1.0",
+  "name": "@otwdesign/core",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -13,7 +13,7 @@
     "@opentelemetry/api": "~1.9.0",
     "@opentelemetry/context-async-hooks": "^2.12.0",
     "@opentelemetry/sdk-trace": "^2.12.0",
-    "@otw/sdk": "workspace:*",
+    "@otwdesign/sdk": "workspace:*",
     "semver": "^7.8.0",
     "sharp": "^0.35.5"
   },

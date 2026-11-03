@@ -1,6 +1,6 @@
-import { FormButton, FormField, FormTable, SubmitButton } from '@otw/admin-ui'
-import { inSentence, type Kernel } from '@otw/core'
-import type { SearchParams, Taxonomy, Term, User } from '@otw/sdk'
+import { FormButton, FormField, FormTable, SubmitButton } from '@otwdesign/admin-ui'
+import { inSentence, type Kernel } from '@otwdesign/core'
+import type { SearchParams, Taxonomy, Term, User } from '@otwdesign/sdk'
 import { AdminScreen } from '../screen'
 import { ParentSelect, parentTerms } from './content-terms'
 

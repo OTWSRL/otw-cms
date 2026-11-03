@@ -1,7 +1,7 @@
-import commerce, { type Order } from '@otw/plugin-commerce'
-import commerceAdmin from '@otw/plugin-commerce/admin'
-import { definePlugin, type SettingsValues } from '@otw/sdk'
-import { createTestKernel, type TestKernel } from '@otw/testing'
+import commerce, { type Order } from '@otwdesign/plugin-commerce'
+import commerceAdmin from '@otwdesign/plugin-commerce/admin'
+import { definePlugin, type SettingsValues } from '@otwdesign/sdk'
+import { createTestKernel, type TestKernel } from '@otwdesign/testing'
 import type { ReactElement, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Stripe from 'stripe'
@@ -106,7 +106,7 @@ describe('configuration', () => {
   it('does not load without commerce', async () => {
     harness = await createTestKernel({ plugins: [createStripePlugin()] })
     expect(harness.kernel.skipped).toEqual([
-      { id: 'commerce-stripe', reason: 'requires "commerce" ^0.1.0, which is not installed' },
+      { id: 'commerce-stripe', reason: 'requires "commerce" ^1.0.0, which is not installed' },
     ])
   })
 })

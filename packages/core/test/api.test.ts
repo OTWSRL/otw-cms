@@ -1,4 +1,4 @@
-import { HttpError, type ApiContext } from '@otw/sdk'
+import { HttpError, type ApiContext } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel } from '../src/kernel'
 import { bootKernel, createDb, memoryLogger, ORIGIN, plugin, signIn } from './helpers'

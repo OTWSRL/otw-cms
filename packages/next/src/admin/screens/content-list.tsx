@@ -1,5 +1,5 @@
-import { Button, ListTable, TableNav, Views, type Column, type View } from '@otw/admin-ui'
-import { inSentence, type Kernel } from '@otw/core'
+import { Button, ListTable, TableNav, Views, type Column, type View } from '@otwdesign/admin-ui'
+import { inSentence, type Kernel } from '@otwdesign/core'
 import type {
   ContentType,
   Entry,
@@ -9,7 +9,7 @@ import type {
   Taxonomy,
   Term,
   User,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import type { ReactNode } from 'react'
 import { firstParam } from '../../runtime/search-params'
 import { AdminScreen } from '../screen'

@@ -2,10 +2,10 @@ import { execFile } from 'node:child_process'
 import { access, cp, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { migrateSite, type Env } from '@otw/core'
-import type { Site } from '@otw/next'
-import { activePluginsFromEnv, dataDir, openDatabase } from '@otw/next/server'
-import type { Logger } from '@otw/sdk'
+import { migrateSite, type Env } from '@otwdesign/core'
+import type { Site } from '@otwdesign/next'
+import { activePluginsFromEnv, dataDir, openDatabase } from '@otwdesign/next/server'
+import type { Logger } from '@otwdesign/sdk'
 
 const run = promisify(execFile)
 

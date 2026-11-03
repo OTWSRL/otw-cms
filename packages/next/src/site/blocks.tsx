@@ -1,4 +1,4 @@
-import { isSafeHref, type Block, type MediaItem } from '@otw/sdk'
+import { isSafeHref, type Block, type MediaItem } from '@otwdesign/sdk'
 import type { ReactNode } from 'react'
 import { Image } from './image'
 

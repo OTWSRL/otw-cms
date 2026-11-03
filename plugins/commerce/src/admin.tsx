@@ -8,9 +8,9 @@ import {
   SubmitButton,
   TableNav,
   Views,
-} from '@otw/admin-ui'
-import type { PluginContext, SearchParams } from '@otw/sdk'
-import { ActionError, defineAdmin } from '@otw/sdk'
+} from '@otwdesign/admin-ui'
+import type { PluginContext, SearchParams } from '@otwdesign/sdk'
+import { ActionError, defineAdmin } from '@otwdesign/sdk'
 import type { ReactNode } from 'react'
 import { CommerceError } from './errors'
 import commerce from './index'

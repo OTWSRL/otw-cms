@@ -37,8 +37,8 @@ import type {
   SlotComponent,
   SlotName,
   User,
-} from '@otw/sdk'
-import { ActionError, ForbiddenError, PageRedirect } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ActionError, ForbiddenError, PageRedirect } from '@otwdesign/sdk'
 import {
   actionPath,
   ADMIN_PREFIX,

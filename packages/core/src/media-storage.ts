@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, open, stat, unlink } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
-import type { MediaStorage } from '@otw/sdk'
+import type { MediaStorage } from '@otwdesign/sdk'
 import { isSafeKey } from './media-files'
 
 /** Where uploads are served from, for storage that keeps them on this site. */

@@ -9,8 +9,8 @@ import type {
   EntryList,
   EntryQuery,
   EntryStatus,
-} from '@otw/sdk'
-import { ContentError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ContentError } from '@otwdesign/sdk'
 import {
   and,
   asc,

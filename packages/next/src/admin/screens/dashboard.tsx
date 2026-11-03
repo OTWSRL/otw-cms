@@ -1,4 +1,4 @@
-import { AdminIcon, Notice, Postbox } from '@otw/admin-ui'
+import { AdminIcon, Notice, Postbox } from '@otwdesign/admin-ui'
 import Link from 'next/link'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'

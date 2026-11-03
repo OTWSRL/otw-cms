@@ -1,5 +1,5 @@
-import type { Kernel, UpdateOverview } from '@otw/core'
-import type { User } from '@otw/sdk'
+import type { Kernel, UpdateOverview } from '@otwdesign/core'
+import type { User } from '@otwdesign/sdk'
 import { cache } from 'react'
 
 const overviewOnce = cache(

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Env } from '@otw/core'
+import type { Env } from '@otwdesign/core'
 
 /**
  * `CMS_ACTIVE_PLUGINS` pins the active plugins and turns off activation in the admin. Unset,

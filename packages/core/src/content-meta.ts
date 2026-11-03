@@ -4,8 +4,8 @@ import type {
   MetaDefinition,
   MetaField,
   UserMetaDefinition,
-} from '@otw/sdk'
-import { ContentError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ContentError } from '@otwdesign/sdk'
 import { selectedTypes } from './content-screens'
 
 /** All of an entry's custom fields together, as JSON. */

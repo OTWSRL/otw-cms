@@ -1,9 +1,9 @@
-import { defineAdmin, type PluginDefinition, type User } from '@otw/sdk'
+import { defineAdmin, type PluginDefinition, type User } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type Kernel, type KernelOptions } from '../src/kernel'
 import { createDb, formPost, memoryLogger, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Settings {
     'shop.currency': string
     'shop.guests': boolean

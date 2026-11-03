@@ -1,5 +1,5 @@
-import { createKernel, type Env, type Kernel } from '@otw/core'
-import type { Database } from '@otw/sdk'
+import { createKernel, type Env, type Kernel } from '@otwdesign/core'
+import type { Database } from '@otwdesign/sdk'
 import type { Site } from '../site-registry'
 import { activePluginsFromEnv, migrationModeFromEnv, uploadsFromEnv } from './settings'
 import { traceCollector } from './tracing'

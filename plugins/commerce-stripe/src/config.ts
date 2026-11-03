@@ -1,4 +1,4 @@
-import type { PluginContext } from '@otw/sdk'
+import type { PluginContext } from '@otwdesign/sdk'
 
 /** Where each key comes from: the server's environment only. */
 export const ENV_NAMES = {

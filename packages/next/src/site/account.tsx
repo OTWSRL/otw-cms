@@ -1,5 +1,5 @@
-import { metaOptions } from '@otw/core'
-import type { AccountTemplateProps, UserMetaField } from '@otw/sdk'
+import { metaOptions } from '@otwdesign/core'
+import type { AccountTemplateProps, UserMetaField } from '@otwdesign/sdk'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { Slot } from './slot'

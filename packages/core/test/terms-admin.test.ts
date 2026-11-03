@@ -1,4 +1,4 @@
-import type { Entry } from '@otw/sdk'
+import type { Entry } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, formPost, plugin, redirectOf, signIn } from './helpers'

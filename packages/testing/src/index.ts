@@ -9,13 +9,13 @@ import {
   type Kernel,
   type KernelOptions,
   type MemoryLogger,
-} from '@otw/core'
-import type { Database, User } from '@otw/sdk'
+} from '@otwdesign/core'
+import type { Database, User } from '@otwdesign/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { trace } from '@opentelemetry/api'
 import { drizzle } from 'drizzle-orm/pglite'
 
-export { createMemoryLogger, type LogEntry, type MemoryLogger } from '@otw/core'
+export { createMemoryLogger, type LogEntry, type MemoryLogger } from '@otwdesign/core'
 
 /** A booted kernel on its own database, with helpers to sign in and send requests. */
 export interface TestKernel {

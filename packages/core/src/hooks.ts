@@ -1,4 +1,4 @@
-import type { Logger } from '@otw/sdk'
+import type { Logger } from '@otwdesign/sdk'
 import { HookError } from './errors'
 import { traced } from './tracing'
 

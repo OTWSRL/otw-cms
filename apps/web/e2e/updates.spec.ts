@@ -5,7 +5,7 @@ import { ADMIN, MANAGER, SUPERVISOR, mainMenu, notice, signIn, submenu } from '.
 // 0.1.3 and Commerce 0.1.5 are waiting, and Commerce 1.0.0 is held back for Stripe.
 test.describe.configure({ mode: 'serial' })
 
-const COMMERCE = '@otw/plugin-commerce'
+const COMMERCE = '@otwdesign/plugin-commerce'
 
 test('administrators see waiting updates in the menu and on the Plugins screen', async ({
   page,
@@ -36,7 +36,7 @@ test('the Updates screen lists core and plugin updates, and why one waits', asyn
   await expect(row).toContainText('You have version 0.1.0 installed. Update to 0.1.5.')
   await expect(row).toContainText('Compatibility with OTW CMS 0.1.3: Yes (according to its author)')
   await expect(row).toContainText(
-    '1.0.0 is out, but @otw/plugin-commerce-stripe 0.1.0 needs @otw/plugin-commerce ^0.1.0.',
+    '1.0.0 is out, but @otwdesign/plugin-commerce-stripe 0.1.0 needs @otwdesign/plugin-commerce ^0.1.0.',
   )
 
   await page.getByRole('button', { name: 'Check again' }).click()

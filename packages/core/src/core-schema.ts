@@ -1,4 +1,4 @@
-import type { Block, EntryMetaValues, EntryStatus, UserMetaValues } from '@otw/sdk'
+import type { Block, EntryMetaValues, EntryStatus, UserMetaValues } from '@otwdesign/sdk'
 import {
   bigint,
   boolean,

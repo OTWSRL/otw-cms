@@ -1,5 +1,5 @@
-import type { Kernel, SettingsPageView } from '@otw/core'
-import type { CapabilityName, ContentTypeName, SearchParams, User } from '@otw/sdk'
+import type { Kernel, SettingsPageView } from '@otwdesign/core'
+import type { CapabilityName, ContentTypeName, SearchParams, User } from '@otwdesign/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound, redirect } from 'next/navigation'
 import { cache, type ReactNode } from 'react'

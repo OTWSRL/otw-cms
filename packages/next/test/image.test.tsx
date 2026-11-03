@@ -1,4 +1,4 @@
-import type { Block, MediaItem } from '@otw/sdk'
+import type { Block, MediaItem } from '@otwdesign/sdk'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Blocks } from '../src/site/blocks'

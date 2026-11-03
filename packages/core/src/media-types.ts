@@ -1,4 +1,4 @@
-import type { MediaKind } from '@otw/sdk'
+import type { MediaKind } from '@otwdesign/sdk'
 
 /**
  * The file types people may upload, by extension, like WordPress's `get_allowed_mime_types()`:

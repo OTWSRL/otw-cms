@@ -1,5 +1,5 @@
-import { FormButton, ListTable, Notice, TableNav, Views } from '@otw/admin-ui'
-import type { PluginStatus, PluginUpdate } from '@otw/core'
+import { FormButton, ListTable, Notice, TableNav, Views } from '@otwdesign/admin-ui'
+import type { PluginStatus, PluginUpdate } from '@otwdesign/core'
 import { currentSite } from '../../site-registry'
 import { AdminScreen } from '../screen'
 import { updateOverview } from '../update-overview'

@@ -1,4 +1,4 @@
-import type { MediaItem } from '@otw/sdk'
+import type { MediaItem } from '@otwdesign/sdk'
 
 /**
  * An item's picture in the library: an image's thumbnail (or medium size, for the grid), as small

@@ -1,5 +1,5 @@
-import { ACCOUNT_PATH, safeRedirectPath } from '@otw/core'
-import type { SearchParams } from '@otw/sdk'
+import { ACCOUNT_PATH, safeRedirectPath } from '@otwdesign/core'
+import type { SearchParams } from '@otwdesign/sdk'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getKernel } from '../../runtime/kernel'

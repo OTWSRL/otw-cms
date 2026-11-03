@@ -1,5 +1,5 @@
-import { Button, EditColumns, FormButton, Notice, Postbox } from '@otw/admin-ui'
-import { inSentence, type Kernel } from '@otw/core'
+import { Button, EditColumns, FormButton, Notice, Postbox } from '@otwdesign/admin-ui'
+import { inSentence, type Kernel } from '@otwdesign/core'
 import type {
   ContentType,
   ContentTypeName,
@@ -8,7 +8,7 @@ import type {
   Taxonomy,
   Term,
   User,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import { EditorLoader } from '../editor/editor-loader'
 import { FeaturedImage } from '../featured-image'
 import type { PickedMedia } from '../media-picker'

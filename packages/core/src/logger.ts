@@ -1,4 +1,4 @@
-import type { Logger } from '@otw/sdk'
+import type { Logger } from '@otwdesign/sdk'
 
 export const consoleLogger: Logger = {
   debug: (message, context) => console.debug(`[cms] ${message}`, context ?? ''),

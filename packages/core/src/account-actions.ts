@@ -1,5 +1,5 @@
-import type { User, UserMetaChanges, UserMetaField } from '@otw/sdk'
-import { ActionError, ContentError } from '@otw/sdk'
+import type { User, UserMetaChanges, UserMetaField } from '@otwdesign/sdk'
+import { ActionError, ContentError } from '@otwdesign/sdk'
 import { safeRedirectPath, type InternalAction } from './admin'
 import { ACCOUNT_PATH, type AccountService } from './accounts'
 import { AuthError, type AuthService } from './auth'

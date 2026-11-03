@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
 import { context, trace } from '@opentelemetry/api'
-import type { PluginContext, RequestTrace } from '@otw/sdk'
+import type { PluginContext, RequestTrace } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -14,7 +14,7 @@ import {
 } from '../src/tracing'
 import { memoryLogger, plugin } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Filters {
     'shop.price': [number, Record<string, never>]
   }

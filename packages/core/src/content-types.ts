@@ -10,7 +10,7 @@ import type {
   MetaCapabilityName,
   RequiredCapabilities,
   User,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import { ADMIN_PREFIX } from './admin'
 import { READ, type CapabilityStore } from './capabilities'
 

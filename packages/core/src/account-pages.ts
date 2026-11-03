@@ -1,4 +1,4 @@
-import type { AccountTemplateProps, AccountView, SearchParams, User } from '@otw/sdk'
+import type { AccountTemplateProps, AccountView, SearchParams, User } from '@otwdesign/sdk'
 import { safeRedirectPath } from './admin'
 import { ACCOUNT_PATH, type AccountService } from './accounts'
 import type { Flash } from './flash'

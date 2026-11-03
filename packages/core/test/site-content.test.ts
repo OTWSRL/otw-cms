@@ -1,10 +1,10 @@
 import type { ContentResolution } from '../src/site-content'
-import type { User } from '@otw/sdk'
+import type { User } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, plugin, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface ContentTypes {
     'school.course': true
   }

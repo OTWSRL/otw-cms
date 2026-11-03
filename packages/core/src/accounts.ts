@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { Logger, User } from '@otw/sdk'
+import type { Logger, User } from '@otwdesign/sdk'
 import { and, count, eq, gt, sql } from 'drizzle-orm'
 import {
   AuthError,

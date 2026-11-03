@@ -1,9 +1,9 @@
-import { ContentError, defineAdmin, type Entry } from '@otw/sdk'
+import { ContentError, defineAdmin, type Entry } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, formPost, memoryLogger, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface EntryMeta {
     'course.level': string
     'course.hours': number

@@ -1,11 +1,11 @@
-import { ActionError, defineAdmin, type AdminDefinition, type Entry } from '@otw/sdk'
+import { ActionError, defineAdmin, type AdminDefinition, type Entry } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { STALE_MESSAGE } from '../src/content-actions'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, formPost, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface ContentTypes {
     'library.book': true
     'library.album': true

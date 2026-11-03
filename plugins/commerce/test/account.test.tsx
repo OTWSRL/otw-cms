@@ -1,4 +1,4 @@
-import type { SlotComponent } from '@otw/sdk'
+import type { SlotComponent } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'

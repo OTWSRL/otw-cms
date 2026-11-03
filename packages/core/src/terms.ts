@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { ContentApi, Entry, EntryQuery, Taxonomy, Term, TermList } from '@otw/sdk'
-import { ContentError } from '@otw/sdk'
+import type { ContentApi, Entry, EntryQuery, Taxonomy, Term, TermList } from '@otwdesign/sdk'
+import { ContentError } from '@otwdesign/sdk'
 import {
   and,
   asc,

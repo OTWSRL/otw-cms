@@ -6,8 +6,8 @@ import { generate, MARKER, managedFiles, parseConfig } from '../src/generate.ts'
 
 describe('parseConfig', () => {
   it('accepts scoped and unscoped package names', () => {
-    expect(parseConfig({ plugins: ['@otw/plugin-commerce', 'cms-plugin-lms'] })).toEqual({
-      plugins: ['@otw/plugin-commerce', 'cms-plugin-lms'],
+    expect(parseConfig({ plugins: ['@otwdesign/plugin-commerce', 'cms-plugin-lms'] })).toEqual({
+      plugins: ['@otwdesign/plugin-commerce', 'cms-plugin-lms'],
     })
   })
 
@@ -76,20 +76,20 @@ describe('parseConfig routes', () => {
 })
 
 describe('managedFiles', () => {
-  const config = { plugins: ['@otw/plugin-commerce', '@otw/plugin-commerce-stripe'] }
+  const config = { plugins: ['@otwdesign/plugin-commerce', '@otwdesign/plugin-commerce-stripe'] }
 
   it('registers the installed plugins in config order', () => {
     const [site] = managedFiles(config, { srcDir: 'src' })
     expect(site).toEqual({
       path: 'src/cms/site.generated.ts',
       content: `${MARKER}
-import { defineSite } from '@otw/next'
-import plugin0 from "@otw/plugin-commerce"
-import plugin1 from "@otw/plugin-commerce-stripe"
+import { defineSite } from '@otwdesign/next'
+import plugin0 from "@otwdesign/plugin-commerce"
+import plugin1 from "@otwdesign/plugin-commerce-stripe"
 
 export const site = defineSite({
   plugins: [plugin0, plugin1],
-  packages: ["@otw/plugin-commerce", "@otw/plugin-commerce-stripe"],
+  packages: ["@otwdesign/plugin-commerce", "@otwdesign/plugin-commerce-stripe"],
 })
 `,
     })
@@ -128,20 +128,20 @@ export const site = defineSite({
   })
 
   it("gives the admin the plugins' admin entries, in a site module of its own", () => {
-    const [, admin] = managedFiles(config, { srcDir: 'src' }, ['@otw/plugin-commerce-stripe'])
+    const [, admin] = managedFiles(config, { srcDir: 'src' }, ['@otwdesign/plugin-commerce-stripe'])
     expect(admin).toEqual({
       path: 'src/cms/admin.generated.ts',
       content: `${MARKER}
 // The admin's site module: the plugins and their admin entries. Only the admin and the API import it.
-import { defineSite } from '@otw/next'
-import plugin0 from "@otw/plugin-commerce"
-import plugin1 from "@otw/plugin-commerce-stripe"
-import admin1 from "@otw/plugin-commerce-stripe/admin"
+import { defineSite } from '@otwdesign/next'
+import plugin0 from "@otwdesign/plugin-commerce"
+import plugin1 from "@otwdesign/plugin-commerce-stripe"
+import admin1 from "@otwdesign/plugin-commerce-stripe/admin"
 
 export const site = defineSite({
   plugins: [plugin0, plugin1],
   admin: [admin1],
-  packages: ["@otw/plugin-commerce", "@otw/plugin-commerce-stripe"],
+  packages: ["@otwdesign/plugin-commerce", "@otwdesign/plugin-commerce-stripe"],
 })
 `,
     })
@@ -166,7 +166,10 @@ export const site = defineSite({
     const admin = files.find((managed) => managed.path.endsWith('[[...segments]]/page.tsx'))!
     expect(admin.content).toBe(`${MARKER}
 import '../../../../cms/admin.generated'
-export { AdminPage as default, generateAdminMetadata as generateMetadata } from '@otw/next/admin'
+export {
+  AdminPage as default,
+  generateAdminMetadata as generateMetadata,
+} from '@otwdesign/next/admin'
 export const dynamic = 'force-dynamic'
 `)
     const imports = (path: string) => files.find((managed) => managed.path === path)!.content
@@ -177,7 +180,7 @@ export const dynamic = 'force-dynamic'
     // Uploads come from the storage plugins set up in the site's module; no admin code.
     expect(imports('src/app/(cms)/uploads/[...path]/route.ts')).toBe(`${MARKER}
 import '../../../../cms/site.generated'
-export { GET, HEAD } from '@otw/next/uploads'
+export { GET, HEAD } from '@otwdesign/next/uploads'
 export const dynamic = 'force-dynamic'
 `)
     expect(imports('src/app/(site)/page.tsx')).toContain("import '../../cms/site.generated'")
@@ -284,7 +287,7 @@ describe('generate', () => {
     )
     expect(instrumentation).toEqual({
       path: 'src/instrumentation.ts',
-      content: `${MARKER}\nexport { register } from '@otw/next/instrumentation'\n`,
+      content: `${MARKER}\nexport { register } from '@otwdesign/next/instrumentation'\n`,
       replaceable: true,
     })
     await mkdir(join(root, 'src'), { recursive: true })
@@ -307,7 +310,7 @@ describe('generate', () => {
   it('removes the optional catch-all earlier versions wrote, which claimed the home page too', async () => {
     const old = join(root, 'src/app/(site)/[[...slug]]/page.tsx')
     await mkdir(join(old, '..'), { recursive: true })
-    await writeFile(old, `${MARKER}\nexport { SitePage as default } from '@otw/next/site'\n`)
+    await writeFile(old, `${MARKER}\nexport { SitePage as default } from '@otwdesign/next/site'\n`)
 
     const result = await statuses()
     expect(result['src/app/(site)/[[...slug]]/page.tsx']).toBe('removed')

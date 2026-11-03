@@ -1,6 +1,6 @@
-import { Button, ListTable, SubmitButton, TableNav } from '@otw/admin-ui'
-import { inSentence, type Kernel } from '@otw/core'
-import type { SearchParams, Taxonomy, TaxonomyName, Term, User } from '@otw/sdk'
+import { Button, ListTable, SubmitButton, TableNav } from '@otwdesign/admin-ui'
+import { inSentence, type Kernel } from '@otwdesign/core'
+import type { SearchParams, Taxonomy, TaxonomyName, Term, User } from '@otwdesign/sdk'
 import { firstParam } from '../../runtime/search-params'
 import { AdminScreen } from '../screen'
 

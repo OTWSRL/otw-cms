@@ -1,4 +1,4 @@
-import type { SettingDefinition } from '@otw/sdk'
+import type { SettingDefinition } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import {
   parseEnvValue,

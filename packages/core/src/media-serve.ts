@@ -1,4 +1,4 @@
-import type { MediaStorage } from '@otw/sdk'
+import type { MediaStorage } from '@otwdesign/sdk'
 import { isSafeKey } from './media-files'
 import { ALLOWED_MIMES, mimeForExtension } from './media-types'
 

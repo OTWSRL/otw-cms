@@ -1,5 +1,5 @@
-import { defineAdmin, definePlugin, type User } from '@otw/sdk'
-import { TEST_ORIGIN, type TestKernel } from '@otw/testing'
+import { defineAdmin, definePlugin, type User } from '@otwdesign/sdk'
+import { TEST_ORIGIN, type TestKernel } from '@otwdesign/testing'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -26,7 +26,7 @@ async function renderAdmin(harness: TestKernel, path: string, user: User) {
 const bankTransfer = definePlugin({
   id: 'bank-transfer',
   version: '1.0.0',
-  requires: { commerce: '^0.1.0' },
+  requires: { commerce: '^1.0.0' },
   setup(cms) {
     cms.registries.get('commerce.gateways').add({
       id: 'bank',
@@ -281,7 +281,7 @@ describe('commerce admin extension points', () => {
     const notes = definePlugin({
       id: 'order-notes',
       version: '1.0.0',
-      requires: { commerce: '^0.1.0' },
+      requires: { commerce: '^1.0.0' },
     })
     const notesAdmin = defineAdmin(notes, (cms) => {
       cms.slots.fill('commerce.admin.order', {

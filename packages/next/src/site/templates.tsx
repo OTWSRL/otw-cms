@@ -1,4 +1,4 @@
-import type { ArchiveTemplateProps, Block, Entry, EntryTemplateProps } from '@otw/sdk'
+import type { ArchiveTemplateProps, Block, Entry, EntryTemplateProps } from '@otwdesign/sdk'
 import { getKernel } from '../runtime/kernel'
 import { Blocks } from './blocks'
 import { Image } from './image'

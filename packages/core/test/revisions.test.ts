@@ -1,9 +1,9 @@
-import { ContentError } from '@otw/sdk'
+import { ContentError } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, formPost, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface ContentTypes {
     'notes.note': true
     'notes.memo': true

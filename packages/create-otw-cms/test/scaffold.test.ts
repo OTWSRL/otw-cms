@@ -32,13 +32,13 @@ describe('scaffold', () => {
     expect(manifest.name).toBe('my-shop')
     expect(manifest.dependencies).toMatchObject({
       '@acme/lms': '^0.3.1',
-      '@otw/admin-ui': '^0.3.1',
-      '@otw/next': '^0.3.1',
-      '@otw/plugin-commerce': '^0.3.1',
-      '@otw/sdk': '^0.3.1',
+      '@otwdesign/admin-ui': '^0.3.1',
+      '@otwdesign/next': '^0.3.1',
+      '@otwdesign/plugin-commerce': '^0.3.1',
+      '@otwdesign/sdk': '^0.3.1',
       next: expect.stringMatching(/^\^16\./),
     })
-    expect(manifest.devDependencies['@otw/cli']).toBe('^0.3.1')
+    expect(manifest.devDependencies['@otwdesign/cli']).toBe('^0.3.1')
     expect(manifest.scripts.build).toBe('cms generate && next build')
     expect(manifest.scripts['build:deploy']).toBe(
       'cms generate && cms migrate --no-backup && next build',
@@ -46,7 +46,7 @@ describe('scaffold', () => {
     // Route types come from Next.js, and go stale when `cms generate` moves a route.
     expect(manifest.scripts.typecheck).toBe('cms generate && next typegen && tsc --noEmit')
     expect(JSON.parse(await read(target, 'cms.config.json'))).toEqual({
-      plugins: ['@otw/plugin-commerce', '@acme/lms'],
+      plugins: ['@otwdesign/plugin-commerce', '@acme/lms'],
     })
 
     const files = await readdir(target, { recursive: true })
@@ -122,9 +122,9 @@ describe('scaffold', () => {
     const target = join(parent, 'linked')
     await scaffold({ target, version: '0.1.0', plugins: ['commerce'], link: repo })
     const { dependencies, devDependencies } = JSON.parse(await read(target, 'package.json'))
-    expect(dependencies['@otw/next']).toMatch(/^link:.*\/packages\/next$/)
-    expect(dependencies['@otw/plugin-commerce']).toMatch(/^link:.*\/plugins\/commerce$/)
-    expect(devDependencies['@otw/cli']).toMatch(/^link:.*\/packages\/cli$/)
+    expect(dependencies['@otwdesign/next']).toMatch(/^link:.*\/packages\/next$/)
+    expect(dependencies['@otwdesign/plugin-commerce']).toMatch(/^link:.*\/plugins\/commerce$/)
+    expect(devDependencies['@otwdesign/cli']).toMatch(/^link:.*\/packages\/cli$/)
   })
 
   it('refuses a directory with files in it, and bad plugin names', async () => {
@@ -140,7 +140,7 @@ describe('scaffold', () => {
 
 describe('helpers', () => {
   it('names first-party plugins by their short name', () => {
-    expect(pluginPackage('commerce-stripe')).toBe('@otw/plugin-commerce-stripe')
+    expect(pluginPackage('commerce-stripe')).toBe('@otwdesign/plugin-commerce-stripe')
     expect(pluginPackage('@acme/lms')).toBe('@acme/lms')
   })
 

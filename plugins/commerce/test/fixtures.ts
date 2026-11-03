@@ -1,6 +1,6 @@
-import type { KernelOptions } from '@otw/core'
-import { definePlugin, type PluginDefinition } from '@otw/sdk'
-import { createTestKernel, type TestKernel } from '@otw/testing'
+import type { KernelOptions } from '@otwdesign/core'
+import { definePlugin, type PluginDefinition } from '@otwdesign/sdk'
+import { createTestKernel, type TestKernel } from '@otwdesign/testing'
 import { afterEach } from 'vitest'
 import commerce, { type Order, type PaymentGateway, type PaymentUrls } from '../src'
 import commerceAdmin from '../src/admin'
@@ -39,7 +39,7 @@ export async function bootShop(
 export const tenPercentOff = definePlugin({
   id: 'discounts',
   version: '1.0.0',
-  requires: { commerce: '^0.1.0' },
+  requires: { commerce: '^1.0.0' },
   setup(cms) {
     cms.hooks.addFilter('commerce.cart.totals', (totals) => ({
       ...totals,
@@ -56,7 +56,7 @@ export function coursesPlugin(enrolled: string[]) {
   return definePlugin({
     id: 'courses',
     version: '1.0.0',
-    optional: { commerce: '^0.1.0' },
+    optional: { commerce: '^1.0.0' },
     setup: (cms) =>
       cms.when('commerce', () => {
         cms.registries.get('commerce.purchasables').add({

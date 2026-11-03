@@ -1,4 +1,4 @@
-import type { PluginContext } from '@otw/sdk'
+import type { PluginContext } from '@otwdesign/sdk'
 
 /**
  * The shop manager role and Commerce's capabilities. Registered by the main entry, so the

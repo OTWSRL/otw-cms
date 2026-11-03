@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { Database } from '@otw/sdk'
+import type { Database } from '@otwdesign/sdk'
 
 type AfterCommit = () => Promise<void>
 

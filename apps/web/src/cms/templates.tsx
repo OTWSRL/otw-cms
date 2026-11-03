@@ -1,5 +1,5 @@
-import type { SiteTemplates } from '@otw/next'
-import { AccountTemplate } from '@otw/next/site'
+import type { SiteTemplates } from '@otwdesign/next'
+import { AccountTemplate } from '@otwdesign/next/site'
 
 /**
  * The shop's own templates, as a theme's: the account pages are the CMS's, under a line of the

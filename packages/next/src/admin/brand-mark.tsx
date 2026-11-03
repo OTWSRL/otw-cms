@@ -1,4 +1,4 @@
-import type { Brand } from '@otw/core'
+import type { Brand } from '@otwdesign/core'
 
 /** The CMS's mark on the sign-in screens, where WordPress shows its logo. A brand's logo replaces it. */
 export function BrandMark({ brand }: { brand: Brand }) {

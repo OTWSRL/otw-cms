@@ -1,4 +1,4 @@
-import type { Block, EntryMetaValues, Revision } from '@otw/sdk'
+import type { Block, EntryMetaValues, Revision } from '@otwdesign/sdk'
 
 /** One line of a diff: kept, removed from the older text, or added in the newer. */
 export interface DiffLine {

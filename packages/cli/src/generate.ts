@@ -1,6 +1,6 @@
 import { access, mkdir, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
-import type { Brand } from '@otw/core'
+import type { Brand } from '@otwdesign/core'
 
 export interface CmsConfig {
   /** npm package names of installed plugins. Installing a plugin adds it here and rebuilds. */
@@ -162,7 +162,7 @@ function importPath(from: string, to: string): string {
 function siteModule(config: CmsConfig, admin?: ReadonlySet<string>, templates = false): string[] {
   const withAdmin = config.plugins.flatMap((name, i) => (admin?.has(name) ? [i] : []))
   return [
-    "import { defineSite } from '@otw/next'",
+    "import { defineSite } from '@otwdesign/next'",
     ...config.plugins.map((name, i) => `import plugin${i} from ${JSON.stringify(name)}`),
     ...withAdmin.map(
       (i) => `import admin${i} from ${JSON.stringify(`${config.plugins[i]}/admin`)}`,
@@ -203,7 +203,7 @@ export function managedFiles(
     route(path, lines, false, adminSite)
   const dynamic = "export const dynamic = 'force-dynamic'"
   const storefront = [
-    "export { SitePage as default, generateSiteMetadata as generateMetadata } from '@otw/next/site'",
+    "export { SitePage as default, generateSiteMetadata as generateMetadata } from '@otwdesign/next/site'",
     dynamic,
   ]
 
@@ -214,32 +214,40 @@ export function managedFiles(
       ...siteModule(config, new Set(admin)),
     ]),
     adminRoute('app/(cms)/layout.tsx', [
-      "export { AdminRootLayout as default } from '@otw/next/admin'",
+      "export { AdminRootLayout as default } from '@otwdesign/next/admin'",
       dynamic,
     ]),
+    // Wrapped as Prettier would, so a site's format check passes on the files written here.
     adminRoute('app/(cms)/admin/[[...segments]]/page.tsx', [
-      "export { AdminPage as default, generateAdminMetadata as generateMetadata } from '@otw/next/admin'",
+      'export {',
+      '  AdminPage as default,',
+      '  generateAdminMetadata as generateMetadata,',
+      "} from '@otwdesign/next/admin'",
       dynamic,
     ]),
     file(at('app/(cms)/admin/forbidden.tsx'), [
-      "export { AdminForbidden as default } from '@otw/next/admin'",
+      "export { AdminForbidden as default } from '@otwdesign/next/admin'",
     ]),
     file(at('app/(cms)/admin/not-found.tsx'), [
-      "export { AdminNotFound as default } from '@otw/next/admin'",
+      "export { AdminNotFound as default } from '@otwdesign/next/admin'",
     ]),
     adminRoute('app/(cms)/api/p/[...path]/route.ts', [
-      "export { DELETE, GET, PATCH, POST, PUT } from '@otw/next/api'",
+      "export { DELETE, GET, PATCH, POST, PUT } from '@otwdesign/next/api'",
       dynamic,
     ]),
     // The media library's files, as wp-content/uploads. A plugin may keep them elsewhere, so
     // they come from the site's module, where plugins set up, never the admin's.
     route('app/(cms)/uploads/[...path]/route.ts', [
-      "export { GET, HEAD } from '@otw/next/uploads'",
+      "export { GET, HEAD } from '@otwdesign/next/uploads'",
       dynamic,
     ]),
     // Next.js loads it when the server starts. A site with its own (Sentry, say) keeps it and
     // calls this register() from its own.
-    file(at('instrumentation.ts'), ["export { register } from '@otw/next/instrumentation'"], true),
+    file(
+      at('instrumentation.ts'),
+      ["export { register } from '@otwdesign/next/instrumentation'"],
+      true,
+    ),
     // The home page has a file of its own so the site can write its own home page; an optional
     // catch-all would claim / as well, and Next.js allows only one.
     route('app/(site)/page.tsx', storefront, true),

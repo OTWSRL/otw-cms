@@ -1,4 +1,4 @@
-import { AdminIcon, Button, ListTable, TableNav, Views } from '@otw/admin-ui'
+import { AdminIcon, Button, ListTable, TableNav, Views } from '@otwdesign/admin-ui'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
 import { firstParam } from '../../runtime/search-params'

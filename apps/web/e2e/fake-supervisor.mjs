@@ -16,7 +16,7 @@ const UPDATE_STEPS = [
 const release = (id, version, status) => ({
   id,
   createdAt: `2026-10-${id === 'r1' ? '30' : '31'}T09:00:00.000Z`,
-  versions: { '@otw/next': version, '@otw/plugin-commerce': '0.1.0' },
+  versions: { '@otwdesign/next': version, '@otwdesign/plugin-commerce': '0.1.0' },
   status,
 })
 
@@ -28,15 +28,15 @@ const state = {
     core: { from: '0.1.0', to: '0.1.3' },
     plugins: [
       {
-        name: '@otw/plugin-commerce',
+        name: '@otwdesign/plugin-commerce',
         from: '0.1.0',
         to: '0.1.5',
         latest: '1.0.0',
         compatible: 'yes',
-        note: '@otw/plugin-commerce-stripe 0.1.0 needs @otw/plugin-commerce ^0.1.0',
+        note: '@otwdesign/plugin-commerce-stripe 0.1.0 needs @otwdesign/plugin-commerce ^0.1.0',
       },
       {
-        name: '@otw/plugin-commerce-stripe',
+        name: '@otwdesign/plugin-commerce-stripe',
         from: '0.1.0',
         to: null,
         latest: null,

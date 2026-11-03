@@ -6,13 +6,13 @@ import type {
   EntryStatus,
   MetaCapabilityName,
   User,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { CapabilityStore } from '../src/capabilities'
 import { ContentTypeStore } from '../src/content-types'
 import { registerCoreCapabilities, registerCoreContent } from '../src/core-plugin'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface ContentTypes {
     'shelf.book': true
     'crew.person': { plural: 'people' }

@@ -1,8 +1,8 @@
-import { ActionError, defineAdmin, ForbiddenError, type PluginContext } from '@otw/sdk'
+import { ActionError, defineAdmin, ForbiddenError, type PluginContext } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, formPost, ORIGIN, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Capabilities {
     'shop.manage': true
     'shop.undeclared': true

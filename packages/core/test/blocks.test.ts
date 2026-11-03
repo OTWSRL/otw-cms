@@ -1,4 +1,4 @@
-import { ContentError, isSafeHref } from '@otw/sdk'
+import { ContentError, isSafeHref } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { cleanBlocks, imageIds } from '../src/blocks'
 

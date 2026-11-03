@@ -1,5 +1,5 @@
-import type { Env, UpdateOverview, UpdateService } from '@otw/core'
-import { ActionError } from '@otw/sdk'
+import type { Env, UpdateOverview, UpdateService } from '@otwdesign/core'
+import { ActionError } from '@otwdesign/sdk'
 
 type Fetch = typeof fetch
 

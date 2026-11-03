@@ -1,5 +1,5 @@
-import { formatBytes, type Kernel } from '@otw/core'
-import type { SearchParams } from '@otw/sdk'
+import { formatBytes, type Kernel } from '@otwdesign/core'
+import type { SearchParams } from '@otwdesign/sdk'
 import { AdminScreen } from '../screen'
 import { MediaUploader } from './media-uploader'
 

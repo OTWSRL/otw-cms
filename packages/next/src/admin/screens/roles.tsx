@@ -1,5 +1,5 @@
-import { ListTable } from '@otw/admin-ui'
-import { ADMINISTRATOR } from '@otw/core'
+import { ListTable } from '@otwdesign/admin-ui'
+import { ADMINISTRATOR } from '@otwdesign/core'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
 

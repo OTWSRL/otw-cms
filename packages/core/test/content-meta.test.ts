@@ -1,4 +1,4 @@
-import { ContentError, type MetaDefinition, type MetaField } from '@otw/sdk'
+import { ContentError, type MetaDefinition, type MetaField } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { cleanMetaValue, MetaStore } from '../src/content-meta'
 

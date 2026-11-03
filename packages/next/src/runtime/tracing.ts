@@ -1,5 +1,5 @@
 import type { Sampler, SpanProcessor } from '@opentelemetry/sdk-trace'
-import { registerTracerProvider, TraceCollector } from '@otw/core'
+import { registerTracerProvider, TraceCollector } from '@otwdesign/core'
 
 // One per process, shared by every bundle: Next.js compiles route handlers and pages separately.
 const globalForTraces = globalThis as typeof globalThis & { __otwTraces?: TraceCollector }
@@ -19,7 +19,7 @@ export function registerTracing(): TraceCollector | undefined {
   // Registration is first come, first served.
   if (!registerTracerProvider(collector)) {
     console.warn(
-      "cms: the site sets up OpenTelemetry itself, so CMS tracing is off. Add cmsTracing()'s span processor from @otw/next/tracing to your tracer provider to turn it on.",
+      "cms: the site sets up OpenTelemetry itself, so CMS tracing is off. Add cmsTracing()'s span processor from @otwdesign/next/tracing to your tracer provider to turn it on.",
     )
     return undefined
   }

@@ -12,12 +12,12 @@ is a switch on the admin's Plugins screen, with no rebuild.
 
 ```
 apps/web               the CMS's own site, exactly what create-otw-cms makes, plus e2e tests
-packages/next          @otw/next: the admin, the storefront route, the API route and the runtime
-packages/sdk           @otw/sdk: the only package plugin authors depend on (types + definePlugin)
-packages/admin-ui      @otw/admin-ui: WordPress-style admin components (list and form tables, boxes)
-packages/core          @otw/core: the kernel (resolver, hooks, registries, services, router, migrations)
-packages/testing       @otw/testing: boots the kernel on in-memory Postgres for plugin tests
-packages/cli           @otw/cli: `cms generate`, `cms migrate`, `cms update`, `cms serve`
+packages/next          @otwdesign/next: the admin, the storefront route, the API route and the runtime
+packages/sdk           @otwdesign/sdk: the only package plugin authors depend on (types + definePlugin)
+packages/admin-ui      @otwdesign/admin-ui: WordPress-style admin components (list and form tables, boxes)
+packages/core          @otwdesign/core: the kernel (resolver, hooks, registries, services, router, migrations)
+packages/testing       @otwdesign/testing: boots the kernel on in-memory Postgres for plugin tests
+packages/cli           @otwdesign/cli: `cms generate`, `cms migrate`, `cms update`, `cms serve`
 packages/create-otw-cms  scaffolds a new site (`pnpm create otw-cms my-site`)
 plugins/commerce       products, orders, checkout; defines the extension points other plugins use
 plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
@@ -38,7 +38,7 @@ pnpm test:e2e        # Playwright against a production build, desktop plus phone
 ```
 
 The phone and tablet runs use Playwright's WebKit as well as Chromium; install it once with
-`pnpm --filter @otw/web exec playwright install webkit`.
+`pnpm --filter @otwdesign/web exec playwright install webkit`.
 
 There's no database to set up: without `DATABASE_URL` the app uses embedded PGlite. Set
 `DATABASE_URL` for Postgres in production. Other settings are in `apps/web/.env.example`.
@@ -68,7 +68,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   `site.footer` and `admin.footer` slots) for people with `performance.view`, with the browser's
   timings and Web Vitals. Measured on `/shop`: 0.08 ms per request with nothing recording,
   0.15 ms recording a visitor's request. A site that sets up OpenTelemetry itself adds
-  `cmsTracing()`'s span processor, from `@otw/next/tracing`, to its provider, in a file only the
+  `cmsTracing()`'s span processor, from `@otwdesign/next/tracing`, to its provider, in a file only the
   Node.js runtime loads: Next.js builds `instrumentation.ts` for the Edge runtime too.
 - **Plugin page paths.** A site can move a plugin's pages with `routes` in `cms.config.json`:
   `"routes": { "commerce.product": "/p/:slug" }`. The new path must keep the page's parameters;
@@ -80,7 +80,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   The name links to `url`, as WordPress links to wordpress.org, and `logo` (a path on the site,
   or an https URL) replaces the mark. It's set per deploy rather than in the admin, so a client
   can't take it off, and `cms generate` rejects any other kind of link. The code keeps its own
-  names (`@otw/*`, the `cms` command, `CMS_*` variables, `cms_*` tables), as a white-labelled
+  names (`@otwdesign/*`, the `cms` command, `CMS_*` variables, `cms_*` tables), as a white-labelled
   WordPress keeps its `wp_` tables. A new site is called "My Site" until it gets a title.
 - **Database changes.** `CMS_MIGRATIONS=startup` (default) migrates when the site starts, for one
   server. `CMS_MIGRATIONS=deploy` never migrates at runtime: run `cms migrate` in the deploy
@@ -91,7 +91,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   `pg_dump`), and `--dry-run` lists what would run. The embedded database belongs to one
   process: a lock file stops a second server, or `cms migrate` beside a running site.
 - **Updating.** `cms update --check` lists newer core and plugin versions and which plugins
-  support the new core. Plugins declare it as a peer dependency on `@otw/sdk`, and what they
+  support the new core. Plugins declare it as a peer dependency on `@otwdesign/sdk`, and what they
   need from each other as peer dependencies on those plugins, so this is known before anything
   changes: a plugin another one still needs in an older version is held back, and says why.
   `cms update` bumps `package.json` within core's compatible range (`--major` to cross it),
@@ -134,7 +134,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
 3. **Set up.** Each plugin registers its hooks, registries, services, routes and slots. After boot
    the registry is sealed, so a late registration fails loudly instead of leaking.
 4. **Recovery mode.** If a plugin throws during migrate or setup, the kernel boots again without it
-   and without anything that requires it. `strict: true` (the default in `@otw/testing`) throws
+   and without anything that requires it. `strict: true` (the default in `@otwdesign/testing`) throws
    instead.
 5. **Reboot on change.** Activating a plugin or saving settings bumps a generation counter in the
    database. The app keeps one kernel per bundle and replaces it when the counter moves: at once
@@ -144,16 +144,16 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
 
 ```tsx
 // src/index.tsx: the main entry, which the site's pages, the API and the admin all load
-import { definePlugin } from '@otw/sdk'
-import type {} from '@otw/plugin-commerce' // loads commerce's extension-point types
+import { definePlugin } from '@otwdesign/sdk'
+import type {} from '@otwdesign/plugin-commerce' // loads commerce's extension-point types
 
 export default definePlugin({
   id: 'lms',
   version: '1.0.0',
   name: 'Courses',
   icon: 'book', // the menu icon: a built-in name, or a base64 SVG data URI as in add_menu_page()
-  requires: { core: '^0.1.0' },
-  optional: { commerce: '^0.1.0' }, // works alone; integrates when commerce is active
+  requires: { core: '^1.0.0' },
+  optional: { commerce: '^1.0.0' }, // works alone; integrates when commerce is active
   migrations: [{ id: '0001_courses', up: (db) => db.execute(sql`CREATE TABLE lms_courses (...)`) }],
   settings: {
     'lms.certificates': { type: 'boolean', label: 'Issue certificates', default: true },
@@ -208,7 +208,7 @@ export default definePlugin({
 ```tsx
 // src/admin.tsx: the admin entry, the package's "./admin" export, which only the admin and the
 // API load: Next.js sends every client component a page imports to its visitors.
-import { ActionError, defineAdmin, ForbiddenError } from '@otw/sdk'
+import { ActionError, defineAdmin, ForbiddenError } from '@otwdesign/sdk'
 import lms from './index'
 
 export default defineAdmin(lms, (cms) => {
@@ -222,7 +222,7 @@ export default defineAdmin(lms, (cms) => {
       load: () => cms.content.list({ type: 'lms.course', limit: 50 }),
       titleAction: () => ({ label: 'Add Course', url: cms.admin.url('lms.course-new') }),
       component: ({ data, user }) => (
-        // From @otw/admin-ui: WP_List_Table's markup, striped, with a phone layout.
+        // From @otwdesign/admin-ui: WP_List_Table's markup, striped, with a phone layout.
         <ListTable
           caption="Courses"
           rows={data.entries.filter((course) => cms.auth.can(user, 'lms.edit_course', course))}
@@ -286,7 +286,7 @@ Rules the kernel enforces or relies on:
 - **Expose extension points** with declaration merging, so other plugins get types:
 
   ```ts
-  declare module '@otw/sdk' {
+  declare module '@otwdesign/sdk' {
     interface Actions {
       'lms.course.completed': { userId: string; courseId: string }
     }
@@ -305,7 +305,7 @@ Rules the kernel enforces or relies on:
 - **Throw `ForbiddenError`** from an admin loader, action or API route when a check needs the
   loaded object (a meta capability). It answers 403.
 
-- **Test with `@otw/testing`:** `createTestKernel({ plugins: [...] })` gives you a kernel on a fresh
+- **Test with `@otwdesign/testing`:** `createTestKernel({ plugins: [...] })` gives you a kernel on a fresh
   migrated database, `request()` for API routes and admin actions, `signIn(role)` for a session
   cookie, and `reboot()` to see activation and settings changes.
 
@@ -339,7 +339,7 @@ Rules the kernel enforces or relies on:
   parent whose plugin is inactive falls back to the page's own section.
 - **Screens.** Plugin pages mount at `/admin/{pluginId}/...` and appear for users with the page's
   capability. The title and notices come from core; `titleAction` adds the "Add New" button.
-  Build the body from `@otw/admin-ui` (`ListTable`, `Views`, `TableNav`, `FormTable`,
+  Build the body from `@otwdesign/admin-ui` (`ListTable`, `Views`, `TableNav`, `FormTable`,
   `FormField`, `SubmitButton`, `Postbox`, `EditColumns`, `Notice`, `Button`, `FormButton`), or
   write WordPress's markup by hand: the admin styles its class names (`wrap`, `button-primary`,
   `notice-warning`, `form-table`, `wp-list-table`, `postbox`, `subsubsub`, `row-actions`).
@@ -442,7 +442,7 @@ post types in LearnDash, LifterLMS and Tutor.
   noindex); the rest is a 404. Settings › Reading makes the home page the latest posts or a
   static page, with a posts page (an `entry` setting: a dropdown of pages). Templates: the
   site's `src/cms/templates.tsx` wins over a plugin's `cms.content.template()`, which wins over
-  the defaults in `@otw/next/site`. The site module imports it when a page first needs it, so
+  the defaults in `@otwdesign/next/site`. The site module imports it when a page first needs it, so
   scripts outside Next.js can import the module, and it registers beside the admin's module
   rather than over it: Next shares the registry between the site's pages and the admin. `permalinks(entries)` batches a page of addresses; the
   admin shows View and Preview links.
@@ -471,11 +471,11 @@ post types in LearnDash, LifterLMS and Tutor.
   Upload and Library tabs (`GET /api/p/core/media`). Image blocks keep the file's id, address
   and alt text (checked: a library id, a site path or web address); `thumbnail_id` references
   the file and is cleared when it's deleted. Templates get `thumbnail` and the body's `media` in
-  one query, and `Image` from `@otw/next/site` writes `srcset` and `sizes` from the same-shaped
+  one query, and `Image` from `@otwdesign/next/site` writes `srcset` and `sizes` from the same-shaped
   sizes up to 2048, as `wp_calculate_image_srcset()`; a deleted image isn't shown.
 - **The editor** is Tiptap (ProseMirror), loaded only on edit screens: in a production build the
   other admin screens download none of it. Bodies are checked against its blocks on every save,
-  links included, and `Blocks` from `@otw/next/site` renders them on the site with no
+  links included, and `Blocks` from `@otwdesign/next/site` renders them on the site with no
   JavaScript.
 - **Cost.** Types and their capabilities are built in memory at boot: 50 types add about
   0.002 ms each.
@@ -486,7 +486,7 @@ post types in LearnDash, LifterLMS and Tutor.
 `mail.message` filter, and `mail.sent` / `mail.failed`; it returns `false` rather than throwing
 when delivery fails. Core has no mailer: one plugin provides the transport
 (`cms.mail.transport()`), and without one the log says what wasn't sent (the text only outside
-production). Settings › General › Send email from (`MAIL_FROM`). `@otw/plugin-mail-file` writes
+production). Settings › General › Send email from (`MAIL_FROM`). `@otwdesign/plugin-mail-file` writes
 each email to a folder, for development and the reference site's tests.
 
 ## Accounts on the site

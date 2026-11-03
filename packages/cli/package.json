@@ -1,6 +1,6 @@
 {
-  "name": "@otw/cli",
-  "version": "0.1.0",
+  "name": "@otwdesign/cli",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@next/env": "^16.4.3",
-    "@otw/core": "workspace:*",
-    "@otw/next": "workspace:*",
-    "@otw/sdk": "workspace:*",
+    "@otwdesign/core": "workspace:*",
+    "@otwdesign/next": "workspace:*",
+    "@otwdesign/sdk": "workspace:*",
     "semver": "^7.8.0",
     "tsx": "^4.23.15"
   },

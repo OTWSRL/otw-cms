@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Database, PluginDefinition } from '@otw/sdk'
+import type { Database, PluginDefinition } from '@otwdesign/sdk'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach } from 'vitest'

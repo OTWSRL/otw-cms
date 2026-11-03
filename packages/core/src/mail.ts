@@ -1,4 +1,4 @@
-import type { Logger, MailApi, MailMessage, MailTransport, OutgoingMail } from '@otw/sdk'
+import type { Logger, MailApi, MailMessage, MailTransport, OutgoingMail } from '@otwdesign/sdk'
 import type { HookBus } from './hooks'
 
 /** What the kernel serves: sending, without the transport's registration. */

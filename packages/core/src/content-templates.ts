@@ -1,4 +1,4 @@
-import type { ContentTemplate, ContentView } from '@otw/sdk'
+import type { ContentTemplate, ContentView } from '@otwdesign/sdk'
 
 const VIEWS: readonly ContentView[] = ['single', 'archive', 'term']
 const DEFAULT_PRIORITY = 10

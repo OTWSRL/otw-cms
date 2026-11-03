@@ -6,7 +6,7 @@
 export async function register(): Promise<void> {
   // Next.js compiles this file for the Edge runtime too, with NEXT_RUNTIME inlined, so the
   // dynamic import drops out of that bundle. A static import of anything Node-only, even a
-  // re-export, would land in both: cmsTracing() lives in @otw/next/tracing for that reason.
+  // re-export, would land in both: cmsTracing() lives in @otwdesign/next/tracing for that reason.
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { registerTracing } = await import('./runtime/tracing')
     registerTracing()

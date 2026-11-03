@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { Database } from '@otw/sdk'
+import type { Database } from '@otwdesign/sdk'
 import { eq, sql } from 'drizzle-orm'
 import { options } from './core-schema'
 

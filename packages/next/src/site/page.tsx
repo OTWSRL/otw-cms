@@ -1,5 +1,5 @@
-import type { AccountResolution, ContentResolution } from '@otw/core'
-import { ForbiddenError, PageRedirect, type SearchParams } from '@otw/sdk'
+import type { AccountResolution, ContentResolution } from '@otwdesign/core'
+import { ForbiddenError, PageRedirect, type SearchParams } from '@otwdesign/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound, redirect } from 'next/navigation'
 import { cache } from 'react'

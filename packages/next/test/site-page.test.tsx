@@ -1,4 +1,4 @@
-import { ForbiddenError, PageRedirect } from '@otw/sdk'
+import { ForbiddenError, PageRedirect } from '@otwdesign/sdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Next's interrupts throw, as they do in a real render; the test reads which was thrown.

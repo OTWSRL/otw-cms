@@ -9,7 +9,7 @@ import type {
   TaxonomyDefinition,
   TaxonomyName,
   Term,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import type { CapabilityStore } from './capabilities'
 import { DEFAULT_CONTENT_ROLES, inSentence } from './content-types'
 import { slugify } from './slugs'

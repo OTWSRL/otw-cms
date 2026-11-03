@@ -1,8 +1,8 @@
-import { ContentError, type Term } from '@otw/sdk'
+import { ContentError, type Term } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { bootKernel, plugin } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Taxonomies {
     'shelf.genre': true
   }

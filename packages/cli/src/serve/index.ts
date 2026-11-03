@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { access } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import { join, resolve } from 'node:path'
-import type { UpdateRequest } from '@otw/core'
+import type { UpdateRequest } from '@otwdesign/core'
 import { loadEnv } from '../site.ts'
 import { detectPackageManager, planSite } from '../update.ts'
 import { ControlError, createControlServer } from './control.ts'
@@ -95,7 +95,7 @@ export async function serve(options: ServeOptions): Promise<void> {
         step(
           process.execPath,
           [
-            join(release.dir, 'node_modules', '@otw', 'cli', 'bin', 'cms.js'),
+            join(release.dir, 'node_modules', '@otwdesign', 'cli', 'bin', 'cms.js'),
             'migrate',
             '--root',
             release.dir,

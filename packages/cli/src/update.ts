@@ -2,23 +2,23 @@ import { execFile } from 'node:child_process'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { Brand } from '@otw/core'
+import type { Brand } from '@otwdesign/core'
 import semver from 'semver'
 
 const run = promisify(execFile)
 
-/** The CMS's own packages, released together under one version. `@otw/next` sets it. */
+/** The CMS's own packages, released together under one version. `@otwdesign/next` sets it. */
 export const CORE_PACKAGES = [
-  '@otw/next',
-  '@otw/cli',
-  '@otw/core',
-  '@otw/sdk',
-  '@otw/admin-ui',
-  '@otw/testing',
+  '@otwdesign/next',
+  '@otwdesign/cli',
+  '@otwdesign/core',
+  '@otwdesign/sdk',
+  '@otwdesign/admin-ui',
+  '@otwdesign/testing',
 ] as const
-const CORE_VERSION_FROM = '@otw/next'
+const CORE_VERSION_FROM = '@otwdesign/next'
 /** Plugins declare the core they work with as a peer dependency on one of these. */
-const COMPATIBILITY_PEERS = ['@otw/sdk', '@otw/next']
+const COMPATIBILITY_PEERS = ['@otwdesign/sdk', '@otwdesign/next']
 
 /** The parts of npm's package metadata this reads: each version's peer dependencies. */
 export interface Packument {
@@ -161,12 +161,12 @@ function coreSupport(
   return semver.satisfies(core, range, INCLUDE_PRERELEASE) ? 'yes' : 'no'
 }
 
-/** `commerce` for `@otw/plugin-commerce`, `forum` for `@acme/forum`, `core` for the CMS's own packages. */
+/** `commerce` for `@otwdesign/plugin-commerce`, `forum` for `@acme/forum`, `core` for the CMS's own packages. */
 export function resolveTargets(site: SitePackages, names: readonly string[]): string[] {
   return names.map((name) => {
     if (name === 'core') return CORE_VERSION_FROM
     if (site.plugins.includes(name) || (isCore(name) && name in site.specs)) return name
-    const firstParty = `@otw/plugin-${name}`
+    const firstParty = `@otwdesign/plugin-${name}`
     if (site.plugins.includes(firstParty)) return firstParty
     // `forum` for `@acme/forum`, when only one installed plugin is called that.
     const unscoped = site.plugins.filter((plugin) => plugin.split('/').at(-1) === name)

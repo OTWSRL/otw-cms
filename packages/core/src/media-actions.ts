@@ -1,5 +1,5 @@
-import type { ApiRoute, CapabilityName, MediaKind, MetaCapabilityName, User } from '@otw/sdk'
-import { ActionError, ForbiddenError, HttpError, MediaError } from '@otw/sdk'
+import type { ApiRoute, CapabilityName, MediaKind, MetaCapabilityName, User } from '@otwdesign/sdk'
+import { ActionError, ForbiddenError, HttpError, MediaError } from '@otwdesign/sdk'
 import type { InternalAction } from './admin'
 import { formatBytes, type MediaService } from './media'
 

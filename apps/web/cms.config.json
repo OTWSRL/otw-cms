@@ -1,1 +1,7 @@
-{ "plugins": ["@otw/plugin-commerce", "@otw/plugin-commerce-stripe", "@otw/plugin-mail-file"] }
+{
+  "plugins": [
+    "@otwdesign/plugin-commerce",
+    "@otwdesign/plugin-commerce-stripe",
+    "@otwdesign/plugin-mail-file"
+  ]
+}

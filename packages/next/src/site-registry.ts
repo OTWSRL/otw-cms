@@ -1,11 +1,11 @@
-import type { Brand } from '@otw/core'
+import type { Brand } from '@otwdesign/core'
 import type {
   AdminDefinition,
   AccountTemplateProps,
   ArchiveTemplateProps,
   EntryTemplateProps,
   PluginDefinition,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import type { ReactNode } from 'react'
 
 type Template<P> = (props: P) => ReactNode | Promise<ReactNode>

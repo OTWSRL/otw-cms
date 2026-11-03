@@ -1,5 +1,5 @@
-import { MIN_PASSWORD_LENGTH } from '@otw/core'
-import type { SearchParams } from '@otw/sdk'
+import { MIN_PASSWORD_LENGTH } from '@otwdesign/core'
+import type { SearchParams } from '@otwdesign/sdk'
 import { redirect } from 'next/navigation'
 import { getKernel } from '../../runtime/kernel'
 import { BrandMark } from '../brand-mark'

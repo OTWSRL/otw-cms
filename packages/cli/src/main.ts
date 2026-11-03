@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs, promisify } from 'node:util'
-import { consoleLogger, DEFAULT_BRAND, type Brand } from '@otw/core'
-import { migrationModeFromEnv } from '@otw/next/server'
+import { consoleLogger, DEFAULT_BRAND, type Brand } from '@otwdesign/core'
+import { migrationModeFromEnv } from '@otwdesign/next/server'
 import { displayPath, generate, readConfig } from './generate.ts'
 import { migrate } from './migrate.ts'
 import { serve } from './serve/index.ts'
@@ -135,7 +135,7 @@ function report(plan: UpdatePlan, brand: Brand): void {
 
 /** Runs the newly installed CLI, so its route files and migrations are the new version's. */
 async function runInstalledCli(root: string, args: string[]): Promise<void> {
-  const bin = join(root, 'node_modules', '@otw', 'cli', 'bin', 'cms.js')
+  const bin = join(root, 'node_modules', '@otwdesign', 'cli', 'bin', 'cms.js')
   const { stdout } = await run(process.execPath, [bin, ...args, '--root', root], { cwd: root })
   process.stdout.write(stdout)
 }

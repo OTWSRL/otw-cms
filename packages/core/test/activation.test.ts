@@ -1,6 +1,7 @@
-import type { PluginDefinition } from '@otw/sdk'
+import type { PluginDefinition } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type KernelOptions } from '../src/kernel'
+import { CORE_VERSION } from '../src/version'
 import { createDb, formPost, memoryLogger, plugin, redirectOf, signIn } from './helpers'
 
 const base = plugin('commerce', { name: 'Commerce' })
@@ -121,7 +122,7 @@ describe('plugin activation', () => {
     expect(blockers).toEqual({
       commerce: ['Stripe requires it. Deactivate that first.'],
       stripe: [],
-      future: ['Requires core ^9.0.0; this site runs 0.1.0.'],
+      future: [`Requires core ^9.0.0; this site runs ${CORE_VERSION}.`],
     })
   })
 

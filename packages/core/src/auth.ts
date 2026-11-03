@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { User } from '@otw/sdk'
+import type { User } from '@otwdesign/sdk'
 import { and, asc, count, eq, gt, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 import { ADMINISTRATOR } from './capabilities'
 import { loginFailures, sessions, users } from './core-schema'

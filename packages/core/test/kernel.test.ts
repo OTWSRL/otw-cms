@@ -1,11 +1,11 @@
-import type { PluginContext } from '@otw/sdk'
+import type { PluginContext } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginBootError } from '../src/errors'
 import { createKernel, type KernelOptions } from '../src/kernel'
 import { createDb, memoryLogger, plugin } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Slots {
     'shop.receipt': { orderId: string }
   }

@@ -1,4 +1,4 @@
-import { getCurrentUser, getKernel, Slot } from '@otw/next/site'
+import { getCurrentUser, getKernel, Slot } from '@otwdesign/next/site'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'

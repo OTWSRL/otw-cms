@@ -1,4 +1,4 @@
-import type { Database, PluginContext, Registry } from '@otw/sdk'
+import type { Database, PluginContext, Registry } from '@otwdesign/sdk'
 import { and, asc, count, desc, eq, inArray, ne } from 'drizzle-orm'
 import { CommerceError } from './errors'
 import { orderLines, orders, products } from './schema'

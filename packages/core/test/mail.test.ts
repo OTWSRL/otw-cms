@@ -1,4 +1,4 @@
-import type { MailTransport, OutgoingMail } from '@otw/sdk'
+import type { MailTransport, OutgoingMail } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import { isMailbox, outgoing } from '../src/mail'
 import { bootKernel, formPost, memoryLogger, ORIGIN, plugin, redirectOf, signIn } from './helpers'

@@ -30,7 +30,7 @@ editor, taxonomies and custom fields, site pages and revisions, and the media li
 Milestone 8, Accounts and email, is complete: email through a plugin's transport, accounts on
 the site, and profiles with user fields. Next: 9, the LMS plugin.
 
-The CMS is OTW CMS: its packages are `@otw/*` and the scaffolder is `create-otw-cms`. A site can
+The CMS is OTW CMS: its packages are `@otwdesign/*` and the scaffolder is `create-otw-cms`. A site can
 sell it under another name with a `brand` in `cms.config.json` (README, White label).
 
 Every milestone ships with its documentation. The docs site, a project of its own beside this one
@@ -123,7 +123,7 @@ browser, at desktop, folded and phone widths.
   pushes the screen aside, list tables collapse to their primary column with a row toggle, form
   tables stack, controls grow to 40px with 16px text. Touch screens open a section's submenu on
   the first tap, as WordPress's `opensub` does.
-- **Components.** `@otw/admin-ui` renders WordPress's markup and class names, so plugins get the
+- **Components.** `@otwdesign/admin-ui` renders WordPress's markup and class names, so plugins get the
   look and the phone layout by using it: `ListTable` (primary column, row actions, bulk-select
   column, row toggle), `Views` (`subsubsub`), `TableNav` (count and pages), `FormTable` and
   `FormField`, `SubmitButton`, `Postbox`, `EditColumns` (`#poststuff`), `Notice` (dismissible),
@@ -145,7 +145,7 @@ front-end admin bar, right-to-left layout.
 
 ## 5. Packaging and updates (done)
 
-A site is a small Next.js app that depends on versioned `@otw/*` packages, so updating core or a
+A site is a small Next.js app that depends on versioned `@otwdesign/*` packages, so updating core or a
 plugin is a version bump, as `wp-admin/update-core.php` is for WordPress. WordPress swaps PHP
 files in place; a Next.js app has to be rebuilt, and on git-based hosts the running site can't
 change itself, so the update path differs by hosting. Both are supported:
@@ -157,7 +157,7 @@ change itself, so the update path differs by hosting. Both are supported:
 
 ### The split
 
-- **`@otw/next`** holds everything the CMS owns in a Next.js app: the database and kernel
+- **`@otwdesign/next`** holds everything the CMS owns in a Next.js app: the database and kernel
   runtime, sessions, the admin (frame, core screens, plugin screens, sign-in, setup, styles), the
   storefront page that serves plugin routes, the API handler, and `withCms()` for
   `next.config` (plain JavaScript, since Node loads it before anything is compiled).
@@ -196,9 +196,9 @@ change itself, so the update path differs by hosting. Both are supported:
 
 ### `cms update`
 
-- `cms update --check` lists newer versions of core (the `@otw/*` packages, released together)
+- `cms update --check` lists newer versions of core (the `@otwdesign/*` packages, released together)
   and of installed plugins, and what is compatible: a plugin declares the core it works with as
-  a peer dependency on `@otw/sdk`, so this is known before anything changes, as WordPress's
+  a peer dependency on `@otwdesign/sdk`, so this is known before anything changes, as WordPress's
   "Requires at least" and "Tested up to" are. The kernel's `requires.core` remains the runtime
   check.
 - `cms update` picks the newest core within the installed version's caret range (`--major` for
@@ -408,7 +408,7 @@ source.
   (`/?preview={id}`, checked against `read_`, noindex, a 404 for anyone else); the rest 404s.
 - **Settings › Reading**: latest posts or a static homepage with a posts page, through a new
   `entry` setting type (a dropdown of a type's published entries), and posts per page.
-- **Templates**: defaults in `@otw/next/site` (`EntryTemplate`, `ArchiveTemplate`, `Blocks`,
+- **Templates**: defaults in `@otwdesign/next/site` (`EntryTemplate`, `ArchiveTemplate`, `Blocks`,
   `excerptOf`); plugins' by priority (`cms.content.template()`); the site's own in
   `src/cms/templates.tsx`, which `cms generate` adds to the site module and never to the
   admin's. Authors show by name, never by email address.
@@ -483,7 +483,7 @@ plugins add (`show_user_profile`), user meta, and a mail transport with filters 
   as WordPress's SMTP plugins replace PHPMailer. Without one, the log says nothing was sent, with
   the text outside production only (it can hold reset links).
 - Settings › General › **Send email from** (`mail.from`, `MAIL_FROM`).
-- **Mail to files** (`@otw/plugin-mail-file`), a first-party transport for development and tests:
+- **Mail to files** (`@otwdesign/plugin-mail-file`), a first-party transport for development and tests:
   each email as a JSON file in `MAIL_FILE_DIR`. The reference site uses it.
 
 ### 8b. Accounts on the site (done)
@@ -491,7 +491,7 @@ plugins add (`show_user_profile`), user meta, and a mail transport with filters 
 - **Pages** at `/account`, after plugins' routes and before content: sign in (and register),
   the account, lost password, set a password (`/account/reset?token=`), confirm an email address
   (`/account/email?token=`). `kernel.resolveAccount()` gives `AccountTemplateProps`;
-  `AccountTemplate` in `@otw/next/site` renders plain forms; a site's `account` template replaces
+  `AccountTemplate` in `@otwdesign/next/site` renders plain forms; a site's `account` template replaces
   it. Pages are noindex, and token pages send Referer to the site only (`same-origin`:
   `no-referrer` would post their forms with `Origin: null`, which actions refuse).
 - **Sign-up**, with Settings › General › Membership › Anyone can register (`users.can_register`)
@@ -563,7 +563,7 @@ users: the server's time to first byte (median of seven) and what the browser wa
 Courses and lessons, enrollment on `commerce.order.paid`, an instructor role limited to their own
 courses through meta capabilities, a learner dashboard, course settings and sections on Commerce's
 pages: the second proof that big plugins extend each other. It's a repository of its own,
-`../otw-plugin-lms` (`@otw/plugin-lms`), linked to this checkout, and needs nothing new from core
+`../otw-plugin-lms` (`@otwdesign/plugin-lms`), linked to this checkout, and needs nothing new from core
 or Commerce: everything below is built on extension points they already had.
 
 - **Courses and lessons** are content types with core's screens. A lesson's `lms.course` field

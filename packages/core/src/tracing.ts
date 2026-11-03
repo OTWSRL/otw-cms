@@ -16,7 +16,7 @@ import {
   type Span,
   type SpanProcessor,
 } from '@opentelemetry/sdk-trace'
-import type { RequestTrace, TraceSpan, TraceSpanKind } from '@otw/sdk'
+import type { RequestTrace, TraceSpan, TraceSpanKind } from '@otwdesign/sdk'
 
 // Asked for when a span starts, not when this module loads: a tracer taken before the site's
 // instrumentation registers its provider, from another copy of the API, would never record.

@@ -1,6 +1,11 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ArchiveTemplateProps, EntryTemplateProps, MediaError, MediaStorage } from '@otw/sdk'
+import type {
+  ArchiveTemplateProps,
+  EntryTemplateProps,
+  MediaError,
+  MediaStorage,
+} from '@otwdesign/sdk'
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
 import { localStorage } from '../src/media-storage'

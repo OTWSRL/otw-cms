@@ -12,8 +12,8 @@ import type {
   Term,
   Logger,
   User,
-} from '@otw/sdk'
-import { ActionError, ForbiddenError } from '@otw/sdk'
+} from '@otwdesign/sdk'
+import { ActionError, ForbiddenError } from '@otwdesign/sdk'
 import { apiPath } from './api'
 import { isSiteOrigin, publicOrigin, type OriginPolicy } from './origins'
 import { withFlash, type Flash, type FlashCodec } from './flash'

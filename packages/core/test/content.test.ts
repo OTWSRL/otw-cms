@@ -1,10 +1,10 @@
-import { ContentError, defineAdmin, type Entry, type PluginContext } from '@otw/sdk'
+import { ContentError, defineAdmin, type Entry, type PluginContext } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, memoryLogger, PASSWORD, plugin } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface ContentTypes {
     'library.book': true
   }

@@ -47,22 +47,22 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.13
         version: 0.5.13
-      '@otw/admin-ui':
+      '@otwdesign/admin-ui':
         specifier: workspace:*
         version: link:../../packages/admin-ui
-      '@otw/next':
+      '@otwdesign/next':
         specifier: workspace:*
         version: link:../../packages/next
-      '@otw/plugin-commerce':
+      '@otwdesign/plugin-commerce':
         specifier: workspace:*
         version: link:../../plugins/commerce
-      '@otw/plugin-commerce-stripe':
+      '@otwdesign/plugin-commerce-stripe':
         specifier: workspace:*
         version: link:../../plugins/commerce-stripe
-      '@otw/plugin-mail-file':
+      '@otwdesign/plugin-mail-file':
         specifier: workspace:*
         version: link:../../plugins/mail-file
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       drizzle-orm:
@@ -81,7 +81,7 @@ importers:
       '@opentelemetry/api':
         specifier: ~1.9.0
         version: 1.9.1
-      '@otw/cli':
+      '@otwdesign/cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@playwright/test':
@@ -99,7 +99,7 @@ importers:
 
   packages/admin-ui:
     dependencies:
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../sdk
     devDependencies:
@@ -124,13 +124,13 @@ importers:
       '@next/env':
         specifier: ^16.4.3
         version: 16.4.3
-      '@otw/core':
+      '@otwdesign/core':
         specifier: workspace:*
         version: link:../core
-      '@otw/next':
+      '@otwdesign/next':
         specifier: workspace:*
         version: link:../next
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../sdk
       semver:
@@ -161,7 +161,7 @@ importers:
       '@opentelemetry/sdk-trace':
         specifier: ^2.12.0
         version: 2.12.0(@opentelemetry/api@1.9.1)
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../sdk
       semver:
@@ -200,13 +200,13 @@ importers:
       '@opentelemetry/sdk-trace':
         specifier: ^2.12.0
         version: 2.12.0(@opentelemetry/api@1.9.1)
-      '@otw/admin-ui':
+      '@otwdesign/admin-ui':
         specifier: workspace:*
         version: link:../admin-ui
-      '@otw/core':
+      '@otwdesign/core':
         specifier: workspace:*
         version: link:../core
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../sdk
       '@tiptap/core':
@@ -276,10 +276,10 @@ importers:
       '@opentelemetry/api':
         specifier: ~1.9.0
         version: 1.9.1
-      '@otw/core':
+      '@otwdesign/core':
         specifier: workspace:*
         version: link:../core
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../sdk
       drizzle-orm:
@@ -302,16 +302,16 @@ importers:
       '@opentelemetry/api':
         specifier: ~1.9.0
         version: 1.9.1
-      '@otw/admin-ui':
+      '@otwdesign/admin-ui':
         specifier: workspace:*
         version: link:../../packages/admin-ui
-      '@otw/core':
+      '@otwdesign/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@otw/testing':
+      '@otwdesign/testing':
         specifier: workspace:*
         version: link:../../packages/testing
       '@types/react':
@@ -339,16 +339,16 @@ importers:
       '@opentelemetry/api':
         specifier: ~1.9.0
         version: 1.9.1
-      '@otw/admin-ui':
+      '@otwdesign/admin-ui':
         specifier: workspace:*
         version: link:../../packages/admin-ui
-      '@otw/plugin-commerce':
+      '@otwdesign/plugin-commerce':
         specifier: workspace:*
         version: link:../commerce
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@otw/testing':
+      '@otwdesign/testing':
         specifier: workspace:*
         version: link:../../packages/testing
       '@types/react':
@@ -369,10 +369,10 @@ importers:
 
   plugins/mail-file:
     devDependencies:
-      '@otw/sdk':
+      '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@otw/testing':
+      '@otwdesign/testing':
         specifier: workspace:*
         version: link:../../packages/testing
 

@@ -1,4 +1,4 @@
-import type { Database, Logger, PluginDefinition } from '@otw/sdk'
+import type { Database, Logger, PluginDefinition } from '@otwdesign/sdk'
 import { getTableName } from 'drizzle-orm'
 import { coreDefinition } from './core-plugin'
 import { pluginStates } from './core-schema'

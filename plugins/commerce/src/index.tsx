@@ -1,4 +1,4 @@
-import { definePlugin } from '@otw/sdk'
+import { definePlugin } from '@otwdesign/sdk'
 import { registerCapabilities } from './capabilities'
 import { AccountOrders, OrderReceivedPage, ProductPage, ShopPage } from './components'
 import { migrations } from './migrations'
@@ -21,11 +21,11 @@ export const manualGateway: PaymentGateway = {
 
 export default definePlugin({
   id: 'commerce',
-  version: '0.1.0',
+  version: '1.0.0',
   name: 'Commerce',
   icon: 'cart',
   description: 'Products, checkout and orders. Other plugins add payment gateways and item types.',
-  requires: { core: '^0.1.0' },
+  requires: { core: '^1.0.0' },
   migrations,
   settings: {
     'commerce.currency': {

@@ -4,7 +4,7 @@ import type {
   ContentMetaBox,
   ContentRowAction,
   ContentTypeSelector,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 
 const NAME = /^[a-z][a-z0-9-]*$/
 const DEFAULT_ORDER = 10

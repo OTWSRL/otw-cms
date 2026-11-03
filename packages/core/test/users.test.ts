@@ -1,10 +1,10 @@
-import type { OutgoingMail } from '@otw/sdk'
-import { defineAdmin } from '@otw/sdk'
+import type { OutgoingMail } from '@otwdesign/sdk'
+import { defineAdmin } from '@otwdesign/sdk'
 import { describe, expect, it } from 'vitest'
 import type { Kernel } from '../src/kernel'
 import { bootKernel, formPost, ORIGIN, plugin, redirectOf, signIn } from './helpers'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface UserMeta {
     'lms.bio': string
     'lms.level': string

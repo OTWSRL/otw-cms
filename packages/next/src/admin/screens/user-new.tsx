@@ -1,5 +1,5 @@
-import { FormField, FormTable, SubmitButton } from '@otw/admin-ui'
-import { MIN_PASSWORD_LENGTH } from '@otw/core'
+import { FormField, FormTable, SubmitButton } from '@otwdesign/admin-ui'
+import { MIN_PASSWORD_LENGTH } from '@otwdesign/core'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
 

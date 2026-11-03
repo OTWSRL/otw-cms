@@ -1,5 +1,5 @@
-import { AdminIcon } from '@otw/admin-ui'
-import type { User } from '@otw/sdk'
+import { AdminIcon } from '@otwdesign/admin-ui'
+import type { User } from '@otwdesign/sdk'
 import Link from 'next/link'
 import { AccountMenu, MenuToggle } from './admin-frame'
 

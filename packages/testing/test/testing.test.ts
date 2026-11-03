@@ -1,4 +1,4 @@
-import { definePlugin, HttpError } from '@otw/sdk'
+import { definePlugin, HttpError } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createTestKernel, type TestKernel } from '../src'

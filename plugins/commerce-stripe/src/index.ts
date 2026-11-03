@@ -1,4 +1,4 @@
-import { definePlugin, type PluginDefinition } from '@otw/sdk'
+import { definePlugin, type PluginDefinition } from '@otwdesign/sdk'
 import Stripe from 'stripe'
 import { missingSettings } from './config'
 import { createStripeGateway, type StripeClient } from './gateway'
@@ -6,7 +6,7 @@ import { createWebhookHandler } from './webhook'
 
 export { GATEWAY_ID, type StripeClient } from './gateway'
 
-declare module '@otw/sdk' {
+declare module '@otwdesign/sdk' {
   interface Settings {
     /** Offer card payments at checkout. Off stops new card payments; started ones still complete. */
     'commerce-stripe.enabled': boolean
@@ -30,10 +30,10 @@ export interface StripePluginOptions {
 export function createStripePlugin(options: StripePluginOptions = {}): PluginDefinition {
   return definePlugin({
     id: 'commerce-stripe',
-    version: '0.1.0',
+    version: '1.0.0',
     name: 'Stripe',
     description: 'Card payments through Stripe Checkout.',
-    requires: { core: '^0.1.0', commerce: '^0.1.0' },
+    requires: { core: '^1.0.0', commerce: '^1.0.0' },
     settings: {
       'commerce-stripe.enabled': {
         type: 'boolean',

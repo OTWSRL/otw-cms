@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import { defineAdmin, definePlugin } from '@otw/sdk'
+import { defineAdmin, definePlugin } from '@otwdesign/sdk'
 import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bootSite } from '../src/runtime/boot'

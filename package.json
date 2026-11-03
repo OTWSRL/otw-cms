@@ -7,16 +7,16 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "dev": "pnpm --filter @otw/web dev",
-    "build": "pnpm --filter @otw/web build",
-    "seed": "pnpm --filter @otw/web seed",
+    "dev": "pnpm --filter @otwdesign/web dev",
+    "build": "pnpm --filter @otwdesign/web build",
+    "seed": "pnpm --filter @otwdesign/web seed",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run --testTimeout=15000",
     "test:watch": "vitest --testTimeout=15000",
-    "test:e2e": "pnpm --filter @otw/web test:e2e",
+    "test:e2e": "pnpm --filter @otwdesign/web test:e2e",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
   },
   "devDependencies": {

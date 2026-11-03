@@ -1,5 +1,5 @@
-import type { Block } from '@otw/sdk'
-import { ContentError, isSafeHref } from '@otw/sdk'
+import type { Block } from '@otwdesign/sdk'
+import { ContentError, isSafeHref } from '@otwdesign/sdk'
 
 /*
  * The blocks an entry's body may hold: ProseMirror's JSON, as the admin's editor (Tiptap) writes

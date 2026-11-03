@@ -12,7 +12,7 @@ import type {
   Term,
   User,
   MediaItem,
-} from '@otw/sdk'
+} from '@otwdesign/sdk'
 import { inArray, sql } from 'drizzle-orm'
 import { imageIds } from './blocks'
 import type { ContentService } from './content'

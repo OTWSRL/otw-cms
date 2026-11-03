@@ -1,4 +1,4 @@
-import type { PaymentGateway } from '@otw/plugin-commerce'
+import type { PaymentGateway } from '@otwdesign/plugin-commerce'
 import type Stripe from 'stripe'
 
 /** The gateway's id in `commerce.gateways`, and on the orders it takes. */

@@ -1,6 +1,6 @@
 'use client'
 
-import { isSafeHref, type Block } from '@otw/sdk'
+import { isSafeHref, type Block } from '@otwdesign/sdk'
 import {
   EditorContent,
   Node,
