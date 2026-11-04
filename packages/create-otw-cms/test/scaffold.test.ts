@@ -120,10 +120,10 @@ describe('scaffold', () => {
   it('links a checkout of the CMS instead of the registry', async () => {
     const repo = resolve(import.meta.dirname, '../../..')
     const target = join(parent, 'linked')
-    await scaffold({ target, version: '0.1.0', plugins: ['commerce'], link: repo })
+    await scaffold({ target, version: '0.1.0', plugins: ['mail-file'], link: repo })
     const { dependencies, devDependencies } = JSON.parse(await read(target, 'package.json'))
     expect(dependencies['@otwdesign/next']).toMatch(/^link:.*\/packages\/next$/)
-    expect(dependencies['@otwdesign/plugin-commerce']).toMatch(/^link:.*\/plugins\/commerce$/)
+    expect(dependencies['@otwdesign/plugin-mail-file']).toMatch(/^link:.*\/plugins\/mail-file$/)
     expect(devDependencies['@otwdesign/cli']).toMatch(/^link:.*\/packages\/cli$/)
   })
 

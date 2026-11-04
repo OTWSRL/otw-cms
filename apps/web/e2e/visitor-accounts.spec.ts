@@ -10,7 +10,7 @@ test.describe.configure({ mode: 'serial' })
 
 const run = Date.now().toString(36)
 const CLEO = {
-  name: 'Cleo Shopper',
+  name: 'Cleo Reader',
   email: `cleo-${run}@example.com`,
   password: 'a long cleo password',
 }
@@ -132,12 +132,12 @@ test('a customer who signs in at the admin lands on their account', async ({ pag
 
 test('signing in from a page’s sign-in link comes back to that page', async ({ page }) => {
   // Where a plugin page's requireUser() sends a signed-out visitor.
-  await page.goto(`/account?next=${encodeURIComponent('/shop?ref=account')}`)
+  await page.goto(`/account?next=${encodeURIComponent('/library?ref=account')}`)
   const form = page.getByRole('form', { name: 'Sign in' })
   await form.getByLabel('Email address').fill(CLEO.email)
   await form.getByLabel('Password').fill(CLEO.password)
   await form.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL('/shop?ref=account')
+  await expect(page).toHaveURL('/library?ref=account')
 })
 
 test('an email address changes once the new one confirms it', async ({ page }) => {
@@ -156,22 +156,6 @@ test('an email address changes once the new one confirms it', async ({ page }) =
   // The old address hears of it, as WordPress tells it.
   expect((await mailTo(CLEO.email, 'Your email address was changed')).text).toContain(next)
   CLEO.email = next
-})
-
-test('an account shows the orders placed with its proven address', async ({ page }) => {
-  await signInOnSite(page, CLEO)
-  const orders = page.getByRole('region', { name: 'Orders' })
-  await expect(orders).toContainText('No orders yet.')
-
-  await page.goto('/product/ceramic-mug')
-  await page.getByLabel('Email').fill(CLEO.email)
-  await page.getByLabel(/Pay later/).check()
-  await page.getByRole('button', { name: 'Place order' }).click()
-  const number = (await page.getByRole('heading', { name: /^Order #\d+$/ }).textContent())!
-
-  await page.goto('/account')
-  await expect(orders.getByRole('link', { name: number.replace('Order ', '') })).toBeVisible()
-  await expect(orders).toContainText('Awaiting payment')
 })
 
 test('administrators edit their profile, and someone else’s account', async ({ page }) => {

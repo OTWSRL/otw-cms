@@ -1,0 +1,11 @@
+{
+  "name": "library-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A plugin for the e2e tests: site pages and an API, an admin section, Settings › Library, a dashboard widget and a role. Its imports resolve from the site.",
+  "type": "module",
+  "exports": {
+    ".": "./index.tsx",
+    "./admin": "./admin.tsx"
+  }
+}

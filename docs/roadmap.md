@@ -593,6 +593,21 @@ orders; `cms.users` lookups by email and for a page of users (the plugin joins `
 now); a slot on the order-received page. Quizzes, certificates, drip content, and refunds that
 unenroll.
 
+## Optional plugins in repos of their own (done)
+
+Commerce and Stripe left the CMS's repo, with their history, for `../otw-plugin-commerce` and
+`../otw-plugin-commerce-stripe`, as the LMS and performance plugins had: every plugin is optional,
+and this repo holds the core packages and mail-file. Each plugin repo links the CMS's checkout
+(Stripe links Commerce's too), has its own test site and e2e tests, and checks out what it links
+in CI.
+
+- The CMS's e2e tests exercise plugins through two test-only ones in `apps/web/fixtures`: Library
+  (site pages, a plugin API, an admin section, a settings page, a dashboard widget, a role) and
+  Courier (which needs Library, adds a section to its settings page, and a notice while its key is
+  unset). They cover what the tests did through Commerce and Stripe.
+- The shop's own tests, the demo products seed and the shop's styles went with Commerce; the site
+  template no longer carries those styles.
+
 ## 10. Operations
 
 Job queue and scheduled tasks (Action Scheduler), an outbound event outbox, caching, uninstalling

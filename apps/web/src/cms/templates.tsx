@@ -2,13 +2,13 @@ import type { SiteTemplates } from '@otwdesign/next'
 import { AccountTemplate } from '@otwdesign/next/site'
 
 /**
- * The shop's own templates, as a theme's: the account pages are the CMS's, under a line of the
- * shop's. `cms generate` adds this file to the site's module.
+ * The site's own templates, as a theme's: the account pages are the CMS's, under a line of the
+ * site's. `cms generate` adds this file to the site's module.
  */
 const templates: SiteTemplates = {
   account: (props) => (
-    <div className="shop-account">
-      <p className="shop-account-kicker">Your shop account</p>
+    <div className="site-account">
+      <p className="site-account-kicker">Members’ area</p>
       <AccountTemplate {...props} />
     </div>
   ),

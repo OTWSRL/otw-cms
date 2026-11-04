@@ -11,7 +11,8 @@ is a switch on the admin's Plugins screen, with no rebuild.
 ## Layout
 
 ```
-apps/web               the CMS's own site, exactly what create-otw-cms makes, plus e2e tests
+apps/web               the CMS's own site, exactly what create-otw-cms makes, plus e2e tests and
+                       two test-only plugins (apps/web/fixtures: Library, and Courier, which needs it)
 packages/next          @otwdesign/next: the admin, the storefront route, the API route and the runtime
 packages/sdk           @otwdesign/sdk: the only package plugin authors depend on (types + definePlugin)
 packages/admin-ui      @otwdesign/admin-ui: WordPress-style admin components (list and form tables, boxes)
@@ -19,19 +20,25 @@ packages/core          @otwdesign/core: the kernel (resolver, hooks, registries,
 packages/testing       @otwdesign/testing: boots the kernel on in-memory Postgres for plugin tests
 packages/cli           @otwdesign/cli: `cms generate`, `cms migrate`, `cms update`, `cms serve`
 packages/create-otw-cms  scaffolds a new site (`pnpm create otw-cms my-site`)
-plugins/commerce       products, orders, checkout; defines the extension points other plugins use
-plugins/commerce-stripe  Stripe Checkout gateway + signed, idempotent webhook
+plugins/mail-file      writes each email to a file, for development and tests
 ```
 
-Plugins that aren't part of the CMS live in repositories of their own, next to this one, and link
-to its packages until they're on npm: `../otw-plugin-performance`, and `../otw-plugin-lms`
-(courses, sold through Commerce).
+Every other plugin, the first-party ones included, is optional and lives in a repository of its
+own, next to this one, linking to its packages until they're on npm:
+
+```
+../otw-plugin-commerce          products, orders, checkout; the extension points shops build on
+../otw-plugin-commerce-stripe   Stripe Checkout gateway and signed, idempotent webhooks
+../otw-plugin-lms               courses, sold through Commerce when it's active
+../otw-plugin-performance       how long each request takes, on the server and in the browser
+```
+
+The CMS's tests use none of them: the e2e site's fixtures exercise what plugins can do.
 
 ## Commands
 
 ```sh
 pnpm install
-pnpm seed            # demo products in the embedded database (apps/web/.data)
 pnpm dev             # http://localhost:3000, admin at /admin
 pnpm check           # lint, format, typecheck, unit + integration tests
 pnpm test:e2e        # Playwright against a production build, desktop plus phone and tablet
@@ -116,8 +123,7 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   `SITE_URL` (the site address on Settings › General); until one is set, admin forms answer 403.
   `cms serve` sets `CMS_TRUST_PROXY` for its releases.
 - **A new site:** `pnpm create otw-cms my-site --plugins lms,performance`, or `--link <checkout>`
-  to try unreleased changes, and Commerce and Stripe, which aren't on npm yet. It includes a
-  Dockerfile for your own server.
+  to try unreleased changes. It includes a Dockerfile for your own server.
 
 ## How the kernel boots
 

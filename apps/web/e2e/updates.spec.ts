@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { ADMIN, MANAGER, SUPERVISOR, mainMenu, notice, signIn, submenu } from './helpers'
+import { ADMIN, LIBRARIAN, SUPERVISOR, mainMenu, notice, signIn, submenu } from './helpers'
 
 // The site reports updates through e2e/fake-supervisor.mjs, standing in for `cms serve`: OTW CMS
-// 0.1.3 and Commerce 0.1.5 are waiting, and Commerce 1.0.0 is held back for Stripe.
+// 0.1.3 and the Library 0.1.5 are waiting, and the Library 1.0.0 is held back for Courier.
 test.describe.configure({ mode: 'serial' })
 
-const COMMERCE = '@otwdesign/plugin-commerce'
+const LIBRARY = 'library-fixture'
 
 test('administrators see waiting updates in the menu and on the Plugins screen', async ({
   page,
@@ -15,10 +15,10 @@ test('administrators see waiting updates in the menu and on the Plugins screen',
   await expect(mainMenu(page).getByRole('link', { name: 'Plugins (1 update)' })).toBeVisible()
 
   await page.goto('/admin/plugins')
-  const commerce = page.getByRole('row', { name: /^Commerce/ })
-  await expect(commerce).toContainText('There is a new version of Commerce available: 0.1.5.')
-  await expect(commerce.getByRole('button', { name: 'Update now Commerce' })).toBeVisible()
-  await expect(page.getByRole('row', { name: /^Stripe/ })).not.toContainText('new version')
+  const library = page.getByRole('row', { name: /^Library/ })
+  await expect(library).toContainText('There is a new version of Library available: 0.1.5.')
+  await expect(library.getByRole('button', { name: 'Update now Library' })).toBeVisible()
+  await expect(page.getByRole('row', { name: /^Courier/ })).not.toContainText('new version')
 })
 
 test('the Updates screen lists core and plugin updates, and why one waits', async ({ page }) => {
@@ -32,11 +32,11 @@ test('the Updates screen lists core and plugin updates, and why one waits', asyn
   await expect(page.getByRole('button', { name: 'Update to version 0.1.3' })).toBeVisible()
   const row = page
     .getByRole('table', { name: 'Plugins with updates' })
-    .getByRole('row', { name: new RegExp(COMMERCE) })
+    .getByRole('row', { name: new RegExp(LIBRARY) })
   await expect(row).toContainText('You have version 0.1.0 installed. Update to 0.1.5.')
   await expect(row).toContainText('Compatibility with OTW CMS 0.1.3: Yes (according to its author)')
   await expect(row).toContainText(
-    '1.0.0 is out, but @otwdesign/plugin-commerce-stripe 0.1.0 needs @otwdesign/plugin-commerce ^0.1.0.',
+    '1.0.0 is out, but courier-fixture 0.1.0 needs library-fixture ^0.1.0.',
   )
 
   await page.getByRole('button', { name: 'Check again' }).click()
@@ -45,20 +45,20 @@ test('the Updates screen lists core and plugin updates, and why one waits', asyn
 
 test('updating ticked plugins shows each step until it’s done', async ({ page, request }) => {
   await signIn(page, ADMIN, '/admin/updates')
-  await page.getByRole('checkbox', { name: `Select ${COMMERCE}` }).check()
+  await page.getByRole('checkbox', { name: `Select ${LIBRARY}` }).check()
   await page.getByRole('button', { name: 'Update Plugins' }).click()
   await notice(page, 'Updating. This page shows the progress.')
   await expect(
     page.getByRole('listitem').filter({ hasText: 'Build the new release' }),
   ).toBeVisible()
   // The screen refreshes itself while the job runs.
-  await expect(page.getByText(`Updated: ${COMMERCE}.`)).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(`Updated: ${LIBRARY}.`)).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('listitem').filter({ hasText: 'Switch' })).toContainText('(done)')
 
   const asked = await request.get(`http://127.0.0.1:${SUPERVISOR.port}/requests`, {
     headers: { authorization: `Bearer ${SUPERVISOR.token}` },
   })
-  expect(await asked.json()).toEqual([{ packages: [COMMERCE] }])
+  expect(await asked.json()).toEqual([{ packages: [LIBRARY] }])
 })
 
 test('automatic updates are saved, and a previous release can be restored', async ({ page }) => {
@@ -78,10 +78,10 @@ test('automatic updates are saved, and a previous release can be restored', asyn
 })
 
 test('people who may not update don’t see updates at all', async ({ page }) => {
-  await signIn(page, MANAGER)
+  await signIn(page, LIBRARIAN)
   await expect(mainMenu(page).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()
   await expect(mainMenu(page).getByRole('link', { name: /updates?\)/ })).toHaveCount(0)
   expect((await page.goto('/admin/updates'))?.status()).toBe(403)
-  await page.goto('/admin/commerce/orders')
+  await page.goto('/admin/library/loans')
   await expect(page.getByText('There is a new version')).toHaveCount(0)
 })

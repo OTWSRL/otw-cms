@@ -56,21 +56,21 @@ importers:
       '@otwdesign/next':
         specifier: workspace:*
         version: link:../../packages/next
-      '@otwdesign/plugin-commerce':
-        specifier: workspace:*
-        version: link:../../plugins/commerce
-      '@otwdesign/plugin-commerce-stripe':
-        specifier: workspace:*
-        version: link:../../plugins/commerce-stripe
       '@otwdesign/plugin-mail-file':
         specifier: workspace:*
         version: link:../../plugins/mail-file
       '@otwdesign/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      courier-fixture:
+        specifier: link:fixtures/courier
+        version: link:fixtures/courier
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@electric-sql/pglite@0.5.13)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)
+      library-fixture:
+        specifier: link:fixtures/library
+        version: link:fixtures/library
       next:
         specifier: ^16.4.3
         version: 16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.64.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -96,9 +96,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.0
         version: 19.3.0(@types/react@19.3.0)
-      tsx:
-        specifier: ^4.23.15
-        version: 4.23.15
 
   packages/admin-ui:
     dependencies:
@@ -295,80 +292,6 @@ importers:
       react:
         specifier: ^19.3.1
         version: 19.3.1
-
-  plugins/commerce:
-    dependencies:
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@opentelemetry/api':
-        specifier: ~1.9.0
-        version: 1.9.1
-      '@otwdesign/admin-ui':
-        specifier: workspace:*
-        version: link:../../packages/admin-ui
-      '@otwdesign/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@otwdesign/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@otwdesign/testing':
-        specifier: workspace:*
-        version: link:../../packages/testing
-      '@types/react':
-        specifier: ^19.3.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19.2.0
-        version: 19.3.0(@types/react@19.3.0)
-      drizzle-orm:
-        specifier: ^0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.5.13)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-      react-dom:
-        specifier: ^19.3.1
-        version: 19.3.1(react@19.3.1)
-
-  plugins/commerce-stripe:
-    dependencies:
-      stripe:
-        specifier: ^23.1.0
-        version: 23.1.0(@types/node@24.19.2)
-    devDependencies:
-      '@opentelemetry/api':
-        specifier: ~1.9.0
-        version: 1.9.1
-      '@otwdesign/admin-ui':
-        specifier: workspace:*
-        version: link:../../packages/admin-ui
-      '@otwdesign/plugin-commerce':
-        specifier: workspace:*
-        version: link:../commerce
-      '@otwdesign/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@otwdesign/testing':
-        specifier: workspace:*
-        version: link:../../packages/testing
-      '@types/react':
-        specifier: ^19.3.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19.2.0
-        version: 19.3.0(@types/react@19.3.0)
-      drizzle-orm:
-        specifier: ^0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.5.13)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-      react-dom:
-        specifier: ^19.3.1
-        version: 19.3.1(react@19.3.1)
 
   plugins/mail-file:
     devDependencies:
@@ -2208,15 +2131,6 @@ packages:
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
-
-  stripe@23.1.0:
-    resolution: {integrity: sha512-fVUfMSfTPoukfoV//MUKAx2+YxyKmYaYtnAL9VkfnHfaPNQylFdWZMD+zgUFerI8rjbaiER8Vzj2XEUQ2AhAsQ==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@types/node': '>=20'
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
 
   styled-jsx@5.1.6:
     resolution: {integrity: sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA==}
@@ -4142,10 +4056,6 @@ snapshots:
   split2@4.2.0: {}
 
   std-env@4.3.0: {}
-
-  stripe@23.1.0(@types/node@24.19.2):
-    optionalDependencies:
-      '@types/node': 24.19.2
 
   styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.3.1):
     dependencies:

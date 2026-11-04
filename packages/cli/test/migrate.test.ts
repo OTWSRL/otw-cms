@@ -99,7 +99,8 @@ describe('the cms binary', () => {
     const dry = await cms('migrate', '--dry-run')
     expect(dry.stdout).toContain('pending migrations:')
     expect(dry.stdout).toContain('core/0001_core_tables')
-    expect(dry.stdout).toMatch(/commerce\/\d{4}_/)
+    // The e2e site's Library fixture brings a migration of its own: plugins' run with core's.
+    expect(dry.stdout).toMatch(/library\/\d{4}_/)
     // A dry run never creates the database.
     await expect(access(join(data, 'pglite'))).rejects.toThrow('ENOENT')
 

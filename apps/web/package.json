@@ -8,7 +8,6 @@
     "dev": "cms generate && next dev",
     "build": "cms generate && next build",
     "start": "next start",
-    "seed": "cms generate && tsx scripts/seed.ts",
     "typecheck": "cms generate && next typegen && tsc --noEmit -p .",
     "test:e2e": "playwright test"
   },
@@ -16,11 +15,11 @@
     "@electric-sql/pglite": "^0.5.13",
     "@otwdesign/admin-ui": "workspace:*",
     "@otwdesign/next": "workspace:*",
-    "@otwdesign/plugin-commerce": "workspace:*",
-    "@otwdesign/plugin-commerce-stripe": "workspace:*",
     "@otwdesign/plugin-mail-file": "workspace:*",
     "@otwdesign/sdk": "workspace:*",
+    "courier-fixture": "link:fixtures/courier",
     "drizzle-orm": "^0.45.4",
+    "library-fixture": "link:fixtures/library",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
@@ -30,7 +29,6 @@
     "@otwdesign/cli": "workspace:*",
     "@playwright/test": "^1.64.1",
     "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.2.0",
-    "tsx": "^4.23.15"
+    "@types/react-dom": "^19.2.0"
   }
 }

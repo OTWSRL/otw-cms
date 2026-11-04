@@ -44,7 +44,8 @@ export default defineConfig({
       },
     },
     {
-      command: `pnpm build && pnpm seed --reset && pnpm start --port ${PORT}`,
+      // A fresh database, uploads and mail each run, so the first visit sets the site up.
+      command: `node e2e/fresh-data.mjs && pnpm build && pnpm start --port ${PORT}`,
       url: `http://localhost:${PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
@@ -53,8 +54,8 @@ export default defineConfig({
         CMS_UPLOADS_DIR: '.data/e2e-uploads',
         MAIL_FILE_DIR: '.data/e2e-mail',
         DATABASE_URL: '',
-        STRIPE_SECRET_KEY: '',
-        STRIPE_WEBHOOK_SECRET: '',
+        // Courier's key stays unset, so its notice shows.
+        COURIER_API_KEY: '',
         CMS_SUPERVISOR_URL: `http://127.0.0.1:${SUPERVISOR_PORT}`,
         CMS_SUPERVISOR_TOKEN: SUPERVISOR_TOKEN,
       },

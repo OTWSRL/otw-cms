@@ -1,0 +1,11 @@
+{
+  "name": "courier-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A plugin for the e2e tests that needs the Library: a section on its settings page, and a notice while its key isn't set. Its imports resolve from the site.",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./admin": "./admin.tsx"
+  }
+}

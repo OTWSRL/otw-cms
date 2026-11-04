@@ -127,8 +127,8 @@ test('the site’s pages and the admin, on one server, each keep their own part'
   await signInAsAdmin(page)
   for (let round = 0; round < 2; round++) {
     await page.goto('/account')
-    await expect(page.getByText('Your shop account')).toBeVisible()
-    await page.goto('/admin/commerce/orders')
-    await expect(page.getByRole('heading', { name: 'Orders' })).toBeVisible()
+    await expect(page.getByText('Members’ area')).toBeVisible()
+    await page.goto('/admin/library/loans')
+    await expect(page.getByRole('heading', { name: 'Loans' })).toBeVisible()
   }
 })

@@ -1,7 +1,3 @@
 {
-  "plugins": [
-    "@otwdesign/plugin-commerce",
-    "@otwdesign/plugin-commerce-stripe",
-    "@otwdesign/plugin-mail-file"
-  ]
+  "plugins": ["library-fixture", "courier-fixture", "@otwdesign/plugin-mail-file"]
 }

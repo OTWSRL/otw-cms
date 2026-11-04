@@ -9,7 +9,6 @@
   "scripts": {
     "dev": "pnpm --filter @otwdesign/web dev",
     "build": "pnpm --filter @otwdesign/web build",
-    "seed": "pnpm --filter @otwdesign/web seed",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -8,7 +8,8 @@ export const ADMIN = {
 /** The stand-in for `cms serve` the e2e site reports updates through (e2e/fake-supervisor.mjs). */
 export const SUPERVISOR = { port: 3199, token: 'e2e-supervisor-token' }
 
-export const MANAGER = { email: 'max@example.com', password: 'another e2e password' }
+/** Gets the Library fixture's Librarian role in admin.spec.ts. */
+export const LIBRARIAN = { email: 'max@example.com', password: 'another e2e password' }
 
 export async function signIn(
   page: Page,

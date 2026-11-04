@@ -17,10 +17,9 @@ const SCREENS = [
   '/admin/users/new',
   '/admin/users/roles',
   '/admin/settings',
-  '/admin/commerce/settings/payments',
-  '/admin/commerce/products',
-  '/admin/commerce/products/new',
-  '/admin/commerce/orders',
+  '/admin/library/settings',
+  '/admin/library/loans',
+  '/admin/library/books',
   '/admin/posts',
   '/admin/posts/new',
   '/admin/pages',
@@ -40,15 +39,6 @@ function hoverless(page: Page): Promise<boolean> {
 
 async function menuWidth(page: Page): Promise<number | undefined> {
   return (await page.locator('#adminmenuwrap').boundingBox())?.width
-}
-
-async function anOrder(page: Page): Promise<string> {
-  await page.goto('/product/field-notebook')
-  await page.getByLabel('Email').fill('dev@example.com')
-  await page.getByLabel(/Pay later/).check()
-  await page.getByRole('button', { name: 'Place order' }).click()
-  const heading = await page.getByRole('heading', { name: /^Order #\d+$/ }).textContent()
-  return heading!.replace('Order ', '')
 }
 
 test('every admin screen fits the screen without scrolling sideways', async ({ page }) => {
@@ -76,8 +66,8 @@ test.describe('phones', () => {
     if (await hoverless(page)) {
       // The first tap opened the submenu in place.
       await expect(page).toHaveURL(/\/admin(\?|$)/)
-      await submenu(page, 'Settings').getByRole('link', { name: 'Payments' }).click()
-      await expect(page).toHaveURL('/admin/commerce/settings/payments')
+      await submenu(page, 'Settings').getByRole('link', { name: 'Library' }).click()
+      await expect(page).toHaveURL('/admin/library/settings')
     } else {
       await expect(page).toHaveURL('/admin/settings')
     }
@@ -86,13 +76,13 @@ test.describe('phones', () => {
   })
 
   test('list tables show the main column and expand a row for the rest', async ({ page }) => {
-    const number = await anOrder(page)
+    // The Library fixture's loans: the loan is the main column; the rest folds away.
     await signInAsAdmin(page)
-    await page.goto('/admin/commerce/orders')
-    const row = page.getByRole('row', { name: new RegExp(`^${number}`) })
-    const customer = row.locator('td.column-customer')
-    await expect(row.getByRole('link', { name: number, exact: true })).toBeVisible()
-    await expect(customer).toBeHidden()
+    await page.goto('/admin/library/loans')
+    const row = page.getByRole('row', { name: /^L-1001/ })
+    const borrower = row.locator('td.column-borrower')
+    await expect(row.getByRole('link', { name: 'L-1001', exact: true })).toBeVisible()
+    await expect(borrower).toBeHidden()
 
     const toggle = row.getByRole('button', { name: 'Show more details' })
     await toggle.click()
@@ -100,8 +90,8 @@ test.describe('phones', () => {
       'aria-expanded',
       'true',
     )
-    await expect(customer).toHaveText('dev@example.com')
-    await expect(row.locator('td.column-total')).toBeVisible()
+    await expect(borrower).toHaveText('ana@example.com')
+    await expect(row.locator('td.column-due')).toBeVisible()
   })
 
   test('settings forms stack their labels over full-width fields', async ({ page, viewport }) => {
@@ -134,18 +124,18 @@ test.describe('tablets', () => {
   test('the menu folds to icons, and a section opens as a flyout', async ({ page }) => {
     await signInAsAdmin(page)
     expect(await menuWidth(page)).toBe(36)
-    const commerce = mainMenu(page).getByRole('link', { name: 'Commerce', exact: true })
+    const library = mainMenu(page).getByRole('link', { name: 'Library', exact: true })
     // Just the icon: the label is moved off screen, as WordPress does.
-    expect((await commerce.boundingBox())?.width).toBe(36)
+    expect((await library.boundingBox())?.width).toBe(36)
 
     if (await hoverless(page)) {
-      await commerce.click()
+      await library.click()
       await expect(page).toHaveURL(/\/admin(\?|$)/)
     } else {
-      await commerce.hover()
+      await library.hover()
     }
-    await submenu(page, 'Commerce').getByRole('link', { name: 'Orders' }).click()
-    await expect(page).toHaveURL('/admin/commerce/orders')
+    await submenu(page, 'Library').getByRole('link', { name: 'Loans' }).click()
+    await expect(page).toHaveURL('/admin/library/loans')
   })
 })
 
@@ -187,8 +177,8 @@ test.describe('wider screens', () => {
 
   test('the current section lists its pages under it', async ({ page }) => {
     await signInAsAdmin(page)
-    await page.goto('/admin/commerce/products')
-    await expect(submenu(page, 'Commerce').getByRole('link', { name: 'Products' })).toHaveAttribute(
+    await page.goto('/admin/library/books')
+    await expect(submenu(page, 'Library').getByRole('link', { name: 'Books' })).toHaveAttribute(
       'aria-current',
       'page',
     )
