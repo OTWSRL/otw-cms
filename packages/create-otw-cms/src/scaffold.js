@@ -99,40 +99,37 @@ export function detectPackageManager(userAgent = process.env.npm_config_user_age
   return /** @type {PackageManager} */ (['pnpm', 'yarn', 'bun'].includes(name) ? name : 'npm')
 }
 
-/**
- * Each package manager's commands. `dockerRuntime` makes it available in the Dockerfile's final
- * stage (npm ships with Node); `dockerStart` is that stage's CMD.
- */
+/** Each package manager's commands. `exec` runs a package's command, such as `cms`. */
 const COMMANDS = {
   pnpm: {
     run: 'pnpm',
     exec: 'pnpm',
     ciInstall: 'corepack enable && pnpm install --frozen-lockfile',
-    dockerRuntime: 'corepack enable',
-    dockerStart: '["pnpm", "start"]',
   },
   npm: {
     run: 'npm run',
     exec: 'npx',
     ciInstall: 'npm ci',
-    dockerRuntime: '',
-    dockerStart: '["npm", "start"]',
   },
   yarn: {
     run: 'yarn',
     exec: 'yarn',
     ciInstall: 'corepack enable && yarn install --immutable',
-    dockerRuntime: 'corepack enable',
-    dockerStart: '["yarn", "start"]',
   },
   bun: {
     run: 'bun run',
     exec: 'bunx',
     ciInstall: 'npm install --global bun && bun install --frozen-lockfile',
-    dockerRuntime: 'npm install --global bun',
-    dockerStart: '["bun", "run", "start"]',
   },
 }
+
+/**
+ * A Dockerfile command in exec form, `["npx", "cms", "migrate"]`, so arguments given to
+ * `docker run` are appended.
+ *
+ * @param {readonly string[]} words
+ */
+const execForm = (words) => `[${words.map((word) => JSON.stringify(word)).join(', ')}]`
 
 /** `{{run}}`-style placeholders in the template's text files. */
 const PLACEHOLDER_FILES = ['README.md', '.github/workflows/cms-update.yml', 'Dockerfile']
@@ -277,12 +274,10 @@ export async function scaffold({
         .replaceAll('{{run}}', commands.run)
         .replaceAll('{{exec}}', commands.exec)
         .replaceAll('{{ci_install}}', commands.ciInstall)
-        // A line of its own, dropped when the package manager needs nothing installed.
-        .replace(
-          /^\{\{docker_runtime\}\}\n/m,
-          commands.dockerRuntime ? `RUN ${commands.dockerRuntime}\n` : '',
-        )
-        .replaceAll('{{docker_start}}', commands.dockerStart),
+        .replaceAll(
+          '{{docker_migrate}}',
+          execForm([...commands.exec.split(' '), 'cms', 'migrate']),
+        ),
     )
   }
   const linked = link ? await workspacePackages(resolve(link)) : undefined

@@ -99,33 +99,42 @@ describe('scaffold', () => {
     [
       'pnpm',
       'RUN corepack enable && pnpm install --frozen-lockfile && pnpm build',
-      'RUN corepack enable',
-      'CMD ["pnpm", "start"]',
+      '["pnpm", "cms", "migrate"]',
     ],
-    ['npm', 'RUN npm ci && npm run build', undefined, 'CMD ["npm", "start"]'],
+    ['npm', 'RUN npm ci && npm run build', '["npx", "cms", "migrate"]'],
     [
       'yarn',
       'RUN corepack enable && yarn install --immutable && yarn build',
-      'RUN corepack enable',
-      'CMD ["yarn", "start"]',
+      '["yarn", "cms", "migrate"]',
     ],
     [
       'bun',
       'RUN npm install --global bun && bun install --frozen-lockfile && bun run build',
-      'RUN npm install --global bun',
-      'CMD ["bun", "run", "start"]',
+      '["bunx", "cms", "migrate"]',
     ],
   ] as const)(
-    'writes a Dockerfile that builds with %s',
-    async (packageManager, build, runtime, start) => {
+    'writes a Dockerfile that builds with %s, into an image of the standalone server',
+    async (packageManager, build, migrate) => {
       const target = join(parent, `site-${packageManager}`)
       await scaffold({ target, version: '0.1.0', packageManager })
       const dockerfile = await read(target, 'Dockerfile')
-      const [buildStage, runtimeStage] = dockerfile.split(/^FROM .* AS build$|^FROM /m).slice(1)
+      const stages = dockerfile.split(/^(?=FROM )/m).slice(1)
+      expect(stages.map((stage) => stage.split('\n')[0])).toEqual([
+        'FROM node:24-slim AS build',
+        'FROM build AS migrate',
+        // Last, so a plain `docker build` makes the site's image.
+        'FROM node:24-slim',
+      ])
+      const [buildStage, migrateStage, siteStage] = stages as [string, string, string]
+      expect(buildStage).toContain('ENV CMS_STANDALONE=1')
       expect(buildStage).toContain(build)
-      if (runtime) expect(runtimeStage).toContain(runtime)
-      else expect(runtimeStage).not.toContain('RUN ')
-      expect(dockerfile).toContain(start)
+      expect(migrateStage).toContain(`ENTRYPOINT ${migrate}`)
+      // Only the standalone server: no package manager, no node_modules beyond what it traced.
+      expect(siteStage).toContain('COPY --from=build /site/.next/standalone ./')
+      expect(siteStage).toContain('COPY --from=build /site/.next/static ./.next/static')
+      expect(siteStage).toContain('CMD ["node", "server.js"]')
+      expect(siteStage).not.toContain('RUN ')
+      expect(siteStage).not.toContain('COPY --from=build /site /site')
       expect(dockerfile).not.toContain('{{')
       if (packageManager !== 'pnpm') expect(dockerfile).not.toContain('pnpm')
     },

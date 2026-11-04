@@ -31,15 +31,20 @@ function installedPlugins(file) {
 const merge = (current, added) => [...new Set([...(current ?? []), ...added])]
 
 /**
- * The Next.js settings a CMS site needs, merged into the site's own.
+ * The Next.js settings a CMS site needs, merged into the site's own. With `CMS_STANDALONE=1`, as
+ * the site's Dockerfile builds, Next.js writes a standalone server: only the files the site runs
+ * on, for a small image.
  *
  * @param {import('next').NextConfig} [nextConfig]
- * @param {{ config?: string }} [options] where cms.config.json is, from the working directory
+ * @param {{ config?: string, env?: Record<string, string | undefined> }} [options] where
+ *   cms.config.json is, from the working directory, and the environment to read
  * @returns {import('next').NextConfig}
  */
-export function withCms(nextConfig = {}, { config = 'cms.config.json' } = {}) {
+export function withCms(nextConfig = {}, { config = 'cms.config.json', env = process.env } = {}) {
   const plugins = installedPlugins(resolve(process.cwd(), config))
+  const standalone = ['1', 'true'].includes(env.CMS_STANDALONE ?? '')
   return {
+    ...(standalone ? { output: 'standalone' } : {}),
     ...nextConfig,
     // Installed plugins ship TypeScript source too.
     transpilePackages: merge(nextConfig.transpilePackages, [...CORE_PACKAGES, ...plugins]),

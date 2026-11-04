@@ -41,4 +41,17 @@ describe('withCms', () => {
       '"plugins" must be a list of package names',
     )
   })
+
+  it('builds a standalone server when CMS_STANDALONE is set, as the Dockerfile does', async () => {
+    await write({ plugins: [] })
+    const config = join(dir, 'cms.config.json')
+    expect(withCms({}, { config, env: {} })).not.toHaveProperty('output')
+    expect(withCms({}, { config, env: { CMS_STANDALONE: '1' } }).output).toBe('standalone')
+    expect(withCms({}, { config, env: { CMS_STANDALONE: 'true' } }).output).toBe('standalone')
+    expect(withCms({}, { config, env: { CMS_STANDALONE: '0' } })).not.toHaveProperty('output')
+    // A site that chose its own output keeps it.
+    expect(withCms({ output: 'export' }, { config, env: { CMS_STANDALONE: '1' } }).output).toBe(
+      'export',
+    )
+  })
 })
