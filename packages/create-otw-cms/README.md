@@ -10,9 +10,11 @@ yarn create otw-cms my-site
 bun create otw-cms my-site
 ```
 
-`--plugins @acme/forum,@acme/events` starts the site with those plugins' npm packages (with npm,
-after `--`: `npm create otw-cms@latest my-site -- --plugins @acme/forum`), and `--no-install` only writes the
-files. Then `cd my-site` and start it; the first visit to `/admin` sets up the administrator.
+`--plugins performance,@acme/forum` starts the site with plugins: npm package names, or a short
+name for one of the CMS's own (`performance` is `@otwdesign/plugin-performance`). With npm, they go
+after `--`: `npm create otw-cms@latest my-site -- --plugins performance`. `--no-install` only
+writes the files. Then `cd my-site` and start it; the first visit to `/admin` sets up the
+administrator.
 
 Part of [OTW CMS](https://github.com/OTWSRL/otw-cms), a WordPress-style CMS for Next.js and
 PostgreSQL. Licensed under the Apache License 2.0.

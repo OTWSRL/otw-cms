@@ -7,7 +7,8 @@ import { detectPackageManager, scaffold } from '../src/scaffold.js'
 const USAGE = `Usage: create-otw-cms <directory> [options]
 
 Options:
-  --plugins <list>   Plugins to install: npm package names, comma-separated
+  --plugins <list>   Plugins to install, comma-separated: npm package names, or a short name for
+                     one of the CMS's own (performance for @otwdesign/plugin-performance)
   --no-install       Write the files without installing dependencies
   --link <dir>       Use the CMS packages from a checkout of the CMS instead of the registry`
 
