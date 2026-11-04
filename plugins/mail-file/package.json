@@ -1,6 +1,7 @@
 {
   "name": "@otwdesign/plugin-mail-file",
   "version": "1.0.0",
+  "private": true,
   "description": "Mail for OTW CMS development: writes each message to a file instead of sending it.",
   "license": "Apache-2.0",
   "author": "OTW SRL",

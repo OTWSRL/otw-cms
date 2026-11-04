@@ -10,8 +10,8 @@ yarn create otw-cms my-site
 bun create otw-cms my-site
 ```
 
-`--plugins lms,performance` starts the site with plugins (with npm, after `--`:
-`npm create otw-cms@latest my-site -- --plugins lms`), and `--no-install` only writes the
+`--plugins @acme/forum,@acme/events` starts the site with those plugins' npm packages (with npm,
+after `--`: `npm create otw-cms@latest my-site -- --plugins @acme/forum`), and `--no-install` only writes the
 files. Then `cd my-site` and start it; the first visit to `/admin` sets up the administrator.
 
 Part of [OTW CMS](https://github.com/OTWSRL/otw-cms), a WordPress-style CMS for Next.js and

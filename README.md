@@ -122,8 +122,8 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   Set `CMS_TRUST_PROXY=1` so the admin trusts `X-Forwarded-Host` and `X-Forwarded-Proto`, or set
   `SITE_URL` (the site address on Settings › General); until one is set, admin forms answer 403.
   `cms serve` sets `CMS_TRUST_PROXY` for its releases.
-- **A new site:** `pnpm create otw-cms my-site --plugins lms,performance`, or `--link <checkout>`
-  to try unreleased changes. It includes a Dockerfile for your own server.
+- **A new site:** `pnpm create otw-cms my-site`, with `--plugins` for plugins' packages, or
+  `--link <checkout>` to try unreleased changes. It includes a Dockerfile for your own server.
 
 ## How the kernel boots
 
