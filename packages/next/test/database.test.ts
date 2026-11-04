@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -45,9 +45,41 @@ describe('openDatabase', () => {
     await writeFile(lock, String(exited))
 
     const { close } = openDatabase({ CMS_DATA_DIR: dir })
-    expect(await readFile(lock, 'utf8')).toBe(String(process.pid))
+    expect((await readFile(lock, 'utf8')).split(' ')[0]).toBe(String(process.pid))
     await close()
     await expect(access(lock)).rejects.toThrow('ENOENT')
+  })
+
+  it('takes over a lock whose process id now belongs to another process, as after a restart', async () => {
+    const dir = join(root, '.data', 'pglite')
+    const lock = `${dir}.lock`
+    await mkdir(join(root, '.data'))
+    // The id is alive (this test's parent), but that process started long after the lock's did:
+    // a container that restarted gives its processes the same low ids again.
+    await writeFile(lock, `${process.ppid} ${Date.now() - 3_600_000}`)
+
+    const { close } = openDatabase({ CMS_DATA_DIR: dir })
+    expect((await readFile(lock, 'utf8')).split(' ')[0]).toBe(String(process.pid))
+    await close()
+  })
+
+  it('keeps a lock while the process that took it is running', async () => {
+    const dir = join(root, '.data', 'pglite')
+    const lock = `${dir}.lock`
+    await mkdir(join(root, '.data'))
+    // Another process takes the lock as openDatabase() writes it, and stays.
+    const holder = spawn(process.execPath, [
+      '-e',
+      `require('node:fs').writeFileSync(${JSON.stringify(lock)}, process.pid + ' ' + Math.round(Date.now() - process.uptime() * 1000)); setInterval(() => {}, 1000)`,
+    ])
+    try {
+      await expect.poll(() => readFile(lock, 'utf8').catch(() => '')).toMatch(/^\d+ \d+$/)
+      expect(() => openDatabase({ CMS_DATA_DIR: dir })).toThrow(
+        `is open in another process (${holder.pid})`,
+      )
+    } finally {
+      holder.kill()
+    }
   })
 
   it('gives the embedded database 16 MB of shared buffers, or what CMS_SHARED_BUFFERS says', async () => {

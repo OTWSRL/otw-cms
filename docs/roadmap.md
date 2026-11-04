@@ -608,10 +608,62 @@ in CI.
 - The shop's own tests, the demo products seed and the shop's styles went with Commerce; the site
   template no longer carries those styles.
 
+## A lighter, faster server (done)
+
+Measured on production builds. Memory and image size in Docker (Linux), a small site after 60
+pages; speed on the Performance plugin's site with 1,500 posts, 300 pages and 440 users.
+
+| What                                         | Before             | After              |
+| -------------------------------------------- | ------------------ | ------------------ |
+| Memory, first start (a new database)         | 575 MiB            | 194 MiB            |
+| Memory, after a restart                      | 444 MiB            | 237 MiB            |
+| Docker image                                 | 1.07 GB            | 436 MB             |
+| Home page / a post / a category, server time | 7.8 / 6.4 / 9.7 ms | 6.2 / 5.0 / 7.2 ms |
+| Category pages a second, 16 at a time        | 139                | 194                |
+| Posts list's counts and months, 31,500 posts | about 30 ms        | under 0.5 ms       |
+
+- **A new embedded database** is created by a short-lived process (`createEmbeddedDatabase`):
+  PGlite's initdb takes about 700 MB, which a server kept until it restarted.
+- **The embedded database's cache** is 16 MB (`CMS_SHARED_BUFFERS`), not PostgreSQL's 128 MB.
+  In a 130 MB database, lists and counts took three times as long; lookups didn't change.
+- **It maintains itself** (`maintainEmbeddedDatabase`): PGlite runs no autovacuum, so its tables
+  were never analyzed, and the planner guessed 36 rows where there were 1,500. The server applies
+  autovacuum's thresholds itself, 30 s after starting and every five minutes.
+- **Loaded when used**: sharp with the first image, OpenTelemetry's SDK when a plugin turns
+  tracing on. The database drivers still load together: making `openDatabase()` async would
+  break scripts that call it, such as Commerce's seed, for a few MB.
+- **Counts and months** come from `cms_entry_counts` and `cms_entry_months`, which a trigger
+  keeps (migration core/0011_entry_counts), as WordPress caches `wp_count_posts()`.
+- **Term filters** find the terms and their descendants once per query, not per entry.
+- **The Docker image** is Next.js's standalone server (`CMS_STANDALONE=1`), with a `migrate`
+  target for several containers.
+- **The embedded database's lock** records its process's start time too, so a restarted
+  container whose processes reuse ids takes it over. Before, a site in a container could stay
+  down after `docker restart` until the lock file was deleted.
+- Not done, measured: counting archive pages over ids only (0.5 ms, lost to a second round trip
+  on a PostgreSQL server). The categories filter on the Posts list still counts each term's
+  entries (about 3 ms at 1,500 posts).
+
 ## 10. Operations
 
 Job queue and scheduled tasks (Action Scheduler), an outbound event outbox, caching, uninstalling
 plugins (their data and migrations), and installing plugins from the admin.
+
+## 11. Page cache plugin
+
+A full-page cache for signed-out visitors, as WordPress sites get from caching plugins, in a
+repository of its own and on npm as an optional plugin. Every site page is rendered for every
+visit today (`Cache-Control: no-store`): 6–10 ms each, 140–265 pages a second on one process.
+Served from a cache, the same pages would answer thousands a second.
+
+- **What's cached**: pages for visitors with no session, by address. Signed-in people, previews,
+  form posts and the account pages always reach the site.
+- **Invalidation** is the work: saving, trashing or restoring an entry, or changing a term or a
+  setting, must drop the pages that show it (the entry, its archives, the home page). It needs
+  hooks core may not have yet, and a plugin's own pages need a way to say what they show.
+- **Where it's kept**: memory for one server, and a store plugins can provide (Redis) for
+  several; `Cache-Control` for a CDN in front.
+- **Measured** against today's numbers above.
 
 ## Later
 

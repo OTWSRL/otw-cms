@@ -593,33 +593,39 @@ export function createContentService({
         number
       >
       if (authorId !== undefined && !UUID.test(authorId)) return counts
-      const rows = await db.current
-        .select({ status: entries.status, count: sql<number>`count(*)`.mapWith(Number) })
-        .from(entries)
-        .where(
-          and(
-            eq(entries.type, type),
-            authorId === undefined ? undefined : eq(entries.authorId, authorId),
-          ),
-        )
-        .groupBy(entries.status)
-      for (const row of rows) counts[row.status] = row.count
+      // From the totals a trigger keeps (migration 0011), not by counting entries.
+      const result = await db.current.execute(sql`
+        SELECT status, sum(entries)::int AS count FROM cms_entry_counts
+         WHERE type = ${type}
+           ${authorId === undefined ? sql`` : sql`AND author_id = ${authorId}::uuid`}
+         GROUP BY status
+      `)
+      for (const row of rowsOf(result) as { status: EntryStatus; count: number }[]) {
+        if (row.status in counts) counts[row.status] = Number(row.count)
+      }
       return counts
     },
 
     async months(type, { status = WRITABLE } = {}) {
       checkStatuses(status)
       if (status.length === 0) return []
-      // In UTC, as the list's date filter takes it, until the site has a time zone setting.
-      const month = sql`date_trunc('month', ${SORTS.date} AT TIME ZONE 'UTC')`
-      const rows = await db.current
-        .selectDistinct({
-          year: sql<number>`extract(year from ${month})`.mapWith(Number),
-          month: sql<number>`extract(month from ${month})`.mapWith(Number),
-        })
-        .from(entries)
-        .where(and(eq(entries.type, type), inArray(entries.status, [...status])))
-      return rows.sort((a, b) => b.year - a.year || b.month - a.month)
+      // In UTC, as the list's date filter takes it, until the site has a time zone setting. From
+      // the months a trigger keeps (migration 0011), not by reading every entry's date.
+      const result = await db.current.execute(sql`
+        SELECT extract(year FROM month)::int AS year, extract(month FROM month)::int AS month
+          FROM cms_entry_months
+         WHERE type = ${type} AND entries > 0
+           AND status IN (${sql.join(
+             status.map((name) => sql`${name}`),
+             sql`, `,
+           )})
+         GROUP BY cms_entry_months.month
+         ORDER BY cms_entry_months.month DESC
+      `)
+      return (rowsOf(result) as { year: number; month: number }[]).map((row) => ({
+        year: Number(row.year),
+        month: Number(row.month),
+      }))
     },
 
     trash: (id) =>

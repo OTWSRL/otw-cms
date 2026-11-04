@@ -51,6 +51,7 @@ describe('cms migrate', () => {
         'core/0008_accounts',
         'core/0009_user_meta',
         'core/0010_entry_search',
+        'core/0011_entry_counts',
         'shop/0001_products',
       ],
       backup: null,

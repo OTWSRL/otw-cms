@@ -628,8 +628,10 @@ export function entryTermsCondition(filter: EntryQuery['terms']): SQL | undefine
       (id): id is string => typeof id === 'string' && UUID.test(id),
     )
     if (valid.length === 0) return null
+    // ANY(ARRAY(…)) finds the terms and their descendants once, for the whole query; with IN,
+    // Postgres may walk the tree again for each entry it checks.
     conditions.push(sql`EXISTS (
-      SELECT 1 FROM cms_entry_terms et WHERE et.entry_id = cms_entries.id AND et.term_id IN (
+      SELECT 1 FROM cms_entry_terms et WHERE et.entry_id = cms_entries.id AND et.term_id = ANY(ARRAY(
         WITH RECURSIVE wanted (id) AS (
           SELECT id FROM cms_terms
             WHERE taxonomy = ${taxonomy} AND id IN (${sql.join(
@@ -640,7 +642,7 @@ export function entryTermsCondition(filter: EntryQuery['terms']): SQL | undefine
           SELECT t.id FROM cms_terms t JOIN wanted ON t.parent_id = wanted.id
         )
         SELECT id FROM wanted
-      )
+      ))
     )`)
   }
   return conditions.length === 0 ? undefined : and(...conditions)!

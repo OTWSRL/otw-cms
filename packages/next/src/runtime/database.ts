@@ -47,11 +47,12 @@ export function sharedBuffers(env: Env = process.env): string {
  * Postgres when DATABASE_URL is set; otherwise embedded PGlite, so a fresh clone runs with no
  * setup. A new embedded database is created by a process of its own (see
  * `createEmbeddedDatabase`). `create: false` is for read-only checks: an embedded database that
- * doesn't exist yet is opened empty, in memory, rather than created on disk.
+ * doesn't exist yet is opened empty, in memory, rather than created on disk. `maintain: true`,
+ * for a server, keeps an embedded database's statistics current (see `scheduleMaintenance`).
  */
 export function openDatabase(
   env: Env = process.env,
-  { create = true }: { create?: boolean } = {},
+  { create = true, maintain = false }: { create?: boolean; maintain?: boolean } = {},
 ): DatabaseHandle {
   if (env.DATABASE_URL) {
     const pool = tracedPool(new Pool({ connectionString: env.DATABASE_URL }))
@@ -71,12 +72,88 @@ export function openDatabase(
   mkdirSync(dir, { recursive: true })
   if (!existsSync(join(dir, 'PG_VERSION'))) createEmbeddedDatabase(dir)
   const client = tracedPglite(new PGlite(dir, options))
+  const stopMaintenance = maintain ? scheduleMaintenance(client) : undefined
   return {
     db: drizzlePglite(client),
     close: async () => {
+      stopMaintenance?.()
       await client.close()
       release()
     },
+  }
+}
+
+/** What one maintenance pass did: the tables it analyzed and those it vacuumed. */
+export interface Maintenance {
+  analyzed: string[]
+  vacuumed: string[]
+}
+
+/**
+ * Does for the embedded database what autovacuum does for a PostgreSQL server, which PGlite,
+ * running no background processes, never does: statistics for each table that changed enough,
+ * so the planner knows how many rows there are, and a vacuum for each with enough dead rows or
+ * new ones, which index-only scans need. Autovacuum's default thresholds.
+ */
+export async function maintainEmbeddedDatabase(client: PGlite): Promise<Maintenance> {
+  const { rows } = await client.query<{
+    name: string
+    tuples: number
+    live: number
+    dead: number
+    modified: number
+    inserted: number
+    analyzed: boolean
+  }>(`
+    SELECT quote_ident(s.schemaname) || '.' || quote_ident(s.relname) AS name,
+           greatest(c.reltuples, 0)::float8 AS tuples,
+           s.n_live_tup::float8 AS live, s.n_dead_tup::float8 AS dead,
+           s.n_mod_since_analyze::float8 AS modified, s.n_ins_since_vacuum::float8 AS inserted,
+           s.last_analyze IS NOT NULL OR s.last_autoanalyze IS NOT NULL AS analyzed
+      FROM pg_stat_user_tables s JOIN pg_class c ON c.oid = s.relid
+     ORDER BY 1
+  `)
+  const done: Maintenance = { analyzed: [], vacuumed: [] }
+  for (const table of rows) {
+    const analyze = table.modified > 50 + 0.1 * table.tuples || (!table.analyzed && table.live > 0)
+    const vacuum =
+      table.dead > 50 + 0.2 * table.tuples || table.inserted > 1000 + 0.2 * table.tuples
+    if (vacuum) {
+      await client.exec(`VACUUM ${analyze ? '(ANALYZE) ' : ''}${table.name}`)
+      done.vacuumed.push(table.name)
+    } else if (analyze) {
+      await client.exec(`ANALYZE ${table.name}`)
+    }
+    if (analyze) done.analyzed.push(table.name)
+  }
+  return done
+}
+
+/**
+ * Runs `maintainEmbeddedDatabase` on a timer: first once a starting server has answered its
+ * first requests, then every few minutes. Each pass is quick when nothing changed. Returns a
+ * function that stops it; the timer never keeps the process alive.
+ */
+export function scheduleMaintenance(
+  client: PGlite,
+  { firstMs = 30_000, everyMs = 5 * 60_000 }: { firstMs?: number; everyMs?: number } = {},
+): () => void {
+  let timer: NodeJS.Timeout | undefined
+  let stopped = false
+  const run = async () => {
+    try {
+      await maintainEmbeddedDatabase(client)
+    } catch (error) {
+      console.warn(
+        `cms: maintaining the embedded database failed, and is tried again in ${Math.round(everyMs / 1000)} s: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+    if (!stopped) timer = setTimeout(run, everyMs).unref()
+  }
+  timer = setTimeout(run, firstMs).unref()
+  return () => {
+    stopped = true
+    clearTimeout(timer)
   }
 }
 
@@ -143,9 +220,65 @@ function tracedPool(pool: Pool): Pool {
   return pool
 }
 
-function lockHolder(file: string): number | undefined {
-  const pid = Number.parseInt(existsSync(file) ? readFileSync(file, 'utf8') : '', 10)
-  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined
+/** When this process started, in milliseconds since 1970: with its id, it names the lock's owner. */
+const STARTED_AT = Math.round(Date.now() - process.uptime() * 1000)
+
+/** Start times a process and the system's record of it may differ by: clock ticks, Node's start. */
+const SAME_START_MS = 2000
+
+/** Linux reports process start times in clock ticks of 1/100 s (USER_HZ), on every architecture. */
+const TICKS_PER_SECOND = 100
+
+interface LockOwner {
+  pid: number
+  /** Missing in a lock written before start times were. */
+  startedAt?: number
+}
+
+function lockOwner(file: string): LockOwner | undefined {
+  const [pid, startedAt] = (existsSync(file) ? readFileSync(file, 'utf8') : '')
+    .trim()
+    .split(/\s+/)
+    .map(Number)
+  if (!Number.isSafeInteger(pid) || pid! <= 0) return undefined
+  return { pid: pid!, startedAt: Number.isFinite(startedAt) ? startedAt : undefined }
+}
+
+/** When a running process started, as the system says: /proc on Linux, ps elsewhere. */
+function processStartedAt(pid: number): number | undefined {
+  try {
+    if (process.platform === 'linux') {
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+      // Field 22, counted after the command's name, which may hold spaces and parentheses.
+      const ticks = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19])
+      const bootedAt = Number(/^btime (\d+)$/m.exec(readFileSync('/proc/stat', 'utf8'))?.[1])
+      const started = bootedAt * 1000 + (ticks * 1000) / TICKS_PER_SECOND
+      return Number.isFinite(started) ? started : undefined
+    }
+    const started = Date.parse(
+      execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+        encoding: 'utf8',
+        env: { ...process.env, LC_ALL: 'C' },
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim(),
+    )
+    return Number.isNaN(started) ? undefined : started
+  } catch {
+    // Exited since, or no way to ask: the caller treats the lock as held, as before.
+    return undefined
+  }
+}
+
+/**
+ * Whether the lock's owner is still running. A live process with the owner's id isn't enough:
+ * a container that restarts hands out the same low ids again, so the id may now belong to
+ * another process. When the system can't say when it started, the lock counts as held.
+ */
+function ownerRunning(owner: LockOwner): boolean {
+  if (owner.pid === process.pid || !isRunning(owner.pid)) return false
+  if (owner.startedAt === undefined) return true
+  const started = processStartedAt(owner.pid)
+  return started === undefined || Math.abs(started - owner.startedAt) < SAME_START_MS
 }
 
 function isRunning(pid: number): boolean {
@@ -161,20 +294,20 @@ function isRunning(pid: number): boolean {
 /**
  * PGlite loads its files into one process's memory and doesn't lock them, so a second process
  * (a second server, or `cms migrate` beside a running site) would never see the first's writes
- * and could corrupt them. A lock file with the owner's process id stops that; one left by a
- * process that has exited is taken over.
+ * and could corrupt them. A lock file with the owner's process id and start time stops that;
+ * one left by a process that has exited, or whose id another process has since, is taken over.
  */
 function claimEmbeddedDatabase(dir: string): () => void {
   const file = `${dir}.lock`
-  const holder = lockHolder(file)
-  if (holder !== undefined && holder !== process.pid && isRunning(holder)) {
+  const owner = lockOwner(file)
+  if (owner && ownerRunning(owner)) {
     throw new Error(
-      `The embedded database in ${dir} is open in another process (${holder}). Stop that process first: only one can use the embedded database. To share a database between processes, use Postgres (DATABASE_URL).`,
+      `The embedded database in ${dir} is open in another process (${owner.pid}). Stop that process first: only one can use the embedded database. To share a database between processes, use Postgres (DATABASE_URL).`,
     )
   }
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, String(process.pid))
+  writeFileSync(file, `${process.pid} ${STARTED_AT}`)
   return () => {
-    if (lockHolder(file) === process.pid) rmSync(file, { force: true })
+    if (lockOwner(file)?.pid === process.pid) rmSync(file, { force: true })
   }
 }

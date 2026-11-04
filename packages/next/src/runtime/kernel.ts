@@ -21,11 +21,15 @@ function holderFor(site: Site): KernelHolder {
   if (!holder) {
     holder = createKernelHolder({
       boot: () =>
-        bootSite(site, (globalForCms.__cmsDatabase ??= openDatabase()).db, {
-          onChange: () => {
-            globalForCms.__cmsChanges = (globalForCms.__cmsChanges ?? 0) + 1
+        bootSite(
+          site,
+          (globalForCms.__cmsDatabase ??= openDatabase(process.env, { maintain: true })).db,
+          {
+            onChange: () => {
+              globalForCms.__cmsChanges = (globalForCms.__cmsChanges ?? 0) + 1
+            },
           },
-        }),
+        ),
       localChanges: () => globalForCms.__cmsChanges ?? 0,
     })
     holders.set(site, holder)

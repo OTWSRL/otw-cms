@@ -262,4 +262,88 @@ export const coreMigrations: Migration[] = [
       )
     },
   },
+  {
+    id: '0011_entry_counts',
+    up: async (db) => {
+      // What list screens show above and beside the list: how many entries each status has
+      // (everyone's and one author's), and the months for the date filter. Counting them meant
+      // reading every entry of the type on every view, so a trigger keeps the totals instead,
+      // as WordPress caches wp_count_posts(). A trigger, so writes from anywhere keep them
+      // right, a foreign key's included. Rows that reach zero stay, at zero.
+      await db.execute(sql`
+        CREATE TABLE cms_entry_counts (
+          type text NOT NULL,
+          status text NOT NULL,
+          author_id uuid,
+          entries integer NOT NULL
+        )
+      `)
+      await db.execute(sql`
+        CREATE UNIQUE INDEX cms_entry_counts_key ON cms_entry_counts
+          (type, status, COALESCE(author_id, '00000000-0000-0000-0000-000000000000'::uuid))
+      `)
+      await db.execute(sql`
+        CREATE TABLE cms_entry_months (
+          type text NOT NULL,
+          status text NOT NULL,
+          month date NOT NULL,
+          entries integer NOT NULL,
+          PRIMARY KEY (type, status, month)
+        )
+      `)
+      // The month as the list's date filter takes it: published, or created, in UTC.
+      await db.execute(sql`
+        CREATE FUNCTION cms_entry_month(published timestamptz, created timestamptz) RETURNS date
+          LANGUAGE sql IMMUTABLE
+          RETURN date_trunc('month', COALESCE(published, created) AT TIME ZONE 'UTC')::date
+      `)
+      await db.execute(sql`
+        CREATE FUNCTION cms_entry_counts_change() RETURNS trigger LANGUAGE plpgsql AS $$
+        DECLARE
+          counted boolean := TG_OP = 'UPDATE' AND OLD.type = NEW.type AND OLD.status = NEW.status
+            AND OLD.author_id IS NOT DISTINCT FROM NEW.author_id;
+          dated boolean := TG_OP = 'UPDATE' AND OLD.type = NEW.type AND OLD.status = NEW.status
+            AND cms_entry_month(OLD.published_at, OLD.created_at)
+              = cms_entry_month(NEW.published_at, NEW.created_at);
+        BEGIN
+          IF TG_OP <> 'INSERT' AND NOT counted THEN
+            UPDATE cms_entry_counts SET entries = entries - 1
+             WHERE type = OLD.type AND status = OLD.status
+               AND author_id IS NOT DISTINCT FROM OLD.author_id;
+          END IF;
+          IF TG_OP <> 'INSERT' AND NOT dated THEN
+            UPDATE cms_entry_months SET entries = entries - 1
+             WHERE type = OLD.type AND status = OLD.status
+               AND month = cms_entry_month(OLD.published_at, OLD.created_at);
+          END IF;
+          IF TG_OP <> 'DELETE' AND NOT counted THEN
+            INSERT INTO cms_entry_counts AS c VALUES (NEW.type, NEW.status, NEW.author_id, 1)
+              ON CONFLICT (type, status, (COALESCE(author_id, '00000000-0000-0000-0000-000000000000'::uuid)))
+              DO UPDATE SET entries = c.entries + 1;
+          END IF;
+          IF TG_OP <> 'DELETE' AND NOT dated THEN
+            INSERT INTO cms_entry_months AS m
+              VALUES (NEW.type, NEW.status, cms_entry_month(NEW.published_at, NEW.created_at), 1)
+              ON CONFLICT (type, status, month) DO UPDATE SET entries = m.entries + 1;
+          END IF;
+          RETURN NULL;
+        END
+        $$
+      `)
+      await db.execute(sql`
+        CREATE TRIGGER cms_entry_counts AFTER INSERT OR DELETE
+          OR UPDATE OF type, status, author_id, published_at, created_at ON cms_entries
+          FOR EACH ROW EXECUTE FUNCTION cms_entry_counts_change()
+      `)
+      await db.execute(sql`
+        INSERT INTO cms_entry_counts
+        SELECT type, status, author_id, count(*) FROM cms_entries GROUP BY 1, 2, 3
+      `)
+      await db.execute(sql`
+        INSERT INTO cms_entry_months
+        SELECT type, status, cms_entry_month(published_at, created_at), count(*)
+          FROM cms_entries GROUP BY 1, 2, 3
+      `)
+    },
+  },
 ]
