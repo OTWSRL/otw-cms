@@ -1,7 +1,8 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Database } from '@otwdesign/sdk'
-import { PGlite } from '@electric-sql/pglite'
+import { PGlite, type PGliteOptions } from '@electric-sql/pglite'
 import { drizzle as drizzlePostgres } from 'drizzle-orm/node-postgres'
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite'
 import { Pool, type PoolClient } from 'pg'
@@ -22,10 +23,31 @@ export function dataDir(env: Env = process.env): string {
   return resolve(/* turbopackIgnore: true */ env.CMS_DATA_DIR || DEFAULT_DATA_DIR)
 }
 
+/** PostgreSQL's default is 128 MB, which PGlite holds in memory however small the site is. */
+export const DEFAULT_SHARED_BUFFERS = '16MB'
+
+const SIZE = /^[1-9]\d*(kB|MB|GB)$/
+
+/**
+ * The embedded database's `shared_buffers`: `CMS_SHARED_BUFFERS`, or `DEFAULT_SHARED_BUFFERS`.
+ * PGlite keeps the database's files in memory too, so a small cache costs reads little. A large
+ * embedded database whose lists and counts slow down can raise it.
+ */
+export function sharedBuffers(env: Env = process.env): string {
+  const value = env.CMS_SHARED_BUFFERS?.trim() || DEFAULT_SHARED_BUFFERS
+  if (!SIZE.test(value)) {
+    throw new Error(
+      `CMS_SHARED_BUFFERS must be a size such as 16MB or 128MB, not "${env.CMS_SHARED_BUFFERS}".`,
+    )
+  }
+  return value
+}
+
 /**
  * Postgres when DATABASE_URL is set; otherwise embedded PGlite, so a fresh clone runs with no
- * setup. `create: false` is for read-only checks: an embedded database that doesn't exist yet is
- * opened empty, in memory, rather than created on disk.
+ * setup. A new embedded database is created by a process of its own (see
+ * `createEmbeddedDatabase`). `create: false` is for read-only checks: an embedded database that
+ * doesn't exist yet is opened empty, in memory, rather than created on disk.
  */
 export function openDatabase(
   env: Env = process.env,
@@ -35,21 +57,57 @@ export function openDatabase(
     const pool = tracedPool(new Pool({ connectionString: env.DATABASE_URL }))
     return { db: drizzlePostgres(pool), close: () => pool.end() }
   }
+  // Parameters given replace PGlite's own, so its defaults come first.
+  const options: PGliteOptions = {
+    startParams: [...PGlite.defaultStartParams, '-c', `shared_buffers=${sharedBuffers(env)}`],
+  }
   const dir = dataDir(env)
   if (!create && !existsSync(dir)) {
-    const memory = new PGlite()
+    const memory = new PGlite(options)
     return { db: drizzlePglite(memory), close: () => memory.close() }
   }
   const release = claimEmbeddedDatabase(dir)
   // PGlite creates the data directory itself but not its parents (.data/ on a fresh clone).
   mkdirSync(dir, { recursive: true })
-  const client = tracedPglite(new PGlite(dir))
+  if (!existsSync(join(dir, 'PG_VERSION'))) createEmbeddedDatabase(dir)
+  const client = tracedPglite(new PGlite(dir, options))
   return {
     db: drizzlePglite(client),
     close: async () => {
       await client.close()
       release()
     },
+  }
+}
+
+// Run by Node in the site's directory, where the site depends on PGlite: creates the database
+// in the directory it's given, then exits. PGlite's ES module, the one the server loads, so a
+// standalone build has it too.
+const CREATE_DATABASE = `
+const { PGlite } = await import('@electric-sql/pglite')
+const db = new PGlite(process.argv[1])
+await db.waitReady
+await db.close()
+`
+
+/**
+ * Creates a new embedded database in a process of its own. PGlite builds one with a second
+ * instance and its initdb module, about 700 MB that a server would keep until it restarts; a
+ * process that exits gives it back. It waits, as a first boot waits for its database anyway.
+ * If that process can't run, PGlite creates it here, as it would by itself.
+ */
+function createEmbeddedDatabase(dir: string): void {
+  try {
+    execFileSync(process.execPath, ['--input-type=module', '-e', CREATE_DATABASE, dir], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+  } catch (error) {
+    const stderr = String((error as { stderr?: unknown }).stderr ?? '').trim()
+    console.warn(
+      `cms: creating the embedded database in this process, which keeps the memory that takes until it restarts. A separate process couldn't: ${stderr || (error instanceof Error ? error.message : String(error))}`,
+    )
   }
 }
 

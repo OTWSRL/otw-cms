@@ -16,7 +16,7 @@ describe('registerTracing', () => {
 
   it('records the embedded database’s queries, inside transactions too', async () => {
     const collector = registerTracing()!
-    collector.setEnabled(true)
+    await collector.setEnabled(true)
     const db = drizzle(tracedPglite(new PGlite()))
     const id = await trace.getTracer('test').startActiveSpan('GET /', async (root) => {
       collector.keep(root.spanContext().traceId)
@@ -34,7 +34,7 @@ describe('registerTracing', () => {
     expect(statements).toEqual(expect.arrayContaining(['SELECT 1', 'SELECT 2']))
   })
 
-  it('treats each request as its own, whatever trace context it arrives with', () => {
+  it('treats each request as its own, whatever trace context it arrives with', async () => {
     const collector = registerTracing()!
     // A sampled W3C traceparent header, as a visitor or a proxy could send.
     const remote = '0af7651916cd43dd8448eb211c80319c'
@@ -43,12 +43,12 @@ describe('registerTracing', () => {
     })
     const tracer = trace.getTracer('test')
 
-    collector.setEnabled(false)
+    await collector.setEnabled(false)
     const ignored = tracer.startSpan('GET /', {}, incoming)
     expect(ignored.isRecording()).toBe(false)
     ignored.end()
 
-    collector.setEnabled(true)
+    await collector.setEnabled(true)
     const recorded = tracer.startSpan('GET /', {}, incoming)
     const id = recorded.spanContext().traceId
     collector.keep(id)

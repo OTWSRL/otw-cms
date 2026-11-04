@@ -1234,7 +1234,7 @@ async function boot(
     }
   }
   settingUp = undefined
-  options.traces?.setEnabled(tracingRequested)
+  await options.traces?.setEnabled(tracingRequested)
   sealed = true
   stores.capabilities.seal()
   const label = (pluginId: string) => displayName(installed.get(pluginId), pluginId)

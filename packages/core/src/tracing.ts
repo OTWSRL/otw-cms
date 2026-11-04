@@ -1,20 +1,21 @@
 import {
   context,
+  isSpanContextValid,
+  ProxyTracerProvider,
   SpanKind,
   SpanStatusCode,
   trace,
+  TraceFlags,
   type Attributes,
   type HrTime,
 } from '@opentelemetry/api'
-import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks'
-import {
-  ParentBasedSampler,
+// Types only: the SDK loads once a plugin turns tracing on (see registerTracerProvider).
+import type {
+  ReadableSpan,
+  Sampler,
   SamplingDecision,
-  TracerProvider,
-  type ReadableSpan,
-  type Sampler,
-  type Span,
-  type SpanProcessor,
+  Span,
+  SpanProcessor,
 } from '@opentelemetry/sdk-trace'
 import type { RequestTrace, TraceSpan, TraceSpanKind } from '@otwdesign/sdk'
 
@@ -126,6 +127,13 @@ interface Recorded {
 }
 
 const toMs = ([seconds, nanos]: HrTime) => seconds * 1e3 + nanos / 1e6
+
+// SamplingDecision's values, which the SDK defines.
+const NOT_RECORD = 0 as SamplingDecision
+const RECORD_AND_SAMPLED = 2 as SamplingDecision
+
+/** Loads the SDK and installs it behind a registered provider, once per collector. */
+const installers = new WeakMap<TraceCollector, () => Promise<void>>()
 
 // Next.js's span types, by what they time.
 const NEXT_KINDS: Record<string, TraceSpanKind> = {
@@ -248,25 +256,41 @@ function buildTrace(id: string, recorded: Recorded): RequestTrace {
  */
 export class TraceCollector implements SpanProcessor {
   #enabled = false
+  #installed?: Promise<void>
   readonly #recording = new Map<string, Recorded>()
   readonly #kept = new Map<string, Recorded>()
 
-  /** Records a request only while tracing is enabled; spans inside it follow their request. */
-  readonly sampler: Sampler = new ParentBasedSampler({
-    root: {
-      shouldSample: () => ({
-        decision: this.#enabled ? SamplingDecision.RECORD_AND_SAMPLED : SamplingDecision.NOT_RECORD,
-      }),
-      toString: () => 'OtwCmsSampler',
+  /**
+   * Records a request only while tracing is enabled; spans inside it follow their request, as
+   * the SDK's ParentBasedSampler has them.
+   */
+  readonly sampler: Sampler = {
+    shouldSample: (parentContext) => {
+      const parent = trace.getSpanContext(parentContext)
+      const sampled =
+        parent && isSpanContextValid(parent)
+          ? (parent.traceFlags & TraceFlags.SAMPLED) === TraceFlags.SAMPLED
+          : this.#enabled
+      return { decision: sampled ? RECORD_AND_SAMPLED : NOT_RECORD }
     },
-  })
+    toString: () => 'OtwCmsSampler',
+  }
 
   get enabled(): boolean {
     return this.#enabled
   }
 
-  setEnabled(enabled: boolean): void {
+  /**
+   * Turns recording on or off. Turned on for the first time, it loads OpenTelemetry's SDK when
+   * the collector was registered with `registerTracerProvider()`; the promise settles once
+   * requests can be recorded.
+   */
+  setEnabled(enabled: boolean): Promise<void> {
     this.#enabled = enabled
+    const install = installers.get(this)
+    if (!enabled || !install) return Promise.resolve()
+    this.#installed ??= install()
+    return this.#installed
   }
 
   keep(id: string): void {
@@ -338,14 +362,26 @@ export class TraceCollector implements SpanProcessor {
  * Makes `collector` the process's OpenTelemetry tracer provider, with the context manager spans
  * need to nest. Returns false, changing nothing, when another provider was registered first.
  *
+ * What's registered here is a stand-in: the SDK, about 25 MB, loads only once the collector is
+ * enabled, so a site with no plugin that traces never loads it. Until then, spans are no-ops.
+ *
  * No propagator: a `traceparent` header on an incoming request is ignored, so every request is
  * a root of its own, recorded only when the collector's sampler says so. With one, anyone could
  * have a request recorded by sending a sampled header, and the collector, which collects roots,
  * would miss requests from proxies that add one.
  */
 export function registerTracerProvider(collector: TraceCollector): boolean {
-  const provider = new TracerProvider({ sampler: collector.sampler, spanProcessors: [collector] })
+  const provider = new ProxyTracerProvider()
   if (!trace.setGlobalTracerProvider(provider)) return false
-  context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable())
+  installers.set(collector, async () => {
+    const [{ TracerProvider }, { AsyncLocalStorageContextManager }] = await Promise.all([
+      import('@opentelemetry/sdk-trace'),
+      import('@opentelemetry/context-async-hooks'),
+    ])
+    context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable())
+    provider.setDelegate(
+      new TracerProvider({ sampler: collector.sampler, spanProcessors: [collector] }),
+    )
+  })
   return true
 }

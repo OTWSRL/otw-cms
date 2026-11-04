@@ -49,4 +49,28 @@ describe('openDatabase', () => {
     await close()
     await expect(access(lock)).rejects.toThrow('ENOENT')
   })
+
+  it('gives the embedded database 16 MB of shared buffers, or what CMS_SHARED_BUFFERS says', async () => {
+    const shown = async (env: Record<string, string>) => {
+      const { db, close } = openDatabase({ CMS_DATA_DIR: join(root, 'pglite'), ...env })
+      try {
+        const result = (await db.execute(sql`SHOW shared_buffers`)) as {
+          rows: { shared_buffers: string }[]
+        }
+        return result.rows[0]!.shared_buffers
+      } finally {
+        await close()
+      }
+    }
+    expect(await shown({})).toBe('16MB')
+    expect(await shown({ CMS_SHARED_BUFFERS: '64MB' })).toBe('64MB')
+  })
+
+  it('refuses a CMS_SHARED_BUFFERS that isn’t a size, before touching the database', async () => {
+    const dir = join(root, 'pglite')
+    expect(() => openDatabase({ CMS_DATA_DIR: dir, CMS_SHARED_BUFFERS: 'lots' })).toThrow(
+      'CMS_SHARED_BUFFERS must be a size such as 16MB or 128MB, not "lots".',
+    )
+    await expect(access(`${dir}.lock`)).rejects.toThrow('ENOENT')
+  })
 })

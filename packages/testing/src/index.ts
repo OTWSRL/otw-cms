@@ -95,7 +95,7 @@ export async function createTestKernel(
       traces,
     })
     // Tests of a plugin's own spans record whether or not a plugin under test enables tracing.
-    traces?.setEnabled(true)
+    await traces?.setEnabled(true)
     return kernel
   }
   const inRequest = async <T>(path: string, method: string, fn: () => Promise<T>) =>

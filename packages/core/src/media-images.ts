@@ -1,5 +1,11 @@
 import type { ImageSize } from '@otwdesign/sdk'
-import sharp, { type Metadata, type Sharp } from 'sharp'
+import type { Metadata, Sharp } from 'sharp'
+
+/**
+ * sharp, loaded with the first image rather than when the server starts: libvips takes about
+ * 27 MB that a site taking no uploads never needs.
+ */
+const loadSharp = () => import('sharp').then((module) => module.default)
 
 /** Above this, an image is scaled down for the site, keeping the original: `big_image_size_threshold`. */
 export const BIG_IMAGE_THRESHOLD = 2560
@@ -25,6 +31,8 @@ export interface ImageInfo {
 
 /** Decodes an image's header: its real type and dimensions, or `null` if it isn't one. */
 export async function readImage(data: Uint8Array): Promise<ImageInfo | null> {
+  // Outside the try: sharp failing to load is an error, not a file that isn't an image.
+  const sharp = await loadSharp()
   let metadata: Metadata
   try {
     metadata = await sharp(data).metadata()
@@ -115,6 +123,7 @@ async function encode(
   height: number,
   crop: boolean,
 ): Promise<Uint8Array> {
+  const sharp = await loadSharp()
   // Turned upright and without the original's metadata (camera, location), as WordPress's sizes.
   const resized = sharp(source)
     .rotate()
