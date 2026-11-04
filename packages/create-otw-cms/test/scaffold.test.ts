@@ -4,11 +4,23 @@ import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   detectPackageManager,
+  latestVersion,
   pluginPackage,
   scaffold,
   siteName,
   TEMPLATE,
 } from '../src/scaffold.js'
+
+/** Plugins' newest versions on the registry, as `npm view` would give them, for the tests. */
+const PUBLISHED: Record<string, string> = {
+  '@acme/lms': '2.4.0',
+  '@otwdesign/plugin-commerce': '1.7.2',
+}
+const resolveVersion = (pkg: string) => {
+  const version = PUBLISHED[pkg]
+  if (!version) throw new Error(`Can't find ${pkg} on npm: E404 Not Found`)
+  return version
+}
 
 describe('scaffold', () => {
   let parent: string
@@ -19,22 +31,24 @@ describe('scaffold', () => {
 
   const read = async (target: string, file: string) => readFile(join(target, file), 'utf8')
 
-  it('writes a site that depends on this release of the CMS', async () => {
+  it('writes a site that depends on this release of the CMS, and plugins on their own', async () => {
     const target = join(parent, 'My Shop')
     await scaffold({
       target,
       version: '0.3.1',
       plugins: ['commerce', '@acme/lms'],
       packageManager: 'pnpm',
+      resolveVersion,
     })
 
     const manifest = JSON.parse(await read(target, 'package.json'))
     expect(manifest.name).toBe('my-shop')
     expect(manifest.dependencies).toMatchObject({
-      '@acme/lms': '^0.3.1',
+      // Plugins release apart from the CMS: each gets its own newest version, not the CMS's.
+      '@acme/lms': '^2.4.0',
+      '@otwdesign/plugin-commerce': '^1.7.2',
       '@otwdesign/admin-ui': '^0.3.1',
       '@otwdesign/next': '^0.3.1',
-      '@otwdesign/plugin-commerce': '^0.3.1',
       '@otwdesign/sdk': '^0.3.1',
       next: expect.stringMatching(/^\^16\./),
     })
@@ -127,6 +141,14 @@ describe('scaffold', () => {
     expect(devDependencies['@otwdesign/cli']).toMatch(/^link:.*\/packages\/cli$/)
   })
 
+  it('stops before writing anything when a plugin isn’t on npm', async () => {
+    const target = join(parent, 'site')
+    await expect(
+      scaffold({ target, version: '0.3.1', plugins: ['@acme/missing'], resolveVersion }),
+    ).rejects.toThrow("Can't find @acme/missing on npm")
+    await expect(readdir(target)).rejects.toThrow('ENOENT')
+  })
+
   it('refuses a directory with files in it, and bad plugin names', async () => {
     const full = join(parent, 'full')
     await mkdir(full)
@@ -184,5 +206,35 @@ describe('the template', () => {
       skipLibCheck: true,
       strict: true,
     })
+  })
+})
+
+describe('latestVersion', () => {
+  it('reads the version npm view prints', () => {
+    const calls: unknown[][] = []
+    const run = (command: string, args: string[], options: { cwd: string }) => {
+      calls.push([command, args, options.cwd])
+      return '1.0.7\n'
+    }
+    expect(latestVersion('@otwdesign/plugin-performance', { cwd: '/sites', run })).toBe('1.0.7')
+    expect(calls).toEqual([['npm', ['view', '@otwdesign/plugin-performance', 'version'], '/sites']])
+  })
+
+  it('says which plugin npm couldn’t find, and why', () => {
+    const run = () => {
+      throw Object.assign(new Error('Command failed'), {
+        stderr:
+          'npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/@acme%2fnope\n',
+      })
+    }
+    expect(() => latestVersion('@acme/nope', { run })).toThrow(
+      "Can't find @acme/nope on npm: npm error code E404",
+    )
+  })
+
+  it('refuses output that isn’t a version', () => {
+    expect(() => latestVersion('@acme/odd', { run: () => 'nope\n' })).toThrow(
+      'npm view @acme/odd version printed "nope", not a version',
+    )
   })
 })

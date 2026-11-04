@@ -1,5 +1,6 @@
 // Plain JavaScript: `npm create otw-cms` runs this straight from the registry, before anything
 // that could compile TypeScript is installed.
+import { execFileSync } from 'node:child_process'
 import { cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,6 +53,44 @@ export function siteName(dir) {
     .replace(/^[._-]+/, '')
   if (!PACKAGE_NAME.test(name)) throw new Error(`Can't make a package name from "${dir}"`)
   return name
+}
+
+const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
+
+/**
+ * @typedef {(command: string, args: string[], options: { cwd: string }) => string} Run
+ */
+
+/** @type {Run} */
+const runCommand = (command, args, { cwd }) =>
+  execFileSync(command, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+
+/**
+ * A plugin's newest published version, from `npm view` in `cwd`, so the person's .npmrc applies:
+ * a private registry, or a token for a paid plugin. Plugins release apart from the CMS, so a
+ * site can't assume they share its version.
+ *
+ * @param {string} pkg
+ * @param {{ cwd?: string, run?: Run }} [options]
+ * @returns {string}
+ */
+export function latestVersion(pkg, { cwd = process.cwd(), run = runCommand } = {}) {
+  let output
+  try {
+    output = run('npm', ['view', pkg, 'version'], { cwd })
+  } catch (error) {
+    const stderr = /** @type {{ stderr?: unknown }} */ (error).stderr
+    const reason =
+      String(stderr ?? '')
+        .split('\n')
+        .find((line) => line.trim()) ?? (error instanceof Error ? error.message : String(error))
+    throw new Error(`Can't find ${pkg} on npm: ${reason.trim()}`, { cause: error })
+  }
+  const version = output.trim().split('\n').pop()?.trim() ?? ''
+  if (!VERSION.test(version)) {
+    throw new Error(`npm view ${pkg} version printed "${output.trim()}", not a version`)
+  }
+  return version
 }
 
 /** The package manager that ran us, from npm_config_user_agent (`pnpm/10.5.2 npm/? node/…`). */
@@ -147,14 +186,19 @@ export default withCms({ turbopack: { root }, outputFileTracingRoot: root })
  *   name: string
  *   version: string
  *   plugins: string[]
+ *   pluginVersions: Record<string, string>
  *   link?: Record<string, string>
  *   target: string
  * }} input
  */
-function packageJson({ name, version, plugins, link, target }) {
-  /** @param {string} pkg */
+function packageJson({ name, version, plugins, pluginVersions, link, target }) {
+  /**
+   * The CMS's packages at this release; plugins at their own newest version.
+   *
+   * @param {string} pkg
+   */
   const spec = (pkg) => {
-    if (!link) return `^${version}`
+    if (!link) return `^${pluginVersions[pkg] ?? version}`
     if (!link[pkg]) throw new Error(`${pkg} is not in the linked checkout`)
     return `link:${relative(target, link[pkg])}`
   }
@@ -193,15 +237,30 @@ function packageJson({ name, version, plugins, link, target }) {
  *   plugins?: string[]
  *   packageManager?: PackageManager
  *   link?: string
- * }} options
+ *   resolveVersion?: (pkg: string) => string | Promise<string>
+ * }} options `resolveVersion` gives a plugin's newest version: `npm view` unless a test says.
  */
-export async function scaffold({ target, version, plugins = [], packageManager = 'npm', link }) {
+export async function scaffold({
+  target,
+  version,
+  plugins = [],
+  packageManager = 'npm',
+  link,
+  resolveVersion = (pkg) => latestVersion(pkg),
+}) {
   const existing = await readdir(target).catch(() => [])
   if (existing.length > 0) throw new Error(`${target} is not empty`)
   const name = siteName(target)
   const packages = plugins.map(pluginPackage)
   const invalid = packages.find((pkg) => !PACKAGE_NAME.test(pkg))
   if (invalid) throw new Error(`Invalid plugin package name: ${invalid}`)
+  // Before anything is written, so a plugin npm doesn't know leaves no half-made site behind.
+  // A linked checkout brings its own plugins.
+  /** @type {Record<string, string>} */
+  const pluginVersions = {}
+  if (!link) {
+    for (const pkg of packages) pluginVersions[pkg] = await resolveVersion(pkg)
+  }
 
   await mkdir(target, { recursive: true })
   await cp(TEMPLATE, target, { recursive: true })
@@ -232,6 +291,7 @@ export async function scaffold({ target, version, plugins = [], packageManager =
     name,
     version,
     plugins: packages,
+    pluginVersions,
     link: linked,
     target: resolve(target),
   })
