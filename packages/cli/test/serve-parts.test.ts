@@ -1,10 +1,10 @@
-import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MARKER } from '../src/generate.ts'
 import { startRelease } from '../src/serve/processes.ts'
-import { buildRelease, writeBack } from '../src/serve/releases.ts'
+import { buildRelease, migrateRelease, removeRelease, writeBack } from '../src/serve/releases.ts'
 import { backupDatabase, loadState, restoreDatabase, saveState } from '../src/serve/state.ts'
 
 let root: string
@@ -154,6 +154,100 @@ describe('writeBack', () => {
       'package-lock.json',
     ])
     expect(await readFile(join(dir, 'package-lock.json'), 'utf8')).toBe('site lock\n')
+  })
+})
+
+describe('migrateRelease', () => {
+  const postgres = { DATABASE_URL: 'postgres://cms:secret@db.invalid:5432/cms' }
+  const now = () => new Date('2026-11-01T10:00:00.000Z')
+  let path: string | undefined
+  beforeEach(async () => {
+    // A pg_dump that writes the file it is given, first on the PATH.
+    const bin = join(root, 'bin')
+    await write(
+      join(bin, 'pg_dump'),
+      '#!/bin/sh\nfor arg in "$@"; do case "$arg" in --file=*) echo dump > "${arg#--file=}";; esac; done\n',
+    )
+    await chmod(join(bin, 'pg_dump'), 0o755)
+    path = process.env.PATH
+    process.env.PATH = `${bin}${delimiter}${path}`
+  })
+  afterEach(() => {
+    process.env.PATH = path
+  })
+
+  /** A release whose `cms migrate` records its arguments and backs up into `--root`, as the real one does. */
+  async function release(site: string) {
+    const dir = join(site, '.cms', 'releases', 'r1')
+    const cli = join(dir, 'node_modules', '@otwdesign', 'cli')
+    await write(join(cli, 'package.json'), json({ name: '@otwdesign/cli', type: 'module' }))
+    await write(
+      join(cli, 'bin', 'cms.js'),
+      [
+        "import { mkdirSync, writeFileSync } from 'node:fs'",
+        "import { join } from 'node:path'",
+        'const args = process.argv.slice(2)',
+        "writeFileSync('migrate-args.json', JSON.stringify(args))",
+        "if (!args.includes('--no-backup')) {",
+        "  const backups = join(args[args.indexOf('--root') + 1], '.data', 'backups')",
+        '  mkdirSync(backups, { recursive: true })',
+        "  writeFileSync(join(backups, 'postgres.dump'), 'dump')",
+        '}',
+      ].join('\n'),
+    )
+    return { id: 'r1', dir, createdAt: now().toISOString(), versions: {} }
+  }
+  const backups = (dir: string) => readdir(join(dir, '.data', 'backups')).catch(() => [])
+  const args = async (dir: string) =>
+    JSON.parse(await readFile(join(dir, 'migrate-args.json'), 'utf8')) as string[]
+
+  it('dumps Postgres into the site’s own .data/backups, which outlive the release', async () => {
+    const site = join(root, 'site')
+    const built = await release(site)
+    await migrateRelease(built, () => {}, {
+      site,
+      siteEnv: postgres,
+      backup: true,
+      releaseEnv: {},
+      now,
+    })
+    expect(await backups(site)).toEqual(['postgres-2026-11-01T10-00-00-000Z.dump'])
+    expect(await backups(built.dir)).toEqual([])
+    expect(await args(built.dir)).toEqual(['migrate', '--root', built.dir, '--no-backup'])
+
+    // Pruned, as the fourth release prunes the first.
+    await removeRelease(built)
+    expect(await backups(site)).toHaveLength(1)
+  })
+
+  it('takes no dump when the host takes backups, or for the embedded database', async () => {
+    const site = join(root, 'site')
+    const built = await release(site)
+    for (const [siteEnv, backup] of [
+      [postgres, false],
+      [{}, true],
+    ] as const) {
+      await migrateRelease(built, () => {}, { site, siteEnv, backup, releaseEnv: {}, now })
+      expect(await args(built.dir)).toContain('--no-backup')
+    }
+    expect(await backups(site)).toEqual([])
+    expect(await backups(built.dir)).toEqual([])
+  })
+
+  it('without pg_dump, stops before migrating and names the serve option that skips the dump', async () => {
+    const site = join(root, 'site')
+    const built = await release(site)
+    process.env.PATH = join(root, 'empty-bin')
+    await expect(
+      migrateRelease(built, () => {}, {
+        site,
+        siteEnv: postgres,
+        backup: true,
+        releaseEnv: {},
+        now,
+      }),
+    ).rejects.toThrow('`cms serve --no-backup`')
+    await expect(access(join(built.dir, 'migrate-args.json'))).rejects.toThrow()
   })
 })
 

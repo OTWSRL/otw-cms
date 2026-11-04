@@ -9,7 +9,7 @@ import { detectPackageManager, planSite } from '../update.ts'
 import { ControlError, createControlServer } from './control.ts'
 import { startRelease } from './processes.ts'
 import { createProxy } from './proxy.ts'
-import { buildRelease, removeRelease, step, writeBack } from './releases.ts'
+import { buildRelease, migrateRelease, removeRelease, writeBack } from './releases.ts'
 import { backupDatabase, loadState, restoreDatabase, saveState } from './state.ts'
 import { Supervisor, type Log } from './supervisor.ts'
 
@@ -92,20 +92,12 @@ export async function serve(options: ServeOptions): Promise<void> {
       plan: (release, scope) => planSite(release.dir, scope),
       build: (id, changes, log) => buildRelease(builder, id, changes, log),
       migrate: (release, log) =>
-        step(
-          process.execPath,
-          [
-            join(release.dir, 'node_modules', '@otwdesign', 'cli', 'bin', 'cms.js'),
-            'migrate',
-            '--root',
-            release.dir,
-            // The supervisor copies the embedded database itself, and puts it back on failure.
-            ...(database === 'embedded' || !options.backup ? ['--no-backup'] : []),
-          ],
-          release.dir,
-          log,
+        migrateRelease(release, log, {
+          site: root,
+          siteEnv: env,
+          backup: options.backup,
           releaseEnv,
-        ),
+        }),
       backup: async () =>
         database === 'embedded'
           ? backupDatabase(dataDir, join(root, '.cms', 'backups'), new Date())

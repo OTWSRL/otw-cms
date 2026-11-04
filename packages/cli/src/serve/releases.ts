@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import type { PackageChange } from '@otwdesign/core'
+import type { Env, PackageChange } from '@otwdesign/core'
 import { MARKER, removeRoute } from '../generate.ts'
+import { backUp } from '../migrate.ts'
 import { CORE_PACKAGES, readSitePackages, writeChanges, type PackageManager } from '../update.ts'
 import type { BuiltRelease, Log } from './supervisor.ts'
 
@@ -135,6 +136,52 @@ export async function buildRelease(
     ),
   )
   return { id, dir, createdAt: new Date().toISOString(), versions }
+}
+
+export interface ReleaseMigration {
+  site: string
+  /** The site's environment, which has its DATABASE_URL. */
+  siteEnv: Env
+  /** False for Postgres hosts that take their own backups. */
+  backup: boolean
+  /** The environment releases run with. */
+  releaseEnv: NodeJS.ProcessEnv
+  now?: () => Date
+}
+
+/**
+ * Runs the release's own `cms migrate`, which knows the release's plugins and migrations, but
+ * never lets it back up: it would write into the release's folder, deleted when the release is
+ * pruned. Postgres is dumped from here into the site's `.data/backups`, as `cms migrate` does in
+ * the site; the supervisor copies the embedded database itself, and puts it back on failure.
+ */
+export async function migrateRelease(
+  release: BuiltRelease,
+  log: Log,
+  { site, siteEnv, backup, releaseEnv, now }: ReleaseMigration,
+): Promise<void> {
+  if (siteEnv.DATABASE_URL && backup) {
+    const file = await backUp({
+      root: site,
+      env: siteEnv,
+      now,
+      withoutBackup: 'cms serve --no-backup',
+    })
+    if (file) log(`Backed up the database to ${relative(site, file)}`)
+  }
+  await step(
+    process.execPath,
+    [
+      join(release.dir, 'node_modules', '@otwdesign', 'cli', 'bin', 'cms.js'),
+      'migrate',
+      '--root',
+      release.dir,
+      '--no-backup',
+    ],
+    release.dir,
+    log,
+    releaseEnv,
+  )
 }
 
 /** Files `cms generate` owns in a tree, relative to it. */

@@ -37,14 +37,19 @@ async function pgDumpAvailable(): Promise<boolean> {
  * Copies the embedded database's directory, or dumps Postgres with `pg_dump`. The password goes
  * through the environment, not the command line, where other users could read it.
  */
-async function backUp(options: MigrateOptions): Promise<string | null> {
+export async function backUp(
+  options: Pick<MigrateOptions, 'root' | 'env' | 'now' | 'hasPgDump'> & {
+    /** The command that skips the backup, for the error when `pg_dump` is missing. */
+    withoutBackup?: string
+  },
+): Promise<string | null> {
   const { env, root } = options
   const stamp = (options.now ?? (() => new Date()))().toISOString().replace(/[:.]/g, '-')
   if (env.DATABASE_URL) {
     const dir = join(root, '.data', 'backups')
     if (!(await (options.hasPgDump ?? pgDumpAvailable)())) {
       throw new Error(
-        'pg_dump is not installed, so the database cannot be backed up first. Take a backup (many hosts do this for you), then run `cms migrate --no-backup`.',
+        `pg_dump is not installed, so the database cannot be backed up first. Take a backup (many hosts do this for you), then run \`${options.withoutBackup ?? 'cms migrate --no-backup'}\`.`,
       )
     }
     const url = new URL(env.DATABASE_URL)
