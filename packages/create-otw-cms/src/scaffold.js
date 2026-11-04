@@ -32,7 +32,8 @@ const THIRD_PARTY_DEV = {
 }
 
 /**
- * `commerce` means the first-party `@otwdesign/plugin-commerce`; anything else is a package name.
+ * A short name such as `lms` means the first-party `@otwdesign/plugin-lms`; anything else is a
+ * package name.
  *
  * @param {string} name
  */

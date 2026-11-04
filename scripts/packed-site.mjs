@@ -5,24 +5,22 @@
 //
 //   node scripts/packed-site.mjs [--keep]
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')
-const PACKAGES = [
-  'packages/sdk',
-  'packages/core',
-  'packages/admin-ui',
-  'packages/next',
-  'packages/cli',
-  'packages/testing',
-  'packages/create-otw-cms',
-  'plugins/commerce',
-  'plugins/commerce-stripe',
-  'plugins/mail-file',
-]
-const PLUGINS = ['commerce', 'commerce-stripe', 'mail-file']
+const manifestOf = (dir) => JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8'))
+const published = (parent) =>
+  readdirSync(join(ROOT, parent))
+    .map((name) => `${parent}/${name}`)
+    .filter((dir) => !manifestOf(dir).private)
+
+// What npm gets: every package not marked private. A held-back plugin (private for now) is left
+// out, and joins once it's published.
+const PACKAGES = [...published('packages'), ...published('plugins')]
+// The site starts with every published first-party plugin, by its short name.
+const PLUGINS = published('plugins').map((dir) => dir.slice('plugins/'.length))
 
 const keep = process.argv.includes('--keep')
 const work = mkdtempSync(join(tmpdir(), 'otw-packed-site-'))
@@ -34,7 +32,7 @@ try {
   const tarballs = join(work, 'tarballs')
   const byName = new Map()
   for (const dir of PACKAGES) {
-    const { name, version } = JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8'))
+    const { name, version } = manifestOf(dir)
     run('pnpm', ['pack', '--pack-destination', tarballs], join(ROOT, dir))
     byName.set(name, join(tarballs, `${name.replace('@', '').replace('/', '-')}-${version}.tgz`))
   }

@@ -1,6 +1,7 @@
 {
   "name": "@otwdesign/plugin-commerce",
   "version": "1.0.0",
+  "private": true,
   "description": "A shop for OTW CMS: products, shop and product pages, checkout and orders, with payment gateways from other plugins.",
   "license": "Apache-2.0",
   "author": "OTW SRL",

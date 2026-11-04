@@ -1,6 +1,7 @@
 {
   "name": "@otwdesign/plugin-commerce-stripe",
   "version": "1.0.0",
+  "private": true,
   "description": "Card payments through Stripe Checkout for OTW CMS Commerce, confirmed by Stripe's signed webhooks.",
   "license": "Apache-2.0",
   "author": "OTW SRL",
