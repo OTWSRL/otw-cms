@@ -105,11 +105,16 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # As npm's trusted publishing example has it.
+          registry-url: https://registry.npmjs.org
           cache: pnpm
       # Trusted publishing needs npm 11.5.1 or later; pnpm hands the upload to npm.
       - run: npm install --global npm@11
       - run: pnpm install --frozen-lockfile
       - uses: changesets/action/publish@v2
+        env:
+          # npm explains a refused trusted publish only in its detailed log.
+          NPM_CONFIG_LOGLEVEL: verbose
         with:
           pack-dir-artifact-id: ${{ needs.pack.outputs.pack-dir-artifact-id }}
           create-github-releases: true
