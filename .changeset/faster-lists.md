@@ -9,4 +9,6 @@ core/0011_entry_counts), instead of reading every entry: at 31,500 posts, about 
 under 0.5 ms. Category and tag filters find the terms once per query. The embedded database
 analyzes and vacuums itself on autovacuum's rules, which PGlite never ran, so its query plans
 fit the data. Its lock also records when its process started, so a container that restarts
-takes it over instead of failing with "open in another process" until the lock is deleted.
+takes it over instead of failing with "open in another process" until the lock is deleted. A
+1.0 site's lock, which has no start time, is taken over once the process with its id started
+after the lock was written, as when the site upgrades into a new container.

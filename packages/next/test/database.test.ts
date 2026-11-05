@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -30,7 +30,8 @@ describe('openDatabase', () => {
     const dir = join(root, '.data', 'pglite')
     const lock = `${dir}.lock`
     await mkdir(join(root, '.data'))
-    // The parent process is alive and isn't this one: a running site, say.
+    // The parent process is alive, isn't this one, and was running when the lock was written: a
+    // running site, say, whose lock is from before start times were kept.
     await writeFile(lock, String(process.ppid))
     expect(() => openDatabase({ CMS_DATA_DIR: dir })).toThrow(
       `The embedded database in ${dir} is open in another process (${process.ppid})`,
@@ -57,6 +58,21 @@ describe('openDatabase', () => {
     // The id is alive (this test's parent), but that process started long after the lock's did:
     // a container that restarted gives its processes the same low ids again.
     await writeFile(lock, `${process.ppid} ${Date.now() - 3_600_000}`)
+
+    const { close } = openDatabase({ CMS_DATA_DIR: dir })
+    expect((await readFile(lock, 'utf8')).split(' ')[0]).toBe(String(process.pid))
+    await close()
+  })
+
+  it('takes over a lock from before start times were kept, when its id now names a newer process', async () => {
+    const dir = join(root, '.data', 'pglite')
+    const lock = `${dir}.lock`
+    await mkdir(join(root, '.data'))
+    // A 1.0 site's lock, an hour old, upgraded into a new container where its id is now another
+    // process (this test's parent), one that started after the lock was written.
+    await writeFile(lock, String(process.ppid))
+    const anHourAgo = new Date(Date.now() - 3_600_000)
+    await utimes(lock, anHourAgo, anHourAgo)
 
     const { close } = openDatabase({ CMS_DATA_DIR: dir })
     expect((await readFile(lock, 'utf8')).split(' ')[0]).toBe(String(process.pid))

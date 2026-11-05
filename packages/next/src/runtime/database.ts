@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type { Database } from '@otwdesign/sdk'
 import { PGlite, type PGliteOptions } from '@electric-sql/pglite'
@@ -274,11 +274,17 @@ function processStartedAt(pid: number): number | undefined {
  * a container that restarts hands out the same low ids again, so the id may now belong to
  * another process. When the system can't say when it started, the lock counts as held.
  */
-function ownerRunning(owner: LockOwner): boolean {
+function ownerRunning(owner: LockOwner, file: string): boolean {
   if (owner.pid === process.pid || !isRunning(owner.pid)) return false
-  if (owner.startedAt === undefined) return true
   const started = processStartedAt(owner.pid)
-  return started === undefined || Math.abs(started - owner.startedAt) < SAME_START_MS
+  if (started === undefined) return true
+  if (owner.startedAt !== undefined) return Math.abs(started - owner.startedAt) < SAME_START_MS
+  // A lock from before start times were kept (a 1.0 site's, in the container that replaced its
+  // own): its owner was running when it wrote it, so a process that started later isn't it.
+  const written = statSync(file, { throwIfNoEntry: false })?.mtimeMs
+  // Gone since: its owner let it go.
+  if (written === undefined) return false
+  return started < written + SAME_START_MS
 }
 
 function isRunning(pid: number): boolean {
@@ -300,7 +306,7 @@ function isRunning(pid: number): boolean {
 function claimEmbeddedDatabase(dir: string): () => void {
   const file = `${dir}.lock`
   const owner = lockOwner(file)
-  if (owner && ownerRunning(owner)) {
+  if (owner && ownerRunning(owner, file)) {
     throw new Error(
       `The embedded database in ${dir} is open in another process (${owner.pid}). Stop that process first: only one can use the embedded database. To share a database between processes, use Postgres (DATABASE_URL).`,
     )
