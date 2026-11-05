@@ -3,7 +3,13 @@
  * site directly. Nothing here imports Next.js or `server-only`.
  */
 export { bootSite, type BootOptions } from './runtime/boot'
-export { DEFAULT_DATA_DIR, dataDir, openDatabase, type DatabaseHandle } from './runtime/database'
+export {
+  DEFAULT_DATA_DIR,
+  dataDir,
+  openDatabase,
+  supabasePoolerUrl,
+  type DatabaseHandle,
+} from './runtime/database'
 export {
   activePluginsFromEnv,
   DEFAULT_UPLOADS_DIR,

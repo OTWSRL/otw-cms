@@ -4,7 +4,12 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { migrateSite, type Env } from '@otwdesign/core'
 import type { Site } from '@otwdesign/next'
-import { activePluginsFromEnv, dataDir, openDatabase } from '@otwdesign/next/server'
+import {
+  activePluginsFromEnv,
+  dataDir,
+  openDatabase,
+  supabasePoolerUrl,
+} from '@otwdesign/next/server'
 import type { Logger } from '@otwdesign/sdk'
 
 const run = promisify(execFile)
@@ -34,9 +39,25 @@ async function pgDumpAvailable(): Promise<boolean> {
 }
 
 /**
- * Copies the embedded database's directory, or dumps Postgres with `pg_dump`. The password goes
- * through the environment, not the command line, where other users could read it.
+ * `DATABASE_URL` as `pg_dump` takes it, with the password apart, for the environment rather than
+ * the command line, where other users could read it. A dump runs in one session, so Supabase's
+ * pooler is dumped in session mode. node-postgres's own `uselibpqcompat` goes: libpq refuses
+ * parameters it doesn't know, and its own `sslmode` already means what that one asks for.
  */
+export function pgDumpTarget(databaseUrl: string): { url: string; password: string } {
+  const url = new URL(supabasePoolerUrl(databaseUrl, 'session'))
+  const password = decodeURIComponent(url.password)
+  url.password = ''
+  // By hand rather than through searchParams, which would write the others' %20 as +.
+  const kept = url.search
+    .slice(1)
+    .split('&')
+    .filter((pair) => pair.split('=')[0] !== 'uselibpqcompat')
+  url.search = kept.join('&')
+  return { url: url.href, password }
+}
+
+/** Copies the embedded database's directory, or dumps Postgres with `pg_dump`. */
 export async function backUp(
   options: Pick<MigrateOptions, 'root' | 'env' | 'now' | 'hasPgDump'> & {
     /** The command that skips the backup, for the error when `pg_dump` is missing. */
@@ -52,12 +73,10 @@ export async function backUp(
         `pg_dump is not installed, so the database cannot be backed up first. Take a backup (many hosts do this for you), then run \`${options.withoutBackup ?? 'cms migrate --no-backup'}\`.`,
       )
     }
-    const url = new URL(env.DATABASE_URL)
-    const password = decodeURIComponent(url.password)
-    url.password = ''
+    const { url, password } = pgDumpTarget(env.DATABASE_URL)
     const file = join(dir, `postgres-${stamp}.dump`)
     await mkdir(dir, { recursive: true })
-    await run('pg_dump', ['--format=custom', `--file=${file}`, url.toString()], {
+    await run('pg_dump', ['--format=custom', `--file=${file}`, url], {
       env: { ...process.env, ...(password ? { PGPASSWORD: password } : {}) },
     })
     return file

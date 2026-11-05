@@ -43,6 +43,75 @@ export function sharedBuffers(env: Env = process.env): string {
   return value
 }
 
+/** pg's own: up to 10 connections, each closed after 10 s idle. */
+export const DEFAULT_POOL_MAX = 10
+export const DEFAULT_POOL_IDLE_MS = 10_000
+
+/**
+ * The Postgres pool: `CMS_DB_POOL_MAX` connections at most, each closed after `CMS_DB_POOL_IDLE_MS`
+ * idle (0 keeps them), or pg's defaults. Each serverless instance keeps a pool of its own, so
+ * there a small one, through the database's transaction pooler, keeps under its client limit.
+ */
+export function poolOptions(env: Env = process.env): { max: number; idleTimeoutMillis: number } {
+  return {
+    max: wholeNumber(env, 'CMS_DB_POOL_MAX', DEFAULT_POOL_MAX, 1, 'connections, at least 1'),
+    idleTimeoutMillis: wholeNumber(
+      env,
+      'CMS_DB_POOL_IDLE_MS',
+      DEFAULT_POOL_IDLE_MS,
+      0,
+      'milliseconds, 0 or more',
+    ),
+  }
+}
+
+function wholeNumber(env: Env, name: string, fallback: number, min: number, unit: string): number {
+  const raw = env[name]?.trim()
+  if (!raw) return fallback
+  const value = Number(raw)
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < min) {
+    throw new Error(`${name} must be a whole number of ${unit}, not "${env[name]}".`)
+  }
+  return value
+}
+
+/** How a connection pooler hands out server connections: per transaction, or per client. */
+export type PoolMode = 'transaction' | 'session'
+
+/**
+ * `CMS_DB_POOL_MODE`, `transaction` unless it says `session`. The CMS keeps nothing on a
+ * connection between transactions (its locks are transaction-level), so it suits a transaction
+ * pooler; session mode is for a plugin that does (LISTEN, a session-level lock).
+ */
+export function poolMode(env: Env = process.env): PoolMode {
+  const raw = env.CMS_DB_POOL_MODE?.trim()
+  if (!raw) return 'transaction'
+  if (raw === 'transaction' || raw === 'session') return raw
+  throw new Error(
+    `CMS_DB_POOL_MODE must be "transaction" or "session", not "${env.CMS_DB_POOL_MODE}".`,
+  )
+}
+
+/** Supabase's shared pooler serves both modes on one host, each on a port of its own. */
+const SUPABASE_POOLER = /\.pooler\.supabase\.com$/i
+const POOLER_PORT: Record<PoolMode, string> = { session: '5432', transaction: '6543' }
+
+/**
+ * `url` in `mode` when it's Supabase's shared pooler, whose session mode admits only as many
+ * clients as its pool size (15 on the smallest plan), which serverless instances, each keeping a
+ * pool, soon pass. Any other address is returned as it is: other hosts run each mode on a host of
+ * its own, if at all, so only the address given can say which.
+ */
+export function supabasePoolerUrl(url: string, mode: PoolMode): string {
+  const parsed = URL.parse(url)
+  if (!parsed || !SUPABASE_POOLER.test(parsed.hostname)) return url
+  // No port is PostgreSQL's, 5432, session mode's.
+  const port = parsed.port || POOLER_PORT.session
+  if (port === POOLER_PORT[mode] || !Object.values(POOLER_PORT).includes(port)) return url
+  parsed.port = POOLER_PORT[mode]
+  return parsed.href
+}
+
 /**
  * Postgres when DATABASE_URL is set; otherwise embedded PGlite, so a fresh clone runs with no
  * setup. A new embedded database is created by a process of its own (see
@@ -55,7 +124,8 @@ export function openDatabase(
   { create = true, maintain = false }: { create?: boolean; maintain?: boolean } = {},
 ): DatabaseHandle {
   if (env.DATABASE_URL) {
-    const pool = tracedPool(new Pool({ connectionString: env.DATABASE_URL }))
+    const connectionString = supabasePoolerUrl(env.DATABASE_URL, poolMode(env))
+    const pool = tracedPool(new Pool({ connectionString, ...poolOptions(env) }))
     return { db: drizzlePostgres(pool), close: () => pool.end() }
   }
   // Parameters given replace PGlite's own, so its defaults come first.

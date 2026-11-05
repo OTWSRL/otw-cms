@@ -7,7 +7,7 @@ import { createMemoryLogger } from '@otwdesign/core'
 import type { Migration } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { migrate } from '../src/migrate.ts'
+import { migrate, pgDumpTarget } from '../src/migrate.ts'
 
 const run = promisify(execFile)
 
@@ -78,6 +78,44 @@ describe('cms migrate', () => {
       hasPgDump: async () => false,
     })
     await expect(migrate(postgres)).rejects.toThrow('run `cms migrate --no-backup`')
+  })
+})
+
+describe('pgDumpTarget', () => {
+  it('passes the password through the environment, not the command line', () => {
+    expect(pgDumpTarget('postgres://cms:s%40cret@db.example.com:5432/cms')).toEqual({
+      url: 'postgres://cms@db.example.com:5432/cms',
+      password: 's@cret',
+    })
+    expect(pgDumpTarget('postgres://cms@db.example.com/cms')).toEqual({
+      url: 'postgres://cms@db.example.com/cms',
+      password: '',
+    })
+  })
+
+  it('drops node-postgres’s uselibpqcompat, which pg_dump refuses, keeping the other parameters', () => {
+    expect(
+      pgDumpTarget('postgres://cms@db.example.com/cms?uselibpqcompat=true&sslmode=require').url,
+    ).toBe('postgres://cms@db.example.com/cms?sslmode=require')
+    expect(
+      pgDumpTarget(
+        'postgres://cms@db.example.com/cms?options=-c%20search_path%3Dcms&uselibpqcompat=true',
+      ).url,
+    ).toBe('postgres://cms@db.example.com/cms?options=-c%20search_path%3Dcms')
+    expect(pgDumpTarget('postgres://cms@db.example.com/cms?uselibpqcompat=true').url).toBe(
+      'postgres://cms@db.example.com/cms',
+    )
+  })
+
+  it('dumps Supabase’s pooler in session mode, as a dump runs in one session', () => {
+    expect(
+      pgDumpTarget(
+        'postgres://postgres.abcd:secret@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?uselibpqcompat=true&sslmode=require',
+      ),
+    ).toEqual({
+      url: 'postgres://postgres.abcd@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require',
+      password: 'secret',
+    })
   })
 })
 
