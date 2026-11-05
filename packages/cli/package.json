@@ -1,6 +1,6 @@
 {
   "name": "@otwdesign/cli",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "The cms command for OTW CMS sites: generate, migrate, update and serve.",
   "license": "Apache-2.0",
   "author": "OTW SRL",

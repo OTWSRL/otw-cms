@@ -1,5 +1,20 @@
 # @otwdesign/testing
 
+## 1.1.0
+
+### Patch Changes
+
+- 9ee2102: A lighter server. A new embedded database is created by a short-lived process of its own, so the
+  site's server no longer keeps the 700 MB that takes until it restarts, and the embedded database
+  keeps a 16 MB cache instead of PostgreSQL's 128 MB, which `CMS_SHARED_BUFFERS` can raise. sharp
+  loads with the first image, and OpenTelemetry's SDK once a plugin turns tracing on. Measured on
+  the CMS's test site: a first start used about 340 MB, down from about 950 MB, and a running site
+  about 310 MB, down from about 440 MB.
+- Updated dependencies [b4b391e]
+- Updated dependencies [9ee2102]
+  - @otwdesign/core@1.1.0
+  - @otwdesign/sdk@1.1.0
+
 ## 1.0.2
 
 ### Patch Changes
