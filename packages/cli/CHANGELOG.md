@@ -1,5 +1,17 @@
 # @otwdesign/cli
 
+## 1.2.0
+
+### Patch Changes
+
+- 0738169: `cms migrate` and `cms serve` back up PostgreSQL from a `DATABASE_URL` with `uselibpqcompat=true`,
+  which `pg_dump` refused ("invalid URI query parameter"), and dump Supabase's pooler in session
+  mode, as a dump runs in one session.
+- Updated dependencies [0738169]
+  - @otwdesign/next@1.2.0
+  - @otwdesign/core@1.2.0
+  - @otwdesign/sdk@1.2.0
+
 ## 1.1.0
 
 ### Patch Changes

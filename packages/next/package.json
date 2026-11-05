@@ -1,6 +1,6 @@
 {
   "name": "@otwdesign/next",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "OTW CMS on Next.js: the admin, the site's pages, the plugin API routes, uploads, and withCms() for next.config.",
   "license": "Apache-2.0",
   "author": "OTW SRL",
