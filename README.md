@@ -556,11 +556,10 @@ packages and the scaffolder share one version; each plugin has its own (see
 [.changeset/README.md](.changeset/README.md)).
 
 - With a change that should reach npm, add a changeset: `pnpm changeset`.
-- After CI passes on `main`, the release workflow opens or updates the "Version Packages" pull
-  request. Merging it publishes the new versions through npm trusted publishing, with provenance:
-  no npm token is stored anywhere.
-- `pnpm version-packages` is the version step on its own: `changeset version`, then
-  `CORE_VERSION` follows core's `package.json`.
+- To release, run `pnpm version-packages` (`changeset version`, then `CORE_VERSION` follows
+  core's `package.json`), commit the result and push it to `main`. There's no pull request.
+- After CI passes on that commit, the release workflow publishes the new versions through npm
+  trusted publishing, with provenance: no npm token is stored anywhere.
 
 ## Roadmap
 

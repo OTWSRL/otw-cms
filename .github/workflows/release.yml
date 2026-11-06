@@ -1,15 +1,14 @@
 name: Release
 
 # Runs after CI passes on main, so nothing is released from a commit whose checks or e2e failed.
-# - Changesets waiting: opens or updates the "Version Packages" pull request (versions, changelogs,
-#   CORE_VERSION).
-# - That pull request merged: packs the packages whose version isn't on npm yet and publishes them
-#   through npm trusted publishing, with provenance and no npm token. Only the publish job can
-#   mint the OIDC token npm accepts.
+# A release is a commit on main, with no pull request: run `pnpm version-packages` (versions,
+# changelogs, CORE_VERSION), commit it and push. Once CI passes on it, this packs the packages
+# whose version isn't on npm yet and publishes them through npm trusted publishing, with
+# provenance and no npm token. Only the publish job can mint the OIDC token npm accepts. While
+# changesets are waiting to be versioned, it does nothing.
 #
-# Repository settings: Actions › General › "Allow GitHub Actions to create and approve pull
-# requests" must be on for the version job. Each package on npmjs.com names this repository and
-# this workflow file (release.yml) as its trusted publisher.
+# Each package on npmjs.com names this repository and this workflow file (release.yml) as its
+# trusted publisher.
 
 on:
   workflow_run:
@@ -44,28 +43,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - id: mode
         uses: changesets/action/select-mode@v2
-
-  version:
-    needs: select-mode
-    if: needs.select-mode.outputs.mode == 'version'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: changesets/action/version@v2
-        with:
-          # changeset version, then CORE_VERSION follows core's package.json.
-          script: pnpm version-packages
 
   pack:
     needs: select-mode

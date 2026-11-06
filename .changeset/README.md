@@ -10,5 +10,5 @@ the bump, and describe the change for the changelog. Commit the file with the ch
 - A minor or patch release of core never breaks the plugin API; a change that does is a major
   one, after a deprecation in a minor release first.
 
-On `main`, the release workflow opens a "Version Packages" pull request with the bumps and the
-changelogs. Merging it publishes to npm.
+To release, run `pnpm version-packages`, which writes the bumps and the changelogs, then commit
+and push to `main`. Once CI passes, the release workflow publishes to npm.
