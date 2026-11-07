@@ -42,6 +42,7 @@ pnpm install
 pnpm dev             # http://localhost:3000, admin at /admin
 pnpm check           # lint, format, typecheck, unit + integration tests
 pnpm test:e2e        # Playwright against a production build, desktop plus phone and tablet
+pnpm test:all        # everything CI runs: check, the packed site, e2e
 ```
 
 The phone and tablet runs use Playwright's WebKit as well as Chromium; install it once with

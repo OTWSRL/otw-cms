@@ -16,6 +16,7 @@
     "test": "vitest run --testTimeout=15000",
     "test:watch": "vitest --testTimeout=15000",
     "test:e2e": "pnpm --filter @otwdesign/web test:e2e",
+    "test:all": "pnpm check && node scripts/packed-site.mjs && pnpm test:e2e",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-core-version.mjs",
