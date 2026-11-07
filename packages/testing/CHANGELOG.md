@@ -1,5 +1,12 @@
 # @otwdesign/testing
 
+## 1.2.0
+
+### Patch Changes
+
+- @otwdesign/core@1.2.0
+  - @otwdesign/sdk@1.2.0
+
 ## 1.1.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @otwdesign/admin-ui
 
+## 1.2.0
+
+### Patch Changes
+
+- @otwdesign/sdk@1.2.0
+
 ## 1.1.0
 
 ### Patch Changes
