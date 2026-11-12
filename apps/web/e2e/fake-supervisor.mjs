@@ -48,7 +48,26 @@ const state = {
   },
   job: null,
   requests: [],
+  /** What Plugins › Add Plugins and Delete asked for. */
+  plugins: [],
 }
+
+/** What npm's search would answer: two tagged plugins, one of them on the site already. */
+const DIRECTORY = [
+  {
+    name: '@acme/forum',
+    version: '1.2.0',
+    description: 'Topics and replies for your site.',
+    keywords: ['otw-cms-plugin', 'forum'],
+    publisher: { username: 'acme' },
+  },
+  {
+    name: 'library-fixture',
+    version: '0.1.0',
+    description: 'Books on the site and loans in the admin.',
+    keywords: ['otw-cms-plugin', 'books'],
+  },
+]
 
 /** Each status read moves a running job one step on, so the screen's progress can be watched. */
 function advance() {
@@ -60,7 +79,14 @@ function advance() {
   if (pending) pending.status = 'running'
   if (job.steps.every((step) => step.status === 'done')) {
     job.status = 'succeeded'
-    job.summary = job.kind === 'rollback' ? 'Rolled back.' : `Updated: ${job.describe}.`
+    job.summary =
+      job.kind === 'rollback'
+        ? 'Rolled back.'
+        : job.kind === 'install'
+          ? `Installed ${job.describe} 1.2.0. Activate it on the Plugins screen.`
+          : job.kind === 'remove'
+            ? `Removed ${job.describe}.`
+            : `Updated: ${job.describe}.`
     job.finishedAt = new Date().toISOString()
   }
 }
@@ -133,12 +159,43 @@ const routes = {
       },
     ]
   },
+  'POST /install': (body) => {
+    state.plugins.push({ install: body.package })
+    return (
+      startJob('install', UPDATE_STEPS, body.package) ?? [
+        200,
+        { notice: `Installing ${body.package}. Dashboard › Updates shows the progress.` },
+      ]
+    )
+  },
+  'POST /remove': (body) => {
+    state.plugins.push({ remove: body.package })
+    return (
+      startJob('remove', UPDATE_STEPS, body.package) ?? [
+        200,
+        { notice: `Removing ${body.package}. Dashboard › Updates shows the progress.` },
+      ]
+    )
+  },
   // For the tests: what the admin asked for.
   'GET /requests': () => [200, state.requests],
+  'GET /plugin-requests': () => [200, state.plugins],
 }
 
 createServer((request, response) => {
   if (request.url === '/health') return response.end('ok')
+  // Stands in for npm's search too, which takes no token: CMS_PLUGIN_SEARCH_URL points here.
+  if (request.url.startsWith('/search?')) {
+    const words = (new URL(request.url, 'http://x').searchParams.get('text') ?? '')
+      .split(' ')
+      .filter((word) => word && !word.startsWith('keywords:'))
+    const found = DIRECTORY.filter((plugin) =>
+      words.every((word) => `${plugin.name} ${plugin.description}`.toLowerCase().includes(word)),
+    )
+    return response
+      .writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ objects: found.map((plugin) => ({ package: plugin })) }))
+  }
   if (request.headers.authorization !== `Bearer ${TOKEN}`) {
     return response.writeHead(401).end('{"error":"Unauthorized"}')
   }

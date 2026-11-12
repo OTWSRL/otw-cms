@@ -103,6 +103,16 @@ export const CORE_MENU: readonly MenuEntry[] = [
     parent: 'plugins',
   },
   {
+    // WordPress's plugin-install.php.
+    key: 'core.plugin-install',
+    pluginId: 'core',
+    label: 'Add Plugin',
+    url: '/admin/plugins/new',
+    order: 1,
+    capability: 'core.install_plugins',
+    parent: 'plugins',
+  },
+  {
     key: 'core.users',
     pluginId: 'core',
     label: 'All Users',

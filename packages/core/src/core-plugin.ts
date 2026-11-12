@@ -19,7 +19,7 @@ import type { JobService } from './jobs'
 import { WebhookError, type WebhookService } from './webhooks'
 import type { WebhookStatus } from './core-schema'
 import type { SettingsLayoutStore } from './settings-pages'
-import type { AutoUpdateMode, UpdateService } from './updates'
+import { isPackageName, type AutoUpdateMode, type UpdateService } from './updates'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
 import { isMailbox } from './mail'
 import { CORE_VERSION } from './version'
@@ -176,6 +176,8 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
   // No role gets it: updating rebuilds the site, so it stays with administrators unless granted.
   capabilities.capability(CORE, 'core.manage_updates', { label: 'Update the CMS and plugins' })
+  // Nor this: a plugin is code that runs on the server.
+  capabilities.capability(CORE, 'core.install_plugins', { label: 'Add and remove plugins' })
   // Nor this: a webhook sends the site's data to an address of the holder's choosing.
   capabilities.capability(CORE, 'core.manage_webhooks', { label: 'Manage webhooks' })
   // No role gets it either: the queue shows every plugin's jobs and what they were given.
@@ -317,6 +319,8 @@ export interface CoreActionDependencies {
   auth: AuthService
   /** Whether the user may use the admin; others sign in to their account on the site instead. */
   canUseAdmin(user: User): boolean
+  /** Whether the user may activate, deactivate and delete the data of plugins. */
+  canManagePlugins(user: User): boolean
   /** Each returns the notice to show. */
   activate(pluginId: string): Promise<string>
   deactivate(pluginId: string): Promise<string>
@@ -428,6 +432,30 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
       name: 'deactivate-plugin',
       capability: 'core.manage_plugins',
       handler: async ({ form }) => ({ notice: await deps.deactivate(field(form, 'plugin')) }),
+    },
+    {
+      // WordPress's Delete: the plugin's data, then its package, which takes a rebuild.
+      name: 'delete-plugin',
+      capability: 'core.install_plugins',
+      async handler({ form, user }) {
+        const name = packageField(form)
+        if (!deps.updates?.remove) throw new ActionError(NO_INSTALL)
+        if (!user || !deps.canManagePlugins(user)) {
+          throw new ActionError('Deleting a plugin also takes the capability to manage plugins.')
+        }
+        // The data first, in its transaction: if that fails, the package stays too.
+        const deleted = await deps.uninstall(field(form, 'plugin'))
+        let removing: string
+        try {
+          removing = await deps.updates.remove(name)
+        } catch (error) {
+          // Half done, and said so: the data is gone, the package can be removed again later.
+          throw new ActionError(
+            `${deleted} The plugin itself wasn’t removed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+        return { redirect: `${ADMIN_PREFIX}/plugins`, notice: `${deleted} ${removing}` }
+      },
     },
     {
       // WordPress's Delete, for the plugin's data: its package stays installed.
@@ -549,6 +577,20 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
   ]
 }
 
+const NO_INSTALL =
+  'Adding and removing plugins from the admin needs the site to run under `cms serve`, or a GitHub repository. Run `cms plugin add` or `cms plugin remove` where the site is built instead.'
+
+/** The package a form names: an npm package's name and nothing else. */
+function packageField(form: FormData): string {
+  const name = field(form, 'package').trim()
+  if (!isPackageName(name)) {
+    throw new ActionError(
+      'Use the plugin’s package name on npm, such as @acme/forum: no version, address or path.',
+    )
+  }
+  return name
+}
+
 const NO_UPDATES =
   'Updates from the admin need the site to run under `cms serve`, or a GitHub repository. Run `cms update` on the server instead.'
 
@@ -559,6 +601,16 @@ function updateActions(updates: UpdateService | null): InternalAction[] {
     return updates
   }
   return [
+    {
+      // WordPress's Install Now: the plugin's package is added and the site rebuilt.
+      name: 'install-plugin',
+      capability: 'core.install_plugins',
+      async handler({ form }) {
+        const name = packageField(form)
+        if (!updates?.install) throw new ActionError(NO_INSTALL)
+        return { notice: await updates.install(name) }
+      },
+    },
     {
       name: 'check-updates',
       capability: 'core.manage_updates',

@@ -6,6 +6,17 @@
 
 export type AutoUpdateMode = 'off' | 'patch'
 
+/** What plugin packages are tagged with on npm, so the admin's Add Plugins search finds them. */
+export const PLUGIN_KEYWORD = 'otw-cms-plugin'
+
+/** npm's own rule for a package name, scoped or not: nothing that could be a path, URL or range. */
+const PACKAGE_NAME = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
+
+/** Whether `name` is an npm package's name and nothing else, safe to hand to a package manager. */
+export function isPackageName(name: string): boolean {
+  return name.length <= 214 && PACKAGE_NAME.test(name)
+}
+
 export interface PackageChange {
   name: string
   /** Empty when the package is being added to the site. */

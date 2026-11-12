@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { Brand } from '@otwdesign/core'
+import { isPackageName, type Brand } from '@otwdesign/core'
 import semver from 'semver'
 
 const run = promisify(execFile)
@@ -417,16 +417,10 @@ export async function planSite(
   return planUpdate(site, packuments, { ...scope, only })
 }
 
-/** What plugin packages are tagged with on npm, so the admin's Add Plugin search finds them. */
-export const PLUGIN_KEYWORD = 'otw-cms-plugin'
-
-/** npm's own rule for a package name, scoped or not: nothing that could be a path, URL or range. */
-const PACKAGE_NAME = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
-
 /** The name as npm knows it, or an error for the person who typed it. */
 export function packageName(name: string): string {
   const trimmed = name.trim()
-  if (trimmed.length > 214 || !PACKAGE_NAME.test(trimmed)) {
+  if (!isPackageName(trimmed)) {
     throw new Error(
       `"${trimmed}" isn't a package name. Use the plugin's name on npm, such as @acme/forum.`,
     )

@@ -237,6 +237,12 @@ export interface Capabilities {
   /** Update the CMS and plugins from Dashboard › Updates. Only administrators have it until a role is granted it. */
   'core.manage_updates': true
   /**
+   * Add plugins from npm (Plugins › Add Plugins) and remove them, like WordPress's
+   * `install_plugins` and `delete_plugins`. Only administrators have it until a role is granted
+   * it: a plugin is code that runs on the server.
+   */
+  'core.install_plugins': true
+  /**
    * Add, change and delete webhooks in Settings › Webhooks, and see their secrets. Only
    * administrators have it until a role is granted it: a webhook sends the site's data elsewhere.
    */

@@ -23,6 +23,7 @@ import { ContentTermsScreen } from './screens/content-terms'
 import type { ScreenContext } from './screens/context'
 import { DashboardScreen } from './screens/dashboard'
 import { LoginScreen } from './screens/login'
+import { PluginInstallScreen } from './screens/plugin-install'
 import { PluginsScreen } from './screens/plugins'
 import { RolesScreen } from './screens/roles'
 import { SetupScreen } from './screens/setup'
@@ -57,6 +58,11 @@ interface CoreScreen {
 const SCREENS: Readonly<Record<string, CoreScreen>> = {
   '/admin': { title: 'Dashboard', Screen: DashboardScreen },
   '/admin/plugins': { title: 'Plugins', capability: 'core.manage_plugins', Screen: PluginsScreen },
+  '/admin/plugins/new': {
+    title: 'Add Plugins',
+    capability: 'core.install_plugins',
+    Screen: PluginInstallScreen,
+  },
   '/admin/users': { title: 'Users', capability: 'core.manage_users', Screen: UsersScreen },
   '/admin/users/new': {
     title: 'Add User',

@@ -58,6 +58,8 @@ export default defineConfig({
         COURIER_API_KEY: '',
         CMS_SUPERVISOR_URL: `http://127.0.0.1:${SUPERVISOR_PORT}`,
         CMS_SUPERVISOR_TOKEN: SUPERVISOR_TOKEN,
+        // The fake supervisor stands in for npm's search, so the tests need no network.
+        CMS_PLUGIN_SEARCH_URL: `http://127.0.0.1:${SUPERVISOR_PORT}/search`,
       },
     },
   ],

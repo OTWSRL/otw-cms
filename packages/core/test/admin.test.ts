@@ -185,7 +185,10 @@ describe('admin pages', () => {
         id: 'plugins',
         label: 'Plugins',
         icon: 'plugins',
-        items: [{ key: 'core.plugins', label: 'Installed Plugins', url: '/admin/plugins' }],
+        items: [
+          { key: 'core.plugins', label: 'Installed Plugins', url: '/admin/plugins' },
+          { key: 'core.plugin-install', label: 'Add Plugin', url: '/admin/plugins/new' },
+        ],
       },
       {
         id: 'users',

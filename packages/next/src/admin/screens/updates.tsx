@@ -310,7 +310,11 @@ function JobProgress({ job }: { job: UpdateJob }) {
       ? 'Rolling back…'
       : job.kind === 'check'
         ? 'Checking for updates…'
-        : 'Updating…'
+        : job.kind === 'install'
+          ? 'Installing a plugin…'
+          : job.kind === 'remove'
+            ? 'Removing a plugin…'
+            : 'Updating…'
     : job.summary
   return (
     <Notice

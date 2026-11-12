@@ -91,7 +91,11 @@ test('an inactive plugin’s data is deleted after a confirmation, and it starts
 
   await library.hover()
   await library.getByRole('link', { name: 'Delete Library’s data' }).click()
-  await page.getByRole('button', { name: 'Yes, delete this data' }).click()
+  // This site runs under a supervisor, so the plugin's package could go too: not here.
+  await expect(
+    page.getByRole('button', { name: 'Yes, delete this data and remove the plugin' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Delete only its data' }).click()
   await notice(page, 'Library’s data was deleted.')
   await expect(page).toHaveURL(/\/admin\/plugins/)
   await expect(library).toHaveClass('inactive')

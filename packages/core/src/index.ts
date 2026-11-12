@@ -84,4 +84,6 @@ export {
   type UpdateOverview,
   type UpdateRequest,
   type UpdateService,
+  isPackageName,
+  PLUGIN_KEYWORD,
 } from './updates'

@@ -865,6 +865,7 @@ async function boot(
     jobs,
     webhooks,
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
+    canManagePlugins: (user) => stores.capabilities.can(user, 'core.manage_plugins'),
     async activate(id) {
       if (options.active) throw new ActionError(PINNED)
       const plugin = installed.get(id)

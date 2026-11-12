@@ -1,5 +1,5 @@
 import { ButtonLink, FormButton, ListTable, Notice, TableNav, Views } from '@otwdesign/admin-ui'
-import type { Kernel, PluginStatus, PluginUpdate, UninstallPlan } from '@otwdesign/core'
+import type { Flash, Kernel, PluginStatus, PluginUpdate, UninstallPlan } from '@otwdesign/core'
 import Link from 'next/link'
 import { currentSite } from '../../site-registry'
 import { AdminScreen } from '../screen'
@@ -25,10 +25,27 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
   const pinned = kernel.activation === 'pinned'
   const filter = filterFrom(firstParam(params.plugin_status))
   const plugins = kernel.plugins()
+  const site = currentSite()
+  const packageOf = (pluginId: string) =>
+    site.packages?.[site.plugins.findIndex((plugin) => plugin.id === pluginId)]
+  // WordPress's install_plugins and delete_plugins, where the site's hosting can rebuild it.
+  const mayInstall = kernel.can(user, 'core.install_plugins')
+  const canRemove = mayInstall && typeof kernel.updates?.remove === 'function'
   const deleting = plugins.find((plugin) => plugin.id === firstParam(params.delete))
   if (deleting) {
     const plan = await kernel.uninstallPlan(deleting.id)
-    if (plan) return <DeleteData kernel={kernel} plugin={deleting} plan={plan} pinned={pinned} />
+    if (plan) {
+      return (
+        <DeleteData
+          kernel={kernel}
+          plugin={deleting}
+          plan={plan}
+          pinned={pinned}
+          removable={canRemove ? packageOf(deleting.id) : undefined}
+          flash={kernel.readFlash(params.flash)}
+        />
+      )
+    }
   }
   const shown = filter ? plugins.filter((plugin) => plugin.status === filter) : plugins
   const count = (status: Filter) => plugins.filter((plugin) => plugin.status === status).length
@@ -37,7 +54,6 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
 
   // Update checks speak in package names; the site module says which package is which plugin.
   const overview = await updateOverview(kernel, user)
-  const site = currentSite()
   const updates = new Map(
     overview?.channel === 'serve'
       ? (overview.lastCheck?.plugins ?? []).flatMap((update) => {
@@ -66,7 +82,11 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
   }
 
   return (
-    <AdminScreen title="Plugins" flash={kernel.readFlash(params.flash)}>
+    <AdminScreen
+      title="Plugins"
+      titleAction={mayInstall ? { label: 'Add Plugin', url: '/admin/plugins/new' } : null}
+      flash={kernel.readFlash(params.flash)}
+    >
       {pinned && (
         <Notice type="info">
           <p>
@@ -106,7 +126,7 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
                   href={`/admin/plugins?delete=${plugin.id}`}
                   aria-label={`Delete ${plugin.name}’s data`}
                 >
-                  Delete Data
+                  {canRemove && packageOf(plugin.id) ? 'Delete' : 'Delete Data'}
                 </Link>,
               ]
             : []),
@@ -159,11 +179,17 @@ function DeleteData({
   plugin,
   plan,
   pinned,
+  removable,
+  flash,
 }: {
   kernel: Kernel
   plugin: PluginStatus
   plan: UninstallPlan
   pinned: boolean
+  /** The plugin's package, when this site's hosting can also take it off the site. */
+  removable: string | undefined
+  /** What a refused delete came back with. */
+  flash: Flash | null
 }) {
   const blocked =
     plugin.status !== 'inactive'
@@ -177,7 +203,7 @@ function DeleteData({
     plan.cached > 0 && plural(plan.cached, 'cached value', 'cached values'),
   ].filter(Boolean)
   return (
-    <AdminScreen title={`Delete ${plugin.name}’s data`} flash={null}>
+    <AdminScreen title={`Delete ${plugin.name}’s data`} flash={flash}>
       {blocked ? (
         <Notice type="warning">
           <p>{blocked}</p>
@@ -209,16 +235,29 @@ function DeleteData({
             </li>
           </ul>
           <p>
-            The plugin itself stays installed, and inactive. This can’t be undone: back up the
-            database first if you may want the data again.
+            {removable
+              ? `You can also remove the plugin itself (${removable}) from the site, which rebuilds it. `
+              : 'The plugin itself stays installed, and inactive. '}
+            This can’t be undone: back up the database first if you may want the data again.
           </p>
           <div className="para">
+            {removable && (
+              <>
+                <FormButton
+                  action={kernel.actionUrl('core', 'delete-plugin')}
+                  fields={{ plugin: plugin.id, package: removable }}
+                  variant="primary"
+                >
+                  Yes, delete this data and remove the plugin
+                </FormButton>{' '}
+              </>
+            )}
             <FormButton
               action={kernel.actionUrl('core', 'delete-plugin-data')}
               fields={{ plugin: plugin.id }}
-              variant="primary"
+              variant={removable ? 'secondary' : 'primary'}
             >
-              Yes, delete this data
+              {removable ? 'Delete only its data' : 'Yes, delete this data'}
             </FormButton>{' '}
             <ButtonLink href="/admin/plugins">No, return me to the plugin list</ButtonLink>
           </div>
