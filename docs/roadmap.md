@@ -735,9 +735,18 @@ The outbound event outbox, with WooCommerce's webhooks as the model for the admi
   deliveries in a row that fail every try disable it, as WooCommerce disables after its fifth.
   A delivery whose webhook was paused or deleted since is dropped. Send a test sends
   `webhook.test` whatever the status.
-- **Cost.** Subscriptions are read once per kernel (one query, with the first event it emits),
-  and saving a webhook bumps the generation, so every kernel reads them again. An event nobody
-  subscribes to costs a lookup in memory; a subscribed one, an insert per webhook.
+- **Cost.** Who is subscribed is kept in `cms_options`, written when a webhook changes and read
+  in the query that reads a booting kernel's generation, so a site without webhooks never reads
+  their table. An event nobody subscribes to costs a lookup in memory; a subscribed one, an
+  insert per webhook. `HookBus.addAction()` takes a `when`: core's event handlers are passed by,
+  without the savepoint a handler takes inside a transaction, while nobody is subscribed.
+- **Measured.** Pages, the build before 10b and the build after side by side as in 10a: every
+  median difference within ±0.16 ms, each spread across zero. Saving an entry on a site with no
+  webhooks: 2.37–2.55 ms before, 2.30–2.40 ms after. The first cut was 0.1–0.3 ms slower, for a
+  handler's savepoint on every save, which is what `when` removed.
+- **Boots.** A kernel's boot had grown from 3.9 ms to 4.3 ms with 10a and 10b's registrations. A
+  profile showed `Router.add()` sorting every route after each add; it now sorts once, on the
+  first match. A boot takes 2.8 ms: 1.2 ms less than before the queue existed.
 
 Not in this part: an incoming-webhook receiver for plugins, per-webhook delivery logs beyond
 Tools › Scheduled Actions, replaying a delivery from the admin, a payload of the whole entry, and

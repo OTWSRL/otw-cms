@@ -534,8 +534,10 @@ caller's transaction, so an event goes out only if what happened was kept. Core 
   them with an existing library. Five tries (at once, then after 1, 4, 16 and 64 minutes), ten
   seconds for an answer, and no redirect followed. Five deliveries in a row that fail every try
   disable the webhook.
-- **Cost.** A kernel reads the subscriptions once, and a changed webhook boots a new kernel, so
-  an event nobody subscribes to is a lookup in memory.
+- **Cost.** Who is subscribed is kept in `cms_options` and read in the query that reads a
+  booting kernel's generation; a changed webhook rewrites it and boots a new kernel. An event
+  nobody subscribes to is a lookup in memory, and core's handlers for its own events are passed
+  by, without the savepoint an action handler takes, while nobody is.
 
 ## Accounts on the site
 
