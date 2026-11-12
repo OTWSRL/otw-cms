@@ -539,6 +539,16 @@ caller's transaction, so an event goes out only if what happened was kept. Core 
   nobody subscribes to is a lookup in memory, and core's handlers for its own events are passed
   by, without the savepoint an action handler takes, while nobody is.
 
+## Caching
+
+`cms.cache` is WordPress's `wp_cache_*` and transients: `get`, `set`, `delete`, `remember(key,
+compute, { ttlSeconds })` and `flush`, each plugin in keys of its own. A value lives in the
+server's memory (5,000 values or 64 MB, least recently used out first); with `durable` it lives in
+the unlogged table `cms_cache`, survives a restart and is the same on every server; and a plugin
+can provide a store, such as Redis (`cms.cache.store()`), which then takes everything. Values are
+plain data, kept as JSON and handed back as one frozen copy: a read from memory is about half a
+microsecond, a durable one a query. Core caches nothing with it, so no page changed speed.
+
 ## Accounts on the site
 
 `/account`, WooCommerce's My Account: signed out, sign in and (with Settings › General ›

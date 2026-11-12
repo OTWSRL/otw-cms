@@ -752,6 +752,36 @@ Not in this part: an incoming-webhook receiver for plugins, per-webhook delivery
 Tools › Scheduled Actions, replaying a delivery from the admin, a payload of the whole entry, and
 blocking private network addresses (an administrator chooses the address).
 
+### 10c. Caching (done)
+
+`cms.cache`, WordPress's object cache and transients in one API.
+
+| WordPress                               | Here                                                        |
+| --------------------------------------- | ----------------------------------------------------------- |
+| `wp_cache_get()` / `set()` / `delete()` | `cms.cache.get()` / `set()` / `delete()`                    |
+| Cache groups                            | Each plugin's keys are its own                              |
+| `wp_cache_flush_group()`                | `flush()`                                                   |
+| `set_transient()` / `get_transient()`   | `set(…, { durable: true })` / `get(key, { durable: true })` |
+| A persistent object cache drop-in       | `cms.cache.store(store)`, from one plugin                   |
+
+- **Memory** by default: one per process, shared by its kernels, 5,000 values or 64 MB, least
+  recently used out first. Unlike WordPress's, it outlives the request, since the server does.
+- **Durable** values are in `cms_cache` (migration core/0015_cache), an unlogged table: a cache
+  needn't survive a crash, and its writes skip the write-ahead log. A durable value is asked for
+  as durable, so a plain `get()` never costs a query. The daily cleanup sweeps the expired.
+- **A store** a plugin provides (Redis) takes every value, durable or not: its keys carry the
+  plugin's id, its values are JSON text.
+- **Values are plain data**: checked by a JSON round trip on `set()`, and handed back as one
+  frozen copy, so memory and a store behave alike and a read copies nothing.
+- **`remember()`** computes once for callers at the same moment on a server, and caches nothing
+  when the computation throws.
+- **Measured**: a read from memory 0.4 µs, a write 4 µs; a durable read 0.2 ms, a durable write
+  0.23 ms (embedded database). A boot: 2.72–2.86 ms before, 2.71–2.82 ms after. Core caches
+  nothing with it.
+
+Not in this part: tags and invalidation by tag, a Flush button in the admin, a Redis store plugin
+of our own, and telling other servers' memories of a delete.
+
 ## 11. Page cache plugin
 
 A full-page cache for signed-out visitors, as WordPress sites get from caching plugins, in a
