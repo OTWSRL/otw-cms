@@ -94,6 +94,8 @@ export function supervisorUpdates(
     update: (request) => notice('POST', '/update', request),
     rollback: (release) => notice('POST', '/rollback', { release }),
     setAutoUpdate: (mode) => notice('PUT', '/auto-update', { mode }),
+    install: (packageName) => notice('POST', '/install', { package: packageName }),
+    remove: (packageName) => notice('POST', '/remove', { package: packageName }),
   }
 }
 
@@ -121,7 +123,10 @@ export function githubUpdates(
   if (!REPOSITORY.test(repository)) throw new Error('CMS_GITHUB_REPO must look like owner/name')
   if (!WORKFLOW.test(workflow)) throw new Error('CMS_GITHUB_WORKFLOW must be a workflow file name')
   const runsUrl = `https://github.com/${repository}/actions/workflows/${workflow}`
-  const dispatch = async (inputs: Record<string, string>) => {
+  const dispatch = async (
+    inputs: Record<string, string>,
+    started = 'Started the update on GitHub. It opens a pull request if there is anything to update',
+  ) => {
     let response: Response
     try {
       response = await fetchImpl(
@@ -147,16 +152,44 @@ export function githubUpdates(
         `GitHub didn't start the update workflow (${response.status}${message ? `: ${message}` : ''}). Check that ${workflow} exists on ${ref} and the token may run workflows.`,
       )
     }
-    return `Started the update on GitHub. It opens a pull request if there is anything to update: ${runsUrl}`
+    return `${started}: ${runsUrl}`
+  }
+  // GitHub refuses an input the workflow file doesn't declare, and a site made before plugins
+  // could be added from the admin has the older file: updates send only what it has always had.
+  const updating = { packages: '', plugins_only: 'false' }
+  const plugin = async (input: 'add_plugin' | 'remove_plugin', name: string, started: string) => {
+    try {
+      return await dispatch({ ...updating, [input]: name }, started)
+    } catch (error) {
+      if (error instanceof ActionError && /\(422/.test(error.message)) {
+        throw new ActionError(
+          `The site's ${workflow} is from before plugins could be added from the admin. Replace it with the one a new site has (it takes add_plugin and remove_plugin), or run \`cms plugin\` yourself.`,
+        )
+      }
+      throw error
+    }
   }
   return {
     overview: async () => ({ channel: 'github', repository, runsUrl }),
-    check: () => dispatch({ packages: '', plugins_only: 'false' }),
+    check: () => dispatch(updating),
     update: (request) =>
       dispatch({
+        ...updating,
         packages: (request.packages ?? []).join(' '),
         plugins_only: String(request.pluginsOnly === true),
       }),
+    install: (packageName) =>
+      plugin(
+        'add_plugin',
+        packageName,
+        `Asked GitHub to add ${packageName}. It opens a pull request; merging it deploys the plugin, inactive`,
+      ),
+    remove: (packageName) =>
+      plugin(
+        'remove_plugin',
+        packageName,
+        `Asked GitHub to remove ${packageName}. It opens a pull request; merging it deploys the site without it`,
+      ),
     rollback: async () => {
       throw new ActionError('To go back, revert the update’s pull request on GitHub.')
     },

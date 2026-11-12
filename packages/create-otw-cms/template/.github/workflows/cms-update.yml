@@ -1,6 +1,7 @@
-# Updates the CMS and its plugins in a pull request. Run it from the admin (Dashboard › Updates,
-# with CMS_GITHUB_REPO and CMS_GITHUB_TOKEN set on the site), from the Actions tab, or on the
-# schedule below. Merging the pull request deploys the update; build:deploy migrates.
+# Updates the CMS and its plugins in a pull request, or adds or removes a plugin in one. Run it
+# from the admin (Dashboard › Updates and Plugins › Add Plugin, with CMS_GITHUB_REPO and
+# CMS_GITHUB_TOKEN set on the site), from the Actions tab, or on the schedule below. Merging the
+# pull request deploys the change; build:deploy migrates.
 name: CMS updates
 
 on:
@@ -14,6 +15,14 @@ on:
         description: Leave the CMS itself where it is
         type: boolean
         default: false
+      add_plugin:
+        description: A plugin's npm package to add, instead of updating
+        required: false
+        default: ''
+      remove_plugin:
+        description: An installed plugin's package to remove, instead of updating
+        required: false
+        default: ''
   schedule:
     # Weekly. Remove to propose updates only when asked.
     - cron: '23 5 * * 1'
@@ -44,11 +53,19 @@ jobs:
           # Through the environment, not pasted into the script.
           PACKAGES: ${{ inputs.packages }}
           PLUGINS_ONLY: ${{ inputs.plugins_only && '--plugins-only' || '' }}
+          ADD_PLUGIN: ${{ inputs.add_plugin }}
+          REMOVE_PLUGIN: ${{ inputs.remove_plugin }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Word splitting on purpose: PACKAGES is a space-separated list.
-          {{exec}} cms update $PACKAGES $PLUGINS_ONLY --commit
+          if [ -n "$ADD_PLUGIN" ]; then
+            {{exec}} cms plugin add "$ADD_PLUGIN" --commit
+          elif [ -n "$REMOVE_PLUGIN" ]; then
+            {{exec}} cms plugin remove "$REMOVE_PLUGIN" --commit
+          else
+            # Word splitting on purpose: PACKAGES is a space-separated list.
+            {{exec}} cms update $PACKAGES $PLUGINS_ONLY --commit
+          fi
       - name: Open a pull request
         env:
           GH_TOKEN: ${{ github.token }}

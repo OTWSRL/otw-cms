@@ -11,6 +11,8 @@ import {
   commitUpdate,
   detectPackageManager,
   install,
+  planInstall,
+  planRemove,
   planSite,
   updateCommitMessage,
   writeChanges,
@@ -36,6 +38,12 @@ Commands:
                --major          allow a new major version of core
                --force          update even if a plugin would be switched off
                --commit         put the update on a new git branch, for hosts that build from git
+  plugin add <package>
+             Add a plugin from npm, in its newest version that works with the site's CMS: to
+             package.json and cms.config.json. It starts inactive
+  plugin remove <package>
+             Take a plugin's package off the site. Delete its data in the admin first
+               --commit         put the change on a new git branch, for hosts that build from git
 
 Options:
   --root <dir>   The site's directory (default: the current directory)`
@@ -185,6 +193,45 @@ async function runUpdate(root: string, names: readonly string[]): Promise<void> 
   )
 }
 
+/** `cms plugin add` and `cms plugin remove`: the site's files, the install, the route files. */
+async function runPlugin(root: string, action: string | undefined, name: string | undefined) {
+  if ((action !== 'add' && action !== 'remove') || !name) {
+    throw new Error('Use `cms plugin add <package>` or `cms plugin remove <package>`.')
+  }
+  const plan = action === 'add' ? await planInstall(root, name) : await planRemove(root, name)
+  for (const warning of plan.warnings) console.warn(`cms: ${warning}`)
+  if (plan.blockers.length > 0) throw new Error(plan.blockers.join(' '))
+  const [change] = plan.changes
+  if (!change) throw new Error(`Nothing to ${action}.`)
+  if (values.commit) {
+    const { stdout } = await run('git', ['status', '--porcelain'], { cwd: root })
+    if (stdout.trim())
+      throw new Error('Commit or stash your changes first, so this is a commit of its own')
+  }
+
+  await writeChanges(root, plan.changes)
+  const manager = await detectPackageManager(root)
+  console.log(`cms: installing with ${manager}`)
+  await install(root, manager)
+  await runInstalledCli(root, ['generate'])
+
+  const did = action === 'add' ? `Add ${change.name} ${change.to}` : `Remove ${change.name}`
+  if (values.commit) {
+    const slug = change.name.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const branch = `cms-plugin-${action}-${slug}-${Date.now().toString(36)}`
+    await commitUpdate(root, branch, did)
+    console.log(
+      `cms: committed on ${branch}. Push it and open a pull request; your host builds it.`,
+    )
+    return
+  }
+  console.log(
+    action === 'add'
+      ? `cms: added ${change.name} ${change.to}. Run \`${manager} run build\` and restart, then activate it on the Plugins screen.`
+      : `cms: removed ${change.name}. Run \`${manager} run build\` and restart.`,
+  )
+}
+
 async function main(): Promise<void> {
   const [command] = positionals
   if (values.help || !command) {
@@ -197,6 +244,7 @@ async function main(): Promise<void> {
   if (command === 'generate') return runGenerate(root)
   if (command === 'migrate') return runMigrate(root)
   if (command === 'update') return runUpdate(root, positionals.slice(1))
+  if (command === 'plugin') return runPlugin(root, positionals[1], positionals[2])
   if (command === 'serve') {
     const port = Number(values.port ?? process.env.PORT ?? 3000)
     if (!Number.isInteger(port) || port < 0 || port > 65535)

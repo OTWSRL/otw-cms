@@ -21,11 +21,19 @@ describe('supervisorUpdates', () => {
     const { calls, fetchImpl } = fake({
       [`POST ${URL}/update`]: [200, { notice: 'Updating.' }],
       [`PUT ${URL}/auto-update`]: [200, { notice: 'Saved.' }],
+      [`POST ${URL}/install`]: [200, { notice: 'Installing @acme/wiki.' }],
+      [`POST ${URL}/remove`]: [200, { notice: 'Removing @acme/wiki.' }],
       [`GET ${URL}/status`]: [200, { channel: 'serve', releases: [] }],
     })
     const service = supervisorUpdates(URL, 'secret', fetchImpl, { statuses: new Map() })
     expect(await service.update({ packages: ['@acme/forum'] })).toBe('Updating.')
     expect(await service.setAutoUpdate('patch')).toBe('Saved.')
+    expect(await service.install!('@acme/wiki')).toBe('Installing @acme/wiki.')
+    expect(await service.remove!('@acme/wiki')).toBe('Removing @acme/wiki.')
+    expect(calls.slice(2, 4).map((call) => call.init.body)).toEqual([
+      '{"package":"@acme/wiki"}',
+      '{"package":"@acme/wiki"}',
+    ])
     expect(await service.overview()).toEqual({ channel: 'serve', releases: [] })
     expect(new Headers(calls[0]!.init.headers).get('authorization')).toBe('Bearer secret')
     expect(calls[0]!.init.body).toBe('{"packages":["@acme/forum"]}')
@@ -146,6 +154,29 @@ describe('githubUpdates', () => {
       repository: 'acme/shop',
       runsUrl: 'https://github.com/acme/shop/actions/workflows/cms-update.yml',
     })
+  })
+
+  it('asks the workflow to add or remove a plugin, with inputs only that asks carry', async () => {
+    const { calls, fetchImpl } = fake({ [DISPATCH]: [204, null] })
+    const service = githubUpdates({ repository: 'acme/shop', token: 'ghp_x' }, fetchImpl)
+    expect(await service.install!('@acme/forum')).toMatch(
+      /^Asked GitHub to add @acme\/forum\. It opens a pull request; merging it deploys the plugin, inactive: https:/,
+    )
+    expect(await service.remove!('@acme/forum')).toMatch(/^Asked GitHub to remove @acme\/forum\./)
+    expect(calls.map((call) => JSON.parse(String(call.init.body)).inputs)).toEqual([
+      { packages: '', plugins_only: 'false', add_plugin: '@acme/forum' },
+      { packages: '', plugins_only: 'false', remove_plugin: '@acme/forum' },
+    ])
+  })
+
+  it('says to replace a workflow file from before plugins could be added', async () => {
+    const { fetchImpl } = fake({
+      [DISPATCH]: [422, { message: 'Unexpected inputs provided: ["add_plugin"]' }],
+    })
+    const service = githubUpdates({ repository: 'acme/shop', token: 'ghp_x' }, fetchImpl)
+    await expect(service.install!('@acme/forum')).rejects.toThrow(
+      'cms-update.yml is from before plugins could be added from the admin',
+    )
   })
 
   it('explains what GitHub refused, and what it can’t do', async () => {

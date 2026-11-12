@@ -86,6 +86,9 @@ describe('scaffold', () => {
     const workflow = await read(target, '.github/workflows/cms-update.yml')
     expect(workflow).toContain("run: 'corepack enable && pnpm install --frozen-lockfile'")
     expect(workflow).toContain('pnpm cms update $PACKAGES $PLUGINS_ONLY --commit')
+    // Plugins › Add Plugin and Delete on a git-based host run it with a plugin's name.
+    expect(workflow).toContain('pnpm cms plugin add "$ADD_PLUGIN" --commit')
+    expect(workflow).toContain('pnpm cms plugin remove "$REMOVE_PLUGIN" --commit')
     expect(workflow.replace(/\$\{\{[^}]*\}\}/g, '')).not.toContain('{{')
     expect(await read(target, '.gitignore')).toContain('.cms/')
   })
