@@ -102,6 +102,7 @@ test('plugins add pages under Settings and sections to each other’s pages', as
     'General',
     'Reading',
     'Media',
+    'Webhooks',
     'Library',
     'Mail to files',
   ])
