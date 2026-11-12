@@ -456,9 +456,9 @@ Not in 7b: Quick Edit and Bulk Edit, preview and View links (7d), plugin-defined
 raw-HTML block, autosave to the server, screen options, editing the publish date, a site time
 zone (dates show and filter in UTC).
 
-Not in 7a: scheduled publishing and emptying the trash after 30 days (they need the job queue in
-10), custom statuses (`register_post_status`), edit locks, search in `list()`, and sharing another
-type's capabilities (`capability_type => 'post'`).
+Not in 7a: custom statuses (`register_post_status`), edit locks, search in `list()`, and sharing
+another type's capabilities (`capability_type => 'post'`). Scheduled publishing and emptying the
+trash after 30 days came with the job queue, in 10a.
 
 ## 8. Accounts and email
 
@@ -646,8 +646,54 @@ pages; speed on the Performance plugin's site with 1,500 posts, 300 pages and 44
 
 ## 10. Operations
 
-Job queue and scheduled tasks (Action Scheduler), an outbound event outbox, caching, uninstalling
-plugins (their data and migrations), and installing plugins from the admin.
+In five parts, each a release: 10a the job queue and scheduled tasks, 10b webhooks (the outbound
+event outbox), 10c caching, 10d uninstalling plugins (their data and migrations), and 10e
+installing plugins from the admin.
+
+### 10a. Jobs and scheduled tasks (done)
+
+`cms.jobs`, after WordPress's Action Scheduler, which also does what WP-Cron does: a plugin
+defines a job by name in `setup()`, and queues runs of it.
+
+| Action Scheduler                 | Here                                                   |
+| -------------------------------- | ------------------------------------------------------ |
+| `as_enqueue_async_action()`      | `cms.jobs.enqueue(name, args)`                         |
+| `as_schedule_single_action()`    | `enqueue(name, args, { at })`                          |
+| `$unique`                        | `enqueue(…, { unique })`: one waiting run per key      |
+| `as_schedule_recurring_action()` | `define(name, { everySeconds })`: declared, not queued |
+| `as_unschedule_all_actions()`    | `cancel(name, unique?)`                                |
+| `as_next_scheduled_action()`     | `next(name, unique?)`                                  |
+| `action_scheduler_failed_action` | The `job.failed` action                                |
+| Tools › Scheduled Actions        | The same screen, for `core.manage_jobs`                |
+
+- **The queue is a table**, `cms_jobs`, one row per run, kept after it finishes as the log (30
+  days). A job is queued in the caller's transaction, so it exists only if what asked for it was
+  kept: the outbox every later part builds on.
+- **Runs** are claimed with `FOR UPDATE SKIP LOCKED`, so several servers never take the same one;
+  tried again with a growing wait as often as the job allows (once by default, as Action
+  Scheduler); timed out, with an `AbortSignal` for the handler; and taken over once their lock
+  runs out, when their server stopped. Only the run that holds a job may finish it.
+- **A repeating job** is declared, not queued: the site queues its first run an interval after
+  first seeing it, and each run queues the next, on its rhythm. Booting reads the waiting repeats
+  once and writes only when a definition changed. A job no active plugin defines waits.
+- **What runs them.** Where the server keeps running (`cms serve`, Docker), the site's own
+  process: a job due now runs once the request that queued it has been answered (`after()`), and
+  one timer, never polling, wakes for the next job's time. With the embedded database nothing
+  looks while nothing waits; with PostgreSQL each server also looks once a minute, for jobs
+  another queued (the transaction pooler rules out LISTEN/NOTIFY). On serverless hosts a
+  scheduled request to `GET /api/p/core/cron`, with `CRON_SECRET`, runs what's due, and `after()`
+  still runs a request's own jobs. A new site has the `vercel.json` entry, once a day, which is
+  the most a Hobby project may.
+- **Core's jobs**: `core.cleanup` daily (sessions and emailed links that ran out, old failed
+  sign-ins, the job log), `core.empty_trash` daily (`wp_scheduled_delete`, 30 days), and
+  `core.publish_entry` at a scheduled entry's date (`publish_future_post`).
+- **Cost**, on the embedded database with 50,000 finished and 2,300 waiting jobs: queueing 0.15
+  ms, the next job's time 0.17 ms, taking a job 0.24 ms. A request that queues nothing runs no
+  query for the queue.
+
+Not in this part: cron expressions (`as_schedule_cron_action`), job groups and priorities, more
+than one job at a time per server, a time zone for "every day at 3", and jobs in a request's
+trace.
 
 ## 11. Page cache plugin
 

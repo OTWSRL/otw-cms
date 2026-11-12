@@ -68,6 +68,12 @@ describe('scaffold', () => {
       expect.arrayContaining(['.gitignore', '.env.example', 'Dockerfile', 'next.config.ts']),
     )
     expect(files).not.toContain('gitignore')
+    // For Vercel, where nothing runs between requests: its cron asks the site to run its due
+    // jobs. Once a day, the most a Hobby project may: a faster schedule fails its deployment.
+    expect(JSON.parse(await read(target, 'vercel.json')).crons).toEqual([
+      { path: '/api/p/core/cron', schedule: '0 3 * * *' },
+    ])
+    expect(await read(target, '.env.example')).toContain('CRON_SECRET=')
     // The CMS's route files come from `cms generate` on the first dev or build.
     expect(files.some((file) => file.includes('(cms)'))).toBe(false)
 

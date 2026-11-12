@@ -342,7 +342,7 @@ Rules the kernel enforces or relies on:
   its submenu, as in WordPress. The stylesheet is our own, written to WordPress's measurements,
   not copied from it. There is no dark mode, as in WordPress.
 - **Menu.** Sections in order: Dashboard, one per plugin (load order, with the plugin's `icon`),
-  Plugins, Users, Settings. A section links to its first page and lists the rest as its
+  Plugins, Users, Tools, Settings. A section links to its first page and lists the rest as its
   submenu. A page joins another section with `menu.parent` (a core section or a plugin id); a
   parent whose plugin is inactive falls back to the page's own section.
 - **Screens.** Plugin pages mount at `/admin/{pluginId}/...` and appear for users with the page's
@@ -496,6 +496,25 @@ when delivery fails. Core has no mailer: one plugin provides the transport
 (`cms.mail.transport()`), and without one the log says what wasn't sent (the text only outside
 production). Settings › General › Send email from (`MAIL_FROM`). `@otwdesign/plugin-mail-file` writes
 each email to a folder, for development and the reference site's tests.
+
+## Background jobs
+
+`cms.jobs` is WordPress's Action Scheduler, and what WP-Cron does: `define(name, { handler })` in
+`setup()`, then `enqueue(name, args)` for as soon as possible, `{ at }` for a time, `{ unique }`
+for one waiting run per key, and `everySeconds` on the definition for a repeat. Jobs live in
+`cms_jobs` and are queued in the caller's transaction, so one exists only if what asked for it was
+kept. Runs are claimed with `FOR UPDATE SKIP LOCKED`, retried with a growing wait as often as the
+job allows, timed out, and taken over when their server stops; a job out of tries runs
+`job.failed`. Tools › Scheduled Actions lists the queue (`core.manage_jobs`).
+
+- **What runs them.** The site's own process, where it keeps running: a job due now runs after
+  the response of the request that queued it, and one timer wakes for the next job's time. It
+  never polls; a request that queues nothing runs no query for the queue. With PostgreSQL each
+  server also looks once a minute, for jobs another queued. On serverless hosts a scheduled
+  request to `/api/p/core/cron` with `Authorization: Bearer $CRON_SECRET` runs what's due (a new
+  site's `vercel.json` has it, once a day: Hobby's limit).
+- **Core's jobs.** `core.cleanup` and `core.empty_trash` daily, and `core.publish_entry` at a
+  scheduled entry's date.
 
 ## Accounts on the site
 

@@ -36,6 +36,12 @@ under Plugins in the admin.
   `CMS_MIGRATIONS=deploy`, and build with `{{run}} build:deploy`, which migrates before building,
   so the database is ready before the new version takes traffic (on Vercel, set it as the build
   command). It skips the backup: use your database host's.
+- **Background jobs** (scheduled posts, emptying the Trash, what plugins queue) run by themselves
+  on a server that keeps running. On Vercel nothing runs between requests, so `vercel.json` has
+  its cron call `/api/p/core/cron`: set `CRON_SECRET` in the project's environment variables for
+  it to work. It is scheduled once a day, the most a Hobby project may; on Pro, change the
+  schedule to `* * * * *` so jobs run within a minute of their time. On another serverless
+  host, have its scheduler request that address with `Authorization: Bearer <CRON_SECRET>`.
 
 ## Updating
 
