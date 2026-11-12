@@ -21,6 +21,8 @@ const globalForCms = globalThis as typeof globalThis & {
   __cmsChanges?: number
   __cmsJobs?: { runner: JobRunner; kernel: () => Promise<Kernel> }
   __cmsCache?: MemoryCache
+  /** The kernel booted last, for plugins' proxies, which never boot one (see ../proxy.ts). */
+  __cmsKernel?: Kernel
 }
 
 /** After a server starts, how long until it first looks for jobs that came due while it was down. */
@@ -86,7 +88,7 @@ function holderFor(site: Site): KernelHolder {
             // One for the process: both bundles' kernels, and those that replace them.
             cacheMemory: (globalForCms.__cmsCache ??= createMemoryCache()),
           },
-        ),
+        ).then((kernel) => (globalForCms.__cmsKernel = kernel)),
       localChanges: () => globalForCms.__cmsChanges ?? 0,
     })
     const runner = jobRunner(() => created.get())
