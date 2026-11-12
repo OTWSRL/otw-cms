@@ -1,5 +1,13 @@
 # @otwdesign/testing
 
+## 1.5.0
+
+### Patch Changes
+
+- Updated dependencies [98503d1]
+  - @otwdesign/sdk@1.5.0
+  - @otwdesign/core@1.5.0
+
 ## 1.4.0
 
 ### Patch Changes
