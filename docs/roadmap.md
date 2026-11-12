@@ -328,8 +328,9 @@ source.
   entry in the trash is checked by the status it had, where WordPress asks only
   `edit_others_posts`.
 - **Entries** in one table, `cms_entries`. Statuses `draft`, `pending`, `published`, `private`
-  and `trash`. The body is JSON blocks, rendered by React (the blocks come with the editor in
-  7b). Slugs are owned by published and private entries, unique per type and parent through a
+  and `trash`, and since 10a `scheduled`. The body is JSON blocks, rendered by React (the blocks
+  come with the editor in 7b). Slugs are owned by published, private and scheduled entries,
+  unique per type and parent through a
   partial unique index, numbered from 2 when taken, and retried when two saves race. The trash
   keeps the status for checks; restoring gives a draft. Deleting a page moves its children up.
 - **Hooks:** the `content.entry` filter, checked after it runs, and `content.status`, `.saved`,
@@ -453,7 +454,7 @@ source.
   the screen is covered by a component test and the save by integration tests.
 
 Not in 7b: Quick Edit and Bulk Edit, preview and View links (7d), plugin-defined blocks and a
-raw-HTML block, autosave to the server, screen options, editing the publish date, a site time
+raw-HTML block, autosave to the server, screen options, a site time
 zone (dates show and filter in UTC).
 
 Not in 7a: custom statuses (`register_post_status`), edit locks, search in `list()`, and sharing
@@ -687,9 +688,27 @@ defines a job by name in `setup()`, and queues runs of it.
 - **Core's jobs**: `core.cleanup` daily (sessions and emailed links that ran out, old failed
   sign-ins, the job log), `core.empty_trash` daily (`wp_scheduled_delete`, 30 days), and
   `core.publish_entry` at a scheduled entry's date (`publish_future_post`).
+- **Scheduled publishing**, WordPress's `future` status: as `wp_insert_post()` has it, an entry
+  saved as published with a date a minute or more ahead is stored as `scheduled`, and one saved
+  as scheduled whose date has come as published. It owns its slug but isn't on the site. The
+  save queues `core.publish_entry` in its transaction, keyed by the entry; a new date moves the
+  job, and a draft, trashed or deleted entry cancels it. The job publishes through the content
+  service, so `content.status` and `content.saved` run. The Publish box has the date (in UTC),
+  and its button reads Schedule for a date ahead; lists have a Scheduled view, and say Missed
+  schedule for an entry a minute past its date. A save that isn't scheduled before or after
+  asks the queue nothing.
 - **Cost**, on the embedded database with 50,000 finished and 2,300 waiting jobs: queueing 0.15
   ms, the next job's time 0.17 ms, taking a job 0.24 ms. A request that queues nothing runs no
   query for the queue.
+- **Measured** on the Performance plugin's site (1,500 posts, 300 pages, 440 users), the build
+  before 10a and the build after running side by side, 500 requests to each page alternating
+  between them, so both see the same load. The median difference, after minus before: home
+  −0.35 ms, a post +0.10 ms, a category −1.43 ms, the Posts list −1.81 ms, the Pages list −0.74
+  ms, a post's edit screen −0.78 ms, the Dashboard −0.05 ms; the middle half of the differences
+  spans zero for all but the category page and the Posts list. Those two are faster because
+  migration core/0013 analyzes `cms_entries` after rebuilding its slug index; without that, the
+  planner took the new index for cheaper than it is, and the Posts list's category counts went
+  from 2.5 ms to 6 ms. Memory after 60 Posts lists: 406–416 MiB before, 414–417 MiB after.
 
 Not in this part: cron expressions (`as_schedule_cron_action`), job groups and priorities, more
 than one job at a time per server, a time zone for "every day at 3", and jobs in a request's

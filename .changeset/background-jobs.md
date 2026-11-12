@@ -15,3 +15,10 @@ running, with one timer and no polling; on serverless hosts a scheduled request 
 `core.manage_jobs` capability. Core queues two daily jobs of its own: `core.cleanup` deletes
 sessions and emailed links that ran out, and `core.empty_trash` deletes what has been in the
 Trash 30 days.
+
+**Scheduled publishing**, WordPress's `future`: an entry published with a date a minute or more
+ahead gets the new status `scheduled`, and the site publishes it on its date (the
+`core.publish_entry` job). The Publish box has the date and a Schedule button; lists have a
+Scheduled view. `EntryStatus` has a new member, so code that handles every status needs a case
+for it. Migrations `core/0012_jobs` and `core/0013_scheduled_entries` add the queue's table and
+widen the entries' status checks and slug index.

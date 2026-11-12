@@ -406,13 +406,16 @@ post types in LearnDash, LifterLMS and Tutor.
 - **Entries.** One table, `cms_entries`, for every type, as `wp_posts` is.
   `cms.content.create/update/get/getBySlug/list/trash/restore/delete` work anywhere and, like
   `wp_insert_post()`, check no capabilities: screens, actions and API routes do. Statuses are
-  `draft`, `pending`, `published`, `private` and `trash`; a restored entry comes back as a draft,
+  `draft`, `pending`, `scheduled`, `published`, `private` and `trash`; a restored entry comes back as a draft,
   as in WordPress 5.6 and later. The body is a list of blocks stored as JSON and rendered by
   React components, so stored content can't add markup of its own.
-- **Slugs** come from the title (accents off Latin letters; other scripts kept). Published and
-  private entries own theirs, among their siblings for hierarchical types; a taken slug gets
-  `-2`, `-3`, enforced by a unique index. Drafts own none, so a draft's slug follows its title
-  until it's published.
+- **Slugs** come from the title (accents off Latin letters; other scripts kept). Published,
+  private and scheduled entries own theirs, among their siblings for hierarchical types; a taken
+  slug gets `-2`, `-3`, enforced by a unique index. Drafts own none, so a draft's slug follows
+  its title until it's published.
+- **Scheduling.** An entry published with a date a minute or more ahead is `scheduled`,
+  WordPress's `future`: it has its slug, but isn't on the site until the `core.publish_entry`
+  job, queued with the save, publishes it on its date. The Publish box's button reads Schedule.
 - **Hooks.** The `content.entry` filter sees the fields before they're saved, and its result is
   checked like any input. `content.status`, `content.saved`, `content.trashed`,
   `content.restored` and `content.deleted` run in the save's transaction.
