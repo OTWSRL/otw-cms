@@ -1,5 +1,12 @@
 # @otwdesign/admin-ui
 
+## 1.3.0
+
+### Patch Changes
+
+- Updated dependencies [b9ca928]
+  - @otwdesign/sdk@1.3.0
+
 ## 1.2.0
 
 ### Patch Changes
