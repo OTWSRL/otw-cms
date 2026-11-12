@@ -397,6 +397,10 @@ export const coreMigrations: Migration[] = [
           (type, coalesce(parent_id, '00000000-0000-0000-0000-000000000000'), slug)
           WHERE status IN ('scheduled', 'published', 'private')
       `)
+      // The planner takes a new index for cheaper than it is until the table is analyzed: on a
+      // site with 1,500 posts, counting each category's posts for the Posts list's filter went
+      // from 2.5 ms to 6 ms. The embedded database analyzes only after enough rows change.
+      await db.execute(sql`ANALYZE cms_entries`)
     },
   },
 ]
