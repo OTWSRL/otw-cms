@@ -240,6 +240,31 @@ describe('emitting', () => {
   })
 })
 
+describe('a kernel booted later', () => {
+  it('knows who is subscribed from its first query, and tells them', async () => {
+    const first = shop()
+    const kernel = await first.boot()
+    await kernel.webhooks.create(endpoint())
+    await kernel.webhooks.create(endpoint({ name: 'Paused', status: 'paused' }))
+
+    const second = shop()
+    const later = await second.boot({ db: kernel.db })
+    expect(second.cms().events.hasSubscribers('shop.order.paid')).toBe(true)
+    expect(second.cms().events.hasSubscribers('shop.order.refunded')).toBe(false)
+    await second.cms().events.emit('shop.order.paid', { order: 'A-9', total: 5 })
+    await later.jobs.runDue()
+    expect(second.sent.map((request) => request.url)).toEqual([
+      'https://warehouse.example.com/hooks',
+    ])
+
+    // Deleted: the next kernel is told nobody listens.
+    await later.webhooks.delete((await later.webhooks.list())[0]!.id)
+    const third = shop()
+    await third.boot({ db: kernel.db })
+    expect(third.cms().events.hasSubscribers('shop.order.paid')).toBe(false)
+  })
+})
+
 describe('delivering', () => {
   it('tries again when the endpoint fails, with the same id, and records each answer', async () => {
     const { boot, cms, sent, state } = shop()

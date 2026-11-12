@@ -58,6 +58,33 @@ describe('HookBus filters', () => {
 })
 
 describe('HookBus actions', () => {
+  it('passes by a handler that has no work, without the savepoint a run takes', async () => {
+    let isolated = 0
+    const { bus } = createBus((fn) => {
+      isolated++
+      return fn()
+    })
+    let wanted = false
+    const ran: string[] = []
+    bus.addAction(
+      'core',
+      'saved',
+      () => void ran.push('sometimes'),
+      10,
+      () => wanted,
+    )
+    bus.addAction('shop', 'saved', () => void ran.push('always'))
+
+    await bus.doAction('saved', {})
+    expect(ran).toEqual(['always'])
+    expect(isolated).toBe(1)
+
+    wanted = true
+    await bus.doAction('saved', {})
+    expect(ran).toEqual(['always', 'sometimes', 'always'])
+    expect(isolated).toBe(3)
+  })
+
   it('runs every handler in priority order', async () => {
     const { bus } = createBus()
     const calls: string[] = []

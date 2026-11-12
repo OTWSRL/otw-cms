@@ -9,6 +9,8 @@ interface Entry {
   pluginId: string
   priority: number
   sequence: number
+  /** For an action handler that only sometimes has work: skipped, savepoint and all, while false. */
+  when?: () => boolean
 }
 
 export interface HookBusOptions {
@@ -35,9 +37,19 @@ export class HookBus {
     this.#add(this.#filters, pluginId, name, handler, priority)
   }
 
-  addAction(pluginId: string, name: string, handler: Handler, priority?: number): void {
+  /**
+   * `when` is for a handler that only sometimes has work: while it answers false the handler
+   * isn't run, and doesn't cost the savepoint every run takes inside a transaction.
+   */
+  addAction(
+    pluginId: string,
+    name: string,
+    handler: Handler,
+    priority?: number,
+    when?: () => boolean,
+  ): void {
     this.#options.assertOpen(`action "${name}"`)
-    this.#add(this.#actions, pluginId, name, handler, priority)
+    this.#add(this.#actions, pluginId, name, handler, priority, when)
   }
 
   /** A failing filter aborts the operation: continuing would use a half-filtered value. */
@@ -65,6 +77,7 @@ export class HookBus {
 
   async doAction<P>(name: string, payload: P): Promise<void> {
     for (const entry of this.#actions.get(name) ?? []) {
+      if (entry.when && !entry.when()) continue
       try {
         await traced(
           `action ${name}`,
@@ -95,6 +108,7 @@ export class HookBus {
     name: string,
     handler: Handler,
     priority = DEFAULT_PRIORITY,
+    when?: () => boolean,
   ): void {
     if (typeof handler !== 'function') {
       throw new TypeError(`Handler for "${name}" must be a function`)
@@ -103,7 +117,7 @@ export class HookBus {
       throw new TypeError(`Priority for "${name}" must be a finite number`)
     }
     const entries = store.get(name) ?? []
-    entries.push({ handler, pluginId, priority, sequence: this.#sequence++ })
+    entries.push({ handler, pluginId, priority, sequence: this.#sequence++, when })
     entries.sort((a, b) => a.priority - b.priority || a.sequence - b.sequence)
     store.set(name, entries)
   }

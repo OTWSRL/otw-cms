@@ -98,7 +98,13 @@ import { pendingMigrations, runMigrations } from './migrations'
 import type { OriginPolicy } from './origins'
 import { DatabaseUpdateRequiredError, migrateSite } from './site-migrations'
 import type { UpdateService } from './updates'
-import { bumpGeneration, ensureSecret, readGeneration } from './options'
+import {
+  bumpGeneration,
+  ensureSecret,
+  readBootState,
+  readGeneration,
+  type WebhookTopics,
+} from './options'
 import type { HashCost } from './passwords'
 import {
   activationBlockers,
@@ -331,6 +337,8 @@ interface Prepared {
   logger: Logger
   db: DatabaseContext
   generation: number
+  /** Who is told of which event, read with the generation. */
+  webhookTopics: WebhookTopics
   flash: FlashCodec
   configured: readonly string[]
   stored: ReadonlyMap<string, unknown>
@@ -372,12 +380,13 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
     await runMigrations(db, [coreDefinition], logger)
   }
   // Read the generation before the state it guards, so a change in between triggers a reboot.
-  const generation = await readGeneration(db.root)
+  const { generation, webhookTopics } = await readBootState(db.root)
   const prepared: Prepared = {
     options,
     logger,
     db,
     generation,
+    webhookTopics,
     flash: createFlashCodec(options.secret ?? (await ensureSecret(db.root))),
     configured: options.active ?? (await loadActiveIds(db.root, options.plugins)),
     stored: start.stored ?? (await loadStoredSettings(db.root)),
@@ -808,6 +817,7 @@ async function boot(
     jobs,
     fetch: options.fetch,
     userAgent: `cms-webhooks/${coreVersion}`,
+    subscriptions: prepared.webhookTopics,
     changed: () => changed(),
   })
   registerCoreEvents({

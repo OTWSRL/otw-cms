@@ -1769,9 +1769,9 @@ export interface EventsApi {
   emit<K extends EventName>(name: K, data: Events[K]): Promise<void>
   /**
    * Whether a webhook is subscribed to the event, so data that's costly to gather can be left
-   * ungathered when nobody is.
+   * ungathered when nobody is. Answered from memory.
    */
-  hasSubscribers(name: EventName): Promise<boolean>
+  hasSubscribers(name: EventName): boolean
 }
 
 // ── Tracing ──────────────────────────────────────────────────────────────────

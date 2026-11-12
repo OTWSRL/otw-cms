@@ -4,6 +4,7 @@ import { asc, eq, sql } from 'drizzle-orm'
 import { webhooks, type WebhookStatus } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { JobService } from './jobs'
+import { saveWebhookTopics, type WebhookTopics } from './options'
 
 /** The job that sends one event to one webhook. */
 export const DELIVER_JOB = 'core.deliver_webhook'
@@ -90,7 +91,7 @@ export class EventStore {
 export interface WebhookService {
   /** Queues a delivery to every active webhook subscribed to the event, in the caller's transaction. */
   emit(name: string, data: unknown): Promise<void>
-  hasSubscribers(name: string): Promise<boolean>
+  hasSubscribers(name: string): boolean
   /** The events a webhook can subscribe to, in the order plugins defined them. */
   events(): { name: string; label: string; description?: string; pluginId: string }[]
   list(): Promise<StoredWebhook[]>
@@ -113,6 +114,8 @@ export interface WebhookServiceOptions {
   fetch?: typeof fetch
   /** The `User-Agent` deliveries carry. */
   userAgent: string
+  /** The active webhooks' ids by event, as the kernel read them at boot. */
+  subscriptions: WebhookTopics
   /** Tells every running kernel that the webhooks changed, so each reads its subscriptions again. */
   changed(): Promise<void>
 }
@@ -148,34 +151,28 @@ export function createWebhookService(options: WebhookServiceOptions): WebhookSer
   const { db, logger, store, jobs } = options
   const send = options.fetch ?? fetch
 
-  let subscribed: Promise<Map<string, string[]>> | undefined
   // Every query here goes through `db.current`: an event is emitted inside the transaction of
   // what happened, and the embedded database has one connection, which that transaction holds.
   /**
-   * The active webhooks by event, read once per kernel: a changed webhook boots a new kernel. So
-   * an event nobody subscribes to costs a lookup in memory.
+   * The active webhooks by event, as the kernel read them when it booted, in the query that
+   * reads its generation. So an event nobody subscribes to costs a lookup in memory, and a site
+   * without webhooks never reads their table.
    */
-  const subscriptions = (): Promise<Map<string, string[]>> => {
-    subscribed ??= db.current
+  let byTopic = new Map(Object.entries(options.subscriptions))
+
+  /** A webhook changed: who is told of what is worked out again, for this kernel and the next. */
+  const afterChange = async (): Promise<void> => {
+    const rows = await db.current
       .select({ id: webhooks.id, topics: webhooks.topics })
       .from(webhooks)
       .where(eq(webhooks.status, 'active'))
-      .then((rows) => {
-        const byTopic = new Map<string, string[]>()
-        for (const { id, topics } of rows) {
-          for (const topic of topics) byTopic.set(topic, [...(byTopic.get(topic) ?? []), id])
-        }
-        return byTopic
-      })
-      .catch((error: unknown) => {
-        subscribed = undefined
-        throw error
-      })
-    return subscribed
-  }
-
-  const afterChange = async (): Promise<void> => {
-    subscribed = undefined
+      .orderBy(asc(webhooks.createdAt), asc(webhooks.id))
+    const next = new Map<string, string[]>()
+    for (const { id, topics } of rows) {
+      for (const topic of topics) next.set(topic, [...(next.get(topic) ?? []), id])
+    }
+    byTopic = next
+    await saveWebhookTopics(db.current, Object.fromEntries(next))
     await options.changed()
   }
 
@@ -254,13 +251,13 @@ export function createWebhookService(options: WebhookServiceOptions): WebhookSer
   return {
     async emit(name, data) {
       if (!store.get(name)) throw new TypeError(`No active plugin defines the event "${name}"`)
-      const ids = (await subscriptions()).get(name)
+      const ids = byTopic.get(name)
       if (!ids || ids.length === 0) return
       const plain = plainData(name, data)
       for (const id of ids) await queue(id, name, plain)
     },
 
-    hasSubscribers: async (name) => (await subscriptions()).has(name),
+    hasSubscribers: (name) => byTopic.has(name),
 
     events: () =>
       store.all().map(({ name, label, description, pluginId }) => ({

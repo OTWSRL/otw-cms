@@ -29,8 +29,8 @@ function mediaData(item: MediaItem): MediaEventData {
 
 /**
  * Core's events, each told from the action of the same name, in that action's transaction: a
- * delivery is queued only if the change is kept. With no webhook subscribed, a handler looks
- * that up in memory and returns.
+ * delivery is queued only if the change is kept. A handler runs only while a webhook is
+ * subscribed to its event; otherwise the action passes it by, at the cost of a lookup in memory.
  */
 export function registerCoreEvents(deps: CoreEventDependencies): void {
   const { store, hooks, webhooks } = deps
@@ -47,6 +47,14 @@ export function registerCoreEvents(deps: CoreEventDependencies): void {
     publishedAt: entry.publishedAt?.toISOString() ?? null,
     updatedAt: entry.updatedAt.toISOString(),
   })
+  const tell = <P>(name: Parameters<WebhookService['emit']>[0], data: (payload: P) => unknown) =>
+    hooks.addAction(
+      CORE,
+      name,
+      async (payload: P) => webhooks.emit(name, await data(payload)),
+      LAST,
+      () => webhooks.hasSubscribers(name),
+    )
 
   store.define(CORE, 'content.saved', {
     label: 'Entry saved',
@@ -65,43 +73,12 @@ export function registerCoreEvents(deps: CoreEventDependencies): void {
     description: 'A file was deleted from the media library.',
   })
 
-  hooks.addAction(
-    CORE,
-    'content.saved',
-    async ({ entry }: { entry: Entry }) => {
-      if (!(await webhooks.hasSubscribers('content.saved'))) return
-      await webhooks.emit('content.saved', await entryData(entry))
-    },
-    LAST,
-  )
-  hooks.addAction(
-    CORE,
-    'content.deleted',
-    async ({ entry }: { entry: Entry }) => {
-      if (!(await webhooks.hasSubscribers('content.deleted'))) return
-      // It's gone, and so is its address.
-      await webhooks.emit('content.deleted', { ...(await entryData(entry)), url: null })
-    },
-    LAST,
-  )
-  hooks.addAction(
-    CORE,
-    'media.uploaded',
-    async ({ item }: { item: MediaItem }) => {
-      if (await webhooks.hasSubscribers('media.uploaded')) {
-        await webhooks.emit('media.uploaded', mediaData(item))
-      }
-    },
-    LAST,
-  )
-  hooks.addAction(
-    CORE,
-    'media.deleted',
-    async ({ item }: { item: MediaItem }) => {
-      if (await webhooks.hasSubscribers('media.deleted')) {
-        await webhooks.emit('media.deleted', mediaData(item))
-      }
-    },
-    LAST,
-  )
+  tell('content.saved', ({ entry }: { entry: Entry }) => entryData(entry))
+  // It's gone, and so is its address.
+  tell('content.deleted', async ({ entry }: { entry: Entry }) => ({
+    ...(await entryData(entry)),
+    url: null,
+  }))
+  tell('media.uploaded', ({ item }: { item: MediaItem }) => mediaData(item))
+  tell('media.deleted', ({ item }: { item: MediaItem }) => mediaData(item))
 }
