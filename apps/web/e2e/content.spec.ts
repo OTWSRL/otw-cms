@@ -125,9 +125,25 @@ test('posts go to the trash, come back as drafts, and are deleted for good', asy
   await signInAsAdmin(page)
   await page.goto('/admin/posts')
   const row = page.getByRole('row', { name: /A guest post/ })
+  const editUrl = await row.getByRole('link', { name: 'Edit “A guest post”' }).getAttribute('href')
   await row.hover()
   await row.getByRole('button', { name: 'Trash' }).click()
   await notice(page, '1 post moved to the Trash.')
+
+  // The post's own screen says where it is, and the browser builds the page the server sent: a
+  // form inside a paragraph, which browsers split in two, would be a hydration error.
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  await page.goto(editUrl!)
+  await expect(page.getByText('This post is in the Trash.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Restore' })).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(errors).toEqual([])
+
+  await page.goto('/admin/posts')
   await page.getByRole('link', { name: /^Trash/ }).click()
   const trashed = page.getByRole('row', { name: /A guest post/ })
   await trashed.hover()

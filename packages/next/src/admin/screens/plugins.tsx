@@ -140,12 +140,12 @@ function UpdateMessage({
   if (!update?.to) return null
   return (
     <div className="notice inline notice-warning update-message">
-      <p>
+      <div className="para">
         There is a new version of {name} available: {update.to}.{' '}
         <FormButton action={action} fields={{ packages: update.name }} variant="link">
           Update now<span className="screen-reader-text"> {name}</span>
         </FormButton>
-      </p>
+      </div>
     </div>
   )
 }

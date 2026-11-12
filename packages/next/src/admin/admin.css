@@ -75,7 +75,9 @@ body:has(> .cms-login) {
   unicode-bidi: embed;
 }
 
-:is(.cms-admin, .cms-login) p {
+/* .para is a paragraph that holds a form's button: a form can't be inside a <p>. */
+:is(.cms-admin, .cms-login) p,
+:is(.cms-admin, .cms-login) .para {
   font-size: 13px;
   line-height: 1.5;
   margin: 1em 0;
@@ -776,6 +778,7 @@ body:has(> .cms-login) {
 }
 
 :is(.cms-admin, .cms-login) .notice p,
+:is(.cms-admin, .cms-login) .notice .para,
 :is(.cms-admin, .cms-login) .notice li {
   margin: 0.5em 0;
   padding: 0;
@@ -1277,7 +1280,8 @@ body:has(> .cms-login) {
   font-variant-numeric: tabular-nums;
 }
 
-.cms-admin .widefat td p {
+.cms-admin .widefat td p,
+.cms-admin .widefat td .para {
   margin: 2px 0 0.8em;
 }
 

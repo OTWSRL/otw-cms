@@ -68,7 +68,7 @@ export async function ContentEditScreen({
         <Notice type="warning" title={`This ${lower} is in the Trash.`}>
           <p>Restore it to edit it.</p>
           {kernel.can(user, caps.deleteEntry, entry) && (
-            <p>
+            <div className="para">
               <FormButton
                 action={kernel.actionUrl('core', 'restore-entry')}
                 fields={{ id: entry.id }}
@@ -76,7 +76,7 @@ export async function ContentEditScreen({
               >
                 Restore
               </FormButton>
-            </p>
+            </div>
           )}
         </Notice>
       </AdminScreen>

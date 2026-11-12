@@ -90,14 +90,14 @@ function ServeUpdates({ kernel, overview }: { kernel: Kernel; overview: Serve })
   return (
     <>
       {job && <JobProgress job={job} />}
-      <p className="update-last-checked">
+      <div className="para update-last-checked">
         {lastCheck
           ? `Last checked on ${when(lastCheck.at)}.`
           : 'Not checked since the last update.'}{' '}
         <FormButton action={action('check-updates')} small disabled={job?.status === 'running'}>
           Check again
         </FormButton>
-      </p>
+      </div>
       {lastCheck?.error && (
         <Notice type="error" title="The last check failed">
           <p>{lastCheck.error}</p>

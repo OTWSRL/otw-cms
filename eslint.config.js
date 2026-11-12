@@ -31,7 +31,20 @@ export default tseslint.config(
   {
     files: ['**/*.tsx'],
     plugins: { 'react-hooks': reactHooks },
-    rules: reactHooks.configs.recommended.rules,
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      // A browser closes a <p> at a <form>, so the page it builds differs from the server's and
+      // React reports a hydration error. FormButton renders a form.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "JSXElement[openingElement.name.name='p'] JSXElement[openingElement.name.name=/^(form|FormButton)$/]",
+          message:
+            'A form can’t be inside a <p>: use <div className="para">, which is styled as one.',
+        },
+      ],
+    },
   },
   {
     // The site, and @otwdesign/next, which holds the CMS's Next.js routes and components.
