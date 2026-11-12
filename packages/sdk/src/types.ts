@@ -1923,6 +1923,14 @@ export interface Migration {
   up: (db: Database) => Promise<unknown>
 }
 
+/** What a plugin's `uninstall()` receives. The plugin isn't loaded: there is no `cms`. */
+export interface UninstallContext {
+  readonly plugin: { readonly id: string; readonly version: string }
+  /** The transaction the uninstall runs in: if anything fails, nothing is deleted. */
+  readonly db: Database
+  readonly logger: Logger
+}
+
 /** What a plugin's `setup(cms)` receives: every API it registers with. */
 export interface PluginContext {
   readonly plugin: { readonly id: string; readonly version: string }
@@ -1981,6 +1989,14 @@ export interface PluginDefinition {
    * Admin pages, actions, settings screens and admin slots go in the plugin's admin entry.
    */
   setup?: (cms: PluginContext) => void | Promise<void>
+  /**
+   * Removes what the plugin made in the database, when an administrator deletes its data from
+   * the Plugins screen, like WordPress's `uninstall.php`: drop its tables, delete the entries of
+   * its content types. Core then forgets its migrations (so activating it again makes its tables
+   * again), its saved settings, its jobs and its cached values. Without it, core deletes only
+   * those last three and leaves the plugin's tables be. It runs while the plugin is inactive.
+   */
+  uninstall?: (context: UninstallContext) => void | Promise<void>
 }
 
 /**

@@ -1,5 +1,6 @@
-import { FormButton, ListTable, Notice, TableNav, Views } from '@otwdesign/admin-ui'
-import type { PluginStatus, PluginUpdate } from '@otwdesign/core'
+import { ButtonLink, FormButton, ListTable, Notice, TableNav, Views } from '@otwdesign/admin-ui'
+import type { Kernel, PluginStatus, PluginUpdate, UninstallPlan } from '@otwdesign/core'
+import Link from 'next/link'
 import { currentSite } from '../../site-registry'
 import { AdminScreen } from '../screen'
 import { updateOverview } from '../update-overview'
@@ -24,6 +25,11 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
   const pinned = kernel.activation === 'pinned'
   const filter = filterFrom(firstParam(params.plugin_status))
   const plugins = kernel.plugins()
+  const deleting = plugins.find((plugin) => plugin.id === firstParam(params.delete))
+  if (deleting) {
+    const plan = await kernel.uninstallPlan(deleting.id)
+    if (plan) return <DeleteData kernel={kernel} plugin={deleting} plan={plan} pinned={pinned} />
+  }
   const shown = filter ? plugins.filter((plugin) => plugin.status === filter) : plugins
   const count = (status: Filter) => plugins.filter((plugin) => plugin.status === status).length
   const href = (status?: Filter) =>
@@ -89,7 +95,22 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
         rows={shown}
         rowKey={(plugin) => plugin.id}
         rowClassName={(plugin) => (plugin.status === 'inactive' ? 'inactive' : 'active')}
-        rowActions={(plugin) => [action(plugin)]}
+        rowActions={(plugin) => [
+          action(plugin),
+          // As WordPress offers Delete once a plugin is deactivated.
+          ...(plugin.status === 'inactive' && !pinned
+            ? [
+                <Link
+                  key="delete"
+                  className="button-link-delete"
+                  href={`/admin/plugins?delete=${plugin.id}`}
+                  aria-label={`Delete ${plugin.name}’s data`}
+                >
+                  Delete Data
+                </Link>,
+              ]
+            : []),
+        ]}
         empty="No plugins found."
         columns={[
           {
@@ -123,6 +144,91 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
           },
         ]}
       />
+    </AdminScreen>
+  )
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
+/**
+ * WordPress's "You are about to remove the following plugin" screen, for the plugin's data: what
+ * will go, and a button that says so. The package stays installed.
+ */
+function DeleteData({
+  kernel,
+  plugin,
+  plan,
+  pinned,
+}: {
+  kernel: Kernel
+  plugin: PluginStatus
+  plan: UninstallPlan
+  pinned: boolean
+}) {
+  const blocked =
+    plugin.status !== 'inactive'
+      ? `Deactivate ${plugin.name} first: only an inactive plugin’s data can be deleted.`
+      : pinned
+        ? 'The active plugins are set by CMS_ACTIVE_PLUGINS, so plugins can’t be changed here.'
+        : null
+  const core = [
+    plan.settings > 0 && plural(plan.settings, 'saved setting', 'saved settings'),
+    plan.jobs > 0 && plural(plan.jobs, 'scheduled action', 'scheduled actions'),
+    plan.cached > 0 && plural(plan.cached, 'cached value', 'cached values'),
+  ].filter(Boolean)
+  return (
+    <AdminScreen title={`Delete ${plugin.name}’s data`} flash={null}>
+      {blocked ? (
+        <Notice type="warning">
+          <p>{blocked}</p>
+        </Notice>
+      ) : (
+        <>
+          <p>
+            You are about to delete the data of the following plugin: <strong>{plugin.name}</strong>
+            .
+          </p>
+          <ul className="ul-disc">
+            {plan.removesItsOwn ? (
+              <li>
+                What {plugin.name} stored itself, such as its tables. Activated again, it starts
+                from nothing.
+              </li>
+            ) : (
+              <li>
+                {plugin.name} doesn’t say how to remove what it stored itself, so its tables, if it
+                has any, are kept.
+              </li>
+            )}
+            <li>
+              What the site kept for it:{' '}
+              {core.length > 0
+                ? core.join(', ')
+                : 'no settings, scheduled actions or cached values'}
+              .
+            </li>
+          </ul>
+          <p>
+            The plugin itself stays installed, and inactive. This can’t be undone: back up the
+            database first if you may want the data again.
+          </p>
+          <div className="para">
+            <FormButton
+              action={kernel.actionUrl('core', 'delete-plugin-data')}
+              fields={{ plugin: plugin.id }}
+              variant="primary"
+            >
+              Yes, delete this data
+            </FormButton>{' '}
+            <ButtonLink href="/admin/plugins">No, return me to the plugin list</ButtonLink>
+          </div>
+        </>
+      )}
+      {blocked && (
+        <p>
+          <Link href="/admin/plugins">← Go to Plugins</Link>
+        </p>
+      )}
     </AdminScreen>
   )
 }

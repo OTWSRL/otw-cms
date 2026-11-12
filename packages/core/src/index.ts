@@ -24,6 +24,7 @@ export { formatBytes, type MediaService } from './media'
 export { isMailbox, type MailService } from './mail'
 export { createMemoryCache, type MemoryCache } from './cache'
 export type { JobListFilter, JobService, StoredJob } from './jobs'
+export type { UninstallPlan } from './uninstall'
 export {
   DELIVERY_ATTEMPTS,
   MAX_FAILURES,

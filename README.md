@@ -360,6 +360,10 @@ Rules the kernel enforces or relies on:
   requires a same-site `Origin`, a session and the capability. It then answers with a 303 back to
   the form, or to `redirect`, carrying a one-time message. Throw `ActionError` for messages the
   user should see; anything else is logged and shown as a generic error.
+- **Deleting a plugin's data.** An inactive plugin has Delete Data, WordPress's Delete for what is
+  in the database: it runs the plugin's `uninstall({ db })`, which drops its tables, then deletes
+  the record of its migrations, its saved settings, its jobs and its cached values, in one
+  transaction, after a page that says what will go. Without `uninstall()` the plugin's tables stay.
 - **Activation.** A plugin can't be activated until its required plugins are active, and can't be
   deactivated while an active plugin requires it. Activation boots the site once with the plugin
   on first, so a plugin that crashes in setup stays off and the reason is shown.

@@ -782,6 +782,29 @@ blocking private network addresses (an administrator chooses the address).
 Not in this part: tags and invalidation by tag, a Flush button in the admin, a Redis store plugin
 of our own, and telling other servers' memories of a delete.
 
+### 10d. Deleting a plugin's data (done)
+
+WordPress's Delete on the Plugins screen, which runs a plugin's `uninstall.php`, for the part that
+is the database's. The plugin's package stays installed: removing code is a rebuild (10e).
+
+- **`uninstall({ db, logger, plugin })`** on a plugin's definition removes what the plugin made:
+  its tables, the entries of its content types. The plugin isn't loaded when it runs.
+- **Core then deletes** what it kept for the plugin: the record of its migrations (only when the
+  plugin has `uninstall()`, so activating it again makes its tables again), its saved settings,
+  its jobs and its durable cached values. A plugin without `uninstall()` keeps its tables and its
+  migrations on record.
+- **One transaction**, under the migrations' advisory lock: an `uninstall()` that throws deletes
+  nothing, and the administrator is told why.
+- **Plugins › Delete Data**, on an inactive plugin, opens a page that says what will go and asks
+  first, as WordPress's does. Refused while the plugin is active, where plugins are pinned, and
+  without `core.manage_plugins`.
+- The plugin's row in `cms_plugins` stays, switched off: a site with no rows is a new site,
+  whose first boot switches every plugin on.
+
+Not in this part: `uninstall()` in the CMS's own plugins (Commerce, Courses, Mailer, Database),
+which each need it written; a `cms` command for it; and webhooks left subscribed to a deleted
+plugin's events, which show them as "Its plugin isn't active".
+
 ## 11. Page cache plugin
 
 A full-page cache for signed-out visitors, as WordPress sites get from caching plugins, in a

@@ -1361,6 +1361,15 @@ body:has(> .cms-login) {
   color: var(--wp-danger);
 }
 
+/* A bulleted list in a screen's text, WordPress's .ul-disc. */
+.cms-admin .ul-disc {
+  margin: 1em 0 1em 2em;
+  padding: 0;
+  list-style: disc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* Settings › Webhooks: one event to a line. */
 .cms-admin .webhook-event {
   display: block;

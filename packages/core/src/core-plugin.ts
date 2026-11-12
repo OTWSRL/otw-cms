@@ -320,6 +320,8 @@ export interface CoreActionDependencies {
   /** Each returns the notice to show. */
   activate(pluginId: string): Promise<string>
   deactivate(pluginId: string): Promise<string>
+  /** Deletes an inactive plugin's data. */
+  uninstall(pluginId: string): Promise<string>
   /** Runs pending migrations for core and the active plugins. */
   updateDatabase(): Promise<string>
   /** The site's way of applying updates, when it has one. */
@@ -426,6 +428,15 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
       name: 'deactivate-plugin',
       capability: 'core.manage_plugins',
       handler: async ({ form }) => ({ notice: await deps.deactivate(field(form, 'plugin')) }),
+    },
+    {
+      // WordPress's Delete, for the plugin's data: its package stays installed.
+      name: 'delete-plugin-data',
+      capability: 'core.manage_plugins',
+      handler: async ({ form }) => ({
+        redirect: `${ADMIN_PREFIX}/plugins`,
+        notice: await deps.uninstall(field(form, 'plugin')),
+      }),
     },
     ...updateActions(deps.updates),
     {

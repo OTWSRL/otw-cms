@@ -72,6 +72,7 @@ import { createWebhookService, EventStore, type WebhookService } from './webhook
 import { accountActions } from './account-actions'
 import { createAccountPages, type AccountResolution } from './account-pages'
 import { createAccountService, signInUrl, type AccountService } from './accounts'
+import { uninstallPlan, uninstallPlugin, type UninstallPlan } from './uninstall'
 import { createUsersService, UserMetaStore, type UsersService } from './users'
 import { userActions } from './user-actions'
 import { localStorage, UPLOADS_PATH } from './media-storage'
@@ -286,6 +287,8 @@ export interface Kernel {
   readonly jobs: JobService
   /** Events and the webhooks they're sent to: Settings › Webhooks. */
   readonly webhooks: WebhookService
+  /** What deleting an installed plugin's data would remove; `null` when it isn't installed. */
+  uninstallPlan(pluginId: string): Promise<UninstallPlan | null>
   /** `cms.cache` for the site's own code: its keys are apart from every plugin's. */
   readonly cache: Omit<CacheApi, 'store'>
   /** People's own accounts: signing up, resetting passwords, changing their details. */
@@ -895,6 +898,28 @@ async function boot(
       await saveActive(db.root, id, false)
       await changed()
       return `${name} deactivated.`
+    },
+    async uninstall(id) {
+      if (options.active) throw new ActionError(PINNED)
+      const plugin = installed.get(id)
+      if (!plugin) throw new ActionError('That plugin is not installed.')
+      const name = displayName(plugin, id)
+      if ((await loadActiveIds(db.root, options.plugins)).includes(id)) {
+        throw new ActionError(`Deactivate ${name} before deleting its data.`)
+      }
+      try {
+        await uninstallPlugin(db, plugin, withContext(logger, { plugin: id }))
+      } catch (error) {
+        logger.error(`Deleting the data of plugin "${id}" failed; nothing was deleted`, {
+          plugin: id,
+          error,
+        })
+        throw new ActionError(
+          `${name}’s data could not be deleted, and nothing was: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+      await changed()
+      return `${name}’s data was deleted.`
     },
     updates: options.updates ?? null,
     async updateDatabase() {
@@ -1686,6 +1711,10 @@ function buildKernel(input: {
     mail: input.mail,
     jobs: input.jobs,
     webhooks: input.webhooks,
+    uninstallPlan: async (pluginId) => {
+      const plugin = installed.get(pluginId)
+      return plugin ? uninstallPlan(db, plugin) : null
+    },
     cache: input.cache,
     accounts: input.accounts,
     users: input.users,

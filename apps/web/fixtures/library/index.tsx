@@ -52,6 +52,10 @@ const library = definePlugin({
       },
     },
   ],
+  // What "Delete Data" on the Plugins screen removes, besides what core kept for the plugin.
+  uninstall: async ({ db }) => {
+    await db.execute('DROP TABLE library_visits')
+  },
   settings: {
     'library.open': {
       type: 'boolean',

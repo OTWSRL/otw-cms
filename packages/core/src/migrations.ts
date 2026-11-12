@@ -16,7 +16,7 @@ export const cmsMigrations = pgTable(
 )
 
 // Serialises migrations across processes booting at the same time (e.g. several app instances).
-const MIGRATION_LOCK = 727_001
+export const MIGRATION_LOCK = 727_001
 
 const lock = sql`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK})`
 

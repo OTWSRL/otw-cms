@@ -67,6 +67,43 @@ test('plugins deactivate and reactivate in dependency order', async ({ page }) =
   await expect(courier).toHaveClass('active')
 })
 
+test('an inactive plugin’s data is deleted after a confirmation, and it starts again from nothing', async ({
+  page,
+}) => {
+  await signIn(page, ADMIN)
+  await page.goto('/admin/plugins')
+  const library = page.getByRole('row', { name: /^Library/ })
+  const courier = page.getByRole('row', { name: /^Courier/ })
+  // Only an inactive plugin offers it, as WordPress offers Delete.
+  await expect(library.getByRole('link', { name: 'Delete Library’s data' })).toHaveCount(0)
+  await courier.getByRole('button', { name: 'Deactivate Courier' }).click()
+  await notice(page, 'Courier deactivated.')
+  await library.getByRole('button', { name: 'Deactivate Library' }).click()
+  await notice(page, 'Library deactivated.')
+
+  await library.hover()
+  await library.getByRole('link', { name: 'Delete Library’s data' }).click()
+  await expect(page.getByRole('heading', { name: 'Delete Library’s data', level: 1 })).toBeVisible()
+  await expect(page.getByText('What Library stored itself, such as its tables.')).toBeVisible()
+  // Changed their mind: nothing happens.
+  await page.getByRole('link', { name: 'No, return me to the plugin list' }).click()
+  await expect(page).toHaveURL('/admin/plugins')
+
+  await library.hover()
+  await library.getByRole('link', { name: 'Delete Library’s data' }).click()
+  await page.getByRole('button', { name: 'Yes, delete this data' }).click()
+  await notice(page, 'Library’s data was deleted.')
+  await expect(page).toHaveURL(/\/admin\/plugins/)
+  await expect(library).toHaveClass('inactive')
+
+  // Activated again, it makes its table again, and the plugin that needs it can come back.
+  await library.getByRole('button', { name: 'Activate Library' }).click()
+  await notice(page, 'Library activated.')
+  await courier.getByRole('button', { name: 'Activate Courier' }).click()
+  await notice(page, 'Courier activated.')
+  expect((await page.goto('/library'))?.status()).toBe(200)
+})
+
 test('settings saved in the admin change the site', async ({ page }) => {
   await signIn(page, ADMIN)
   await openSection(page, 'Settings')
