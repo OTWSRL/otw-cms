@@ -82,6 +82,8 @@ function splitPath(pathname: string): string[] | null {
 
 export class Router<T> {
   readonly #routes: CompiledRoute<T>[] = []
+  /** Whether `#routes` is in matching order: adding a route leaves it for the next match to sort. */
+  #sorted = true
   readonly #byKey = new Map<string, CompiledRoute<T>>()
   readonly #byShape = new Map<string, string>()
 
@@ -94,8 +96,11 @@ export class Router<T> {
     if (clash) throw new Error(`Route "${key}" (${pattern}) conflicts with "${clash}"`)
 
     const route = { key, pattern, segments, value }
+    // Sorted once, by the first match after the last route is added, not on every add: a site
+    // registers its routes together at boot, and sorting each time made that quadratic. The
+    // sort is stable, so routes of the same specificity keep the order they were added in.
     this.#routes.push(route)
-    this.#routes.sort((a, b) => compareSpecificity(a.segments, b.segments))
+    this.#sorted = false
     this.#byKey.set(key, route)
     this.#byShape.set(shapeKey, key)
     return route
@@ -109,6 +114,10 @@ export class Router<T> {
   matchAll(pathname: string): RouteMatch<T>[] {
     const parts = splitPath(pathname)
     if (!parts) return []
+    if (!this.#sorted) {
+      this.#routes.sort((a, b) => compareSpecificity(a.segments, b.segments))
+      this.#sorted = true
+    }
     const matches: RouteMatch<T>[] = []
     for (const route of this.#routes) {
       const params = matchSegments(route.segments, parts)

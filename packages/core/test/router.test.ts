@@ -29,6 +29,29 @@ describe('Router', () => {
     expect(router.match('/members/ana')?.route.value).toBe('member')
   })
 
+  it('orders matches by specificity, then by when each was added, whenever routes are added', () => {
+    const router = new Router<string>()
+    const paths = ['/:a/:b', '/shop/:b', '/:a/new', '/shop/new', '/:x/:y/:z', '/shop']
+    router.add('first', paths[0]!, 'first')
+    // A match between adds must not change where later routes land.
+    expect(router.matchAll('/shop/new').map((match) => match.route.key)).toEqual(['first'])
+    paths.slice(1).forEach((path, index) => router.add(`r${index}`, path, path, String(index)))
+    expect(router.matchAll('/shop/new').map((match) => match.route.pattern)).toEqual([
+      '/shop/new',
+      '/shop/:b',
+      '/:a/new',
+      '/:a/:b',
+    ])
+    // Two of the same shape, in scopes of their own: the one added first comes first.
+    router.add('get', '/items/:id', 'get', 'GET')
+    router.add('post', '/items/:id', 'post', 'POST')
+    expect(router.matchAll('/items/7').map((match) => match.route.key)).toEqual([
+      'get',
+      'post',
+      'first',
+    ])
+  })
+
   it('ignores trailing slashes', () => {
     const router = new Router<string>()
     router.add('shop', '/shop/', 'shop')
