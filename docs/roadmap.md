@@ -838,21 +838,47 @@ WordPress's Add Plugins and Delete. There is no plugin directory of our own: npm
 Not in this part: ratings, screenshots and a details page for a plugin; uploading a plugin as a
 file; installing several at once; and checking a package's publisher or signature.
 
-## 11. Page cache plugin
+## 11. Page cache plugin (done)
 
-A full-page cache for signed-out visitors, as WordPress sites get from caching plugins, in a
-repository of its own and on npm as an optional plugin. Every site page is rendered for every
-visit today (`Cache-Control: no-store`): 6–10 ms each, 140–265 pages a second on one process.
-Served from a cache, the same pages would answer thousands a second.
+A full-page cache for visitors who aren't signed in, as WordPress sites get from WP Super Cache
+and its kind: `@otwdesign/plugin-page-cache`, in a repository of its own
+(`../otw-plugin-page-cache`).
 
-- **What's cached**: pages for visitors with no session, by address. Signed-in people, previews,
-  form posts and the account pages always reach the site.
-- **Invalidation** is the work: saving, trashing or restoring an entry, or changing a term or a
-  setting, must drop the pages that show it (the entry, its archives, the home page). It needs
-  hooks core may not have yet, and a plugin's own pages need a way to say what they show.
-- **Where it's kept**: memory for one server, and a store plugins can provide (Redis) for
-  several; `Cache-Control` for a CDN in front.
-- **Measured** against today's numbers above.
+| Page, 1,500 posts                     | Rendered | From the cache |
+| ------------------------------------- | -------- | -------------- |
+| Home                                  | 4.40 ms  | 0.48 ms        |
+| A post                                | 3.38 ms  | 0.42 ms        |
+| A category                            | 2.92 ms  | 0.38 ms        |
+| Category pages a second, 16 at a time | 395      | 7,445          |
+
+- **Where it answers: a plugin's proxy**, new in core for this (1.6). A plugin package's
+  `./proxy` entry exports a `ProxyHandler`, which sees a request before any page or route and may
+  answer it: WordPress's `advanced-cache.php` drop-in. `cms generate` writes the site's
+  `proxy.ts` with `createProxy()` only when an installed plugin has one, keeps a proxy the site
+  wrote, and removes its own when the last such plugin goes: a site without one has no proxy.
+  Passing through one costs nothing measurable: against a build with none, interleaved, −0.21
+  to +0.13 ms across pages, each spread across zero.
+- **What it may use**: `bootedKernel()`, the kernel the server booted last (the active plugins,
+  settings, services), which a proxy never boots itself, and `ownOrigin()`, Next.js's own
+  address for the server. The proxy shares the process's memory with the site's bundles, which
+  is how the plugin's hooks purge what its proxy stored.
+- **What's cached**: GET and HEAD for a page (never the admin, the API, accounts, uploads, a
+  preview, a client-side navigation), from a visitor with no cookie beyond analytics and consent
+  ones. Any other cookie, a session's or a cart's, sends the visitor to the site. Stored: only a
+  200 with HTML that sets no cookie. The proxy fills the cache by asking the site itself for the
+  page, with the visitor's host; visitors who miss together share one render.
+- **Invalidation is everything at once**, as WP Super Cache's default: when a published entry is
+  saved, trashed, restored or deleted (a draft clears nothing), a term changes, a file's details
+  change, and whenever a kernel boots, which a saved setting or a switched plugin causes. Plus a
+  time per page (10 minutes), and a Purge button.
+- **For other plugins**: the `pageCache` service excludes paths and purges; a page refuses with
+  `x-page-cache: skip`.
+- **Where it's kept**: the server's memory, 5,000 pages or 128 MB, least recently used out
+  first. `s-maxage` for a CDN in front is a setting.
+
+Not built: a shared store (Redis) for several servers, which today each keep their own pages
+until their time is up; purging only the pages a change shows on; caching client-side
+navigations; and purging a CDN.
 
 ## Later
 
