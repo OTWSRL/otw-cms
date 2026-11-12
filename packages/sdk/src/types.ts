@@ -3,6 +3,8 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import type { ReactNode } from 'react'
 import type {
   ActionName,
+  JobName,
+  Jobs,
   Actions,
   CapabilityArgs,
   CapabilityName,
@@ -1608,6 +1610,91 @@ export interface MailApi {
   transport(transport: MailTransport): void
 }
 
+// ── Jobs ─────────────────────────────────────────────────────────────────────
+
+/** Where a job stands: waiting for its time, running, or finished one of three ways. */
+export type JobStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+
+/** One run of a job, as its handler sees it. */
+export interface JobRun {
+  /** The job's id, as Tools › Scheduled Actions shows it. */
+  id: string
+  /** 1 for the first try. */
+  attempt: number
+  /**
+   * Aborts once the run has used its `timeoutSeconds`. Pass it to `fetch()` and stop when it
+   * fires: a run that goes on after it may be started again somewhere else.
+   */
+  signal: AbortSignal
+}
+
+/** A job: work that runs in the background, now, at a time or on a repeat. */
+export interface JobDefinition<TArgs> {
+  /** Shown in Tools › Scheduled Actions. Defaults to the name. */
+  label?: string
+  /**
+   * Does the work. It runs outside any transaction; use `cms.transaction()` for what must be
+   * kept or lost together. Throwing fails this try. A job can run more than once (a retry, or a
+   * run whose server stopped), so make it safe to repeat.
+   */
+  handler: (args: TArgs, run: JobRun) => void | Promise<void>
+  /**
+   * Runs it on a repeat, this many seconds apart, with no arguments, like
+   * `as_schedule_recurring_action()`. The first run is one interval after the site first sees
+   * it. At least 60.
+   */
+  everySeconds?: number
+  /** How many times a run is tried before it counts as failed. Defaults to 1: no retry. */
+  attempts?: number
+  /**
+   * Seconds to wait before the next try, given the try that failed (1 for the first). Defaults
+   * to 1 minute, then 4, then 16, up to a day.
+   */
+  backoffSeconds?: number | ((attempt: number) => number)
+  /** How long a run may take. Defaults to 300 seconds. */
+  timeoutSeconds?: number
+}
+
+/** When and how a job is queued. */
+export interface EnqueueOptions {
+  /** Not before this time. Without it, as soon as possible. */
+  at?: Date
+  /**
+   * Queues it only if no job with this name and key is already waiting, like Action Scheduler's
+   * `$unique`: `enqueue()` then answers `null`. For "rebuild the index" asked for many times.
+   */
+  unique?: string
+}
+
+/**
+ * `cms.jobs`: work in the background, like WordPress's Action Scheduler. A job is queued in the
+ * caller's transaction, so it exists only if what asked for it was kept.
+ */
+export interface JobsApi {
+  /** Declares a job and what runs it. In `setup()`; its name starts with the plugin's id. */
+  define<K extends JobName>(name: K, definition: JobDefinition<Jobs[K]>): void
+  /**
+   * Queues a run, like `as_enqueue_async_action()`, or `as_schedule_single_action()` with
+   * `at`. Returns the job's id, or `null` when `unique` found one waiting. The arguments must
+   * be plain data: they're stored as JSON.
+   */
+  enqueue<K extends JobName>(
+    name: K,
+    args: Jobs[K],
+    options?: EnqueueOptions,
+  ): Promise<string | null>
+  /**
+   * Cancels the waiting jobs of this name, or only those queued with this `unique` key, like
+   * `as_unschedule_all_actions()`. Returns how many.
+   */
+  cancel<K extends JobName>(name: K, unique?: string): Promise<number>
+  /**
+   * When the next waiting job of this name (and `unique` key) is due, like
+   * `as_next_scheduled_action()`; `null` when none is waiting.
+   */
+  next<K extends JobName>(name: K, unique?: string): Promise<Date | null>
+}
+
 // ── Tracing ──────────────────────────────────────────────────────────────────
 
 /** What a span in a request's trace timed. */
@@ -1710,6 +1797,7 @@ export interface PluginContext {
   readonly content: ContentApi
   readonly media: MediaApi
   readonly mail: MailApi
+  readonly jobs: JobsApi
   readonly users: UsersApi
   readonly traces: TracesApi
   readonly logger: Logger

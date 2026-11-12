@@ -1,4 +1,5 @@
-import type { Block, EntryMetaValues, EntryStatus, UserMetaValues } from '@otwdesign/sdk'
+import type { Block, EntryMetaValues, EntryStatus, JobStatus, UserMetaValues } from '@otwdesign/sdk'
+import { sql } from 'drizzle-orm'
 import {
   bigint,
   boolean,
@@ -9,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
@@ -206,4 +208,38 @@ export const userTokens = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('cms_user_tokens_user_idx').on(table.userId, table.createdAt)],
+)
+
+/**
+ * Work for the background, like Action Scheduler's actions: one row per run, kept after it
+ * finishes as the log Tools › Scheduled Actions shows.
+ */
+export const jobs = pgTable(
+  'cms_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    args: jsonb('args').$type<Record<string, unknown>>().notNull().default({}),
+    /** Set by `unique`, and by a repeating job: one waiting row per name and key. */
+    uniqueKey: text('unique_key'),
+    status: text('status').$type<JobStatus>().notNull().default('pending'),
+    runAt: timestamp('run_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Tries started, this one included once it runs. */
+    attempts: integer('attempts').notNull().default(0),
+    /** For a repeating job: how far apart its runs are. */
+    everySeconds: integer('every_seconds'),
+    /** While it runs: when another server may take it over, because this one stopped. */
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    // What's due next, and each status's list in the admin, newest or soonest first.
+    index('cms_jobs_status_idx').on(table.status, table.runAt),
+    uniqueIndex('cms_jobs_unique_idx')
+      .on(table.name, table.uniqueKey)
+      .where(sql`unique_key IS NOT NULL AND status = 'pending'`),
+  ],
 )

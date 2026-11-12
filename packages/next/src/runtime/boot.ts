@@ -10,6 +10,8 @@ export interface BootOptions {
   env?: Env
   /** Called after an admin changes activation or settings. */
   onChange?: () => void
+  /** Called when a job is queued, with the time it's due: the app wakes what runs its jobs. */
+  onJobQueued?: (dueAt: Date) => void
 }
 
 /**
@@ -19,7 +21,7 @@ export interface BootOptions {
 export function bootSite(
   site: Site,
   db: Database,
-  { env = process.env, onChange }: BootOptions = {},
+  { env = process.env, onChange, onJobQueued }: BootOptions = {},
 ): Promise<Kernel> {
   return createKernel({
     plugins: site.plugins,
@@ -36,5 +38,6 @@ export function bootSite(
     brand: site.brand,
     uploads: uploadsFromEnv(env),
     onChange,
+    onJobQueued,
   })
 }

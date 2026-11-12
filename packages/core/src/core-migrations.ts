@@ -346,4 +346,32 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    // The job queue: one row per run, waiting, running or finished.
+    id: '0012_jobs',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_jobs (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          name text NOT NULL,
+          args jsonb NOT NULL DEFAULT '{}',
+          unique_key text,
+          status text NOT NULL DEFAULT 'pending',
+          run_at timestamptz NOT NULL DEFAULT now(),
+          attempts integer NOT NULL DEFAULT 0,
+          every_seconds integer,
+          locked_until timestamptz,
+          last_error text,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          started_at timestamptz,
+          finished_at timestamptz
+        )
+      `)
+      await db.execute(sql`CREATE INDEX cms_jobs_status_idx ON cms_jobs (status, run_at)`)
+      await db.execute(sql`
+        CREATE UNIQUE INDEX cms_jobs_unique_idx ON cms_jobs (name, unique_key)
+          WHERE unique_key IS NOT NULL AND status = 'pending'
+      `)
+    },
+  },
 ]

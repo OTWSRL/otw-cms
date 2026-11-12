@@ -61,6 +61,7 @@ import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
 import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
+import { createJobService, cronHandler, JobStore, type JobService } from './jobs'
 import { createMailService, type MailService } from './mail'
 import { accountActions } from './account-actions'
 import { createAccountPages, type AccountResolution } from './account-pages'
@@ -162,6 +163,11 @@ export interface KernelOptions {
   secret?: string
   /** Runs after the admin changes activation or settings, so the app can reboot its kernel. */
   onChange?: () => void
+  /**
+   * Runs when a job has been queued and its transaction committed, with the time it's due, so
+   * the app can wake what runs its jobs (`kernel.jobs.runDue()`).
+   */
+  onJobQueued?: (dueAt: Date) => void
   /** `fast` lowers the password hashing cost. Only for test suites. */
   passwordHashing?: HashCost
   /**
@@ -257,6 +263,8 @@ export interface Kernel {
   readonly media: MediaService
   /** Sending email, through the transport a plugin provides. */
   readonly mail: MailService
+  /** The job queue: what a runner calls, and what Tools › Scheduled Actions lists. */
+  readonly jobs: JobService
   /** People's own accounts: signing up, resetting passwords, changing their details. */
   readonly accounts: AccountService
   /** Users and the fields plugins give them. */
@@ -548,6 +556,14 @@ async function boot(
     transport: () => mailTransport?.transport ?? null,
     production: (options.env ?? process.env).NODE_ENV === 'production',
   })
+  const jobStore = new JobStore(assertOpen)
+  const jobs = createJobService({
+    db,
+    logger,
+    hooks: stores.hooks,
+    store: jobStore,
+    onQueued: options.onJobQueued,
+  })
   /** A plugin's mail transport: one, as one SMTP plugin replaces wp_mail()'s mailer. */
   const provideTransport = (pluginId: string, transport: MailTransport) => {
     assertOpen(`mail transport from "${pluginId}"`)
@@ -721,6 +737,7 @@ async function boot(
     ...options,
     strict: false,
     onChange: undefined,
+    onJobQueued: undefined,
     // Only the kernel that serves requests decides whether they're recorded.
     traces: undefined,
     logger: {
@@ -835,6 +852,15 @@ async function boot(
     },
   })
   for (const action of actions) registerAction(CORE, action)
+  // Where nothing runs between requests, a cron request runs the jobs that are due.
+  registerApi(CORE, {
+    method: 'GET',
+    path: '/cron',
+    handler: cronHandler({
+      secret: () => (options.env ?? {}).CRON_SECRET,
+      runDue: (runOptions) => jobs.runDue(runOptions),
+    }),
+  })
   const contentForms = contentActions({
     content,
     types: contentTypes,
@@ -1111,6 +1137,20 @@ async function boot(
           provideTransport(plugin.id, transport)
         },
       },
+      jobs: {
+        define: (name, definition) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Define the job "${name}" in setup(): jobs run wherever the site does, where the admin entry isn't loaded`,
+            )
+          }
+          jobStore.define(plugin.id, name, definition as never)
+        },
+        enqueue: (name, args, enqueueOptions) =>
+          jobs.enqueue(name, args as Record<string, unknown>, enqueueOptions),
+        cancel: (name, unique) => jobs.cancel(name, unique),
+        next: (name, unique) => jobs.next(name, unique),
+      },
       admin: {
         page: (page) => {
           inAdminEntry(`admin page "${plugin.id}.${page.name}"`)
@@ -1335,6 +1375,7 @@ async function boot(
     mediaStorage,
     maxUploadBytes,
     mail,
+    jobs,
     accounts,
     resolveAccount,
     users,
@@ -1394,6 +1435,7 @@ function buildKernel(input: {
   mediaStorage: () => MediaStorage
   maxUploadBytes: number
   mail: MailService
+  jobs: JobService
   accounts: AccountService
   resolveAccount: ReturnType<typeof createAccountPages>
   users: UsersService
@@ -1547,6 +1589,7 @@ function buildKernel(input: {
     content: input.content,
     media: input.media,
     mail: input.mail,
+    jobs: input.jobs,
     accounts: input.accounts,
     users: input.users,
     resolveAccount: (pathname, searchParams, user) =>

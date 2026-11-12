@@ -119,7 +119,18 @@ export interface Actions {
   'mail.sent': { message: OutgoingMail }
   /** An email couldn't be sent, or there's no transport: `wp_mail_failed`. */
   'mail.failed': { message: OutgoingMail; error: string }
+  /**
+   * A job failed its last try, like `action_scheduler_failed_action`: for telling someone. Its
+   * `error` is the last try's.
+   */
+  'job.failed': { id: string; name: string; args: unknown; attempts: number; error: string }
 }
+
+/**
+ * Job name -> its arguments, which must be plain data. Declare the job itself with
+ * `cms.jobs.define()`. A job that repeats takes none: `Record<string, never>`.
+ */
+export interface Jobs {}
 
 /** Service name -> the API the providing plugin exposes to others. */
 export interface Services {}
@@ -265,6 +276,7 @@ export type RegistryName = keyof Registries & string
 export type FilterName = keyof Filters & string
 /** Any declared action's name. */
 export type ActionName = keyof Actions & string
+export type JobName = keyof Jobs & string
 /** Any declared service's name. */
 export type ServiceName = keyof Services & string
 /** Any declared setting's key. */
