@@ -294,6 +294,7 @@ export type RegistryName = keyof Registries & string
 export type FilterName = keyof Filters & string
 /** Any declared action's name. */
 export type ActionName = keyof Actions & string
+/** Any declared job's name. */
 export type JobName = keyof Jobs & string
 /** Any declared service's name. */
 export type ServiceName = keyof Services & string
