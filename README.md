@@ -519,6 +519,24 @@ job allows, timed out, and taken over when their server stops; a job out of trie
 - **Core's jobs.** `core.cleanup` and `core.empty_trash` daily, and `core.publish_entry` at a
   scheduled entry's date.
 
+## Events and webhooks
+
+`cms.events` is the outbox: `define(name, { label })` in `setup()`, then `emit(name, data)` where
+it happens. Each active webhook subscribed to the event gets a delivery, queued as a job in the
+caller's transaction, so an event goes out only if what happened was kept. Core tells of
+`content.saved`, `content.deleted`, `media.uploaded` and `media.deleted`.
+
+- **Settings › Webhooks** (`core.manage_webhooks`), as WooCommerce's: a name, a status, the events
+  to send, a delivery URL and a secret; Send a test; the last delivery's answer.
+- **Deliveries** follow the [Standard Webhooks](https://www.standardwebhooks.com) specification:
+  a JSON body `{ type, timestamp, data }` with `webhook-id`, `webhook-timestamp` and
+  `webhook-signature` (`v1,` and an HMAC-SHA256 of `id.timestamp.body`), so a receiver verifies
+  them with an existing library. Five tries (at once, then after 1, 4, 16 and 64 minutes), ten
+  seconds for an answer, and no redirect followed. Five deliveries in a row that fail every try
+  disable the webhook.
+- **Cost.** A kernel reads the subscriptions once, and a changed webhook boots a new kernel, so
+  an event nobody subscribes to is a lookup in memory.
+
 ## Accounts on the site
 
 `/account`, WooCommerce's My Account: signed out, sign in and (with Settings › General ›

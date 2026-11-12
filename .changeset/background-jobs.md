@@ -22,3 +22,10 @@ ahead gets the new status `scheduled`, and the site publishes it on its date (th
 Scheduled view. `EntryStatus` has a new member, so code that handles every status needs a case
 for it. Migrations `core/0012_jobs` and `core/0013_scheduled_entries` add the queue's table and
 widen the entries' status checks and slug index.
+
+**Events and webhooks.** `cms.events.define()` and `emit()` tell other systems what happened:
+each webhook subscribed to an event in the new **Settings › Webhooks** screen (the
+`core.manage_webhooks` capability) gets a signed POST, queued with the caller's transaction and
+tried five times. Deliveries follow the Standard Webhooks specification. Core emits
+`content.saved`, `content.deleted`, `media.uploaded` and `media.deleted`. Migration
+`core/0014_webhooks` adds the webhooks' table.

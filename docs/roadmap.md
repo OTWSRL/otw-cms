@@ -714,6 +714,35 @@ Not in this part: cron expressions (`as_schedule_cron_action`), job groups and p
 than one job at a time per server, a time zone for "every day at 3", and jobs in a request's
 trace.
 
+### 10b. Events and webhooks (done)
+
+The outbound event outbox, with WooCommerce's webhooks as the model for the admin and the
+[Standard Webhooks](https://www.standardwebhooks.com) specification for what's sent.
+
+- **`cms.events`**: a plugin defines an event in `setup()` (`shop.order.paid`, with a label) and
+  emits it with plain data. Typed by the `Events` interface. Core defines `content.saved`,
+  `content.deleted`, `media.uploaded` and `media.deleted`, told from the actions of the same
+  names with a summary of the entry or file (no body), and a published entry's address.
+- **The outbox is the job queue**: an emit queues one `core.deliver_webhook` job per subscribed
+  webhook, in the caller's transaction. Nothing is sent for what was rolled back.
+- **A webhook** (`cms_webhooks`) has a name, a status (active, paused, disabled), events, a
+  delivery URL (http or https, no credentials in it) and a secret the site makes (`whsec_` and
+  24 random bytes). Settings › Webhooks lists them and edits one with `?edit=`, as WooCommerce's
+  `&edit-webhook=` does, for `core.manage_webhooks`.
+- **A delivery** is a POST of `{ type, timestamp, data }` with `webhook-id` (the same on every
+  try), `webhook-timestamp` (this try's) and `webhook-signature`. It never follows a redirect,
+  waits ten seconds, and is tried five times. Each answer is kept on the webhook; five
+  deliveries in a row that fail every try disable it, as WooCommerce disables after its fifth.
+  A delivery whose webhook was paused or deleted since is dropped. Send a test sends
+  `webhook.test` whatever the status.
+- **Cost.** Subscriptions are read once per kernel (one query, with the first event it emits),
+  and saving a webhook bumps the generation, so every kernel reads them again. An event nobody
+  subscribes to costs a lookup in memory; a subscribed one, an insert per webhook.
+
+Not in this part: an incoming-webhook receiver for plugins, per-webhook delivery logs beyond
+Tools › Scheduled Actions, replaying a delivery from the admin, a payload of the whole entry, and
+blocking private network addresses (an administrator chooses the address).
+
 ## 11. Page cache plugin
 
 A full-page cache for signed-out visitors, as WordPress sites get from caching plugins, in a
