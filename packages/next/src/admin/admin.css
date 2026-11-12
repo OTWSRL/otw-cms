@@ -1361,6 +1361,12 @@ body:has(> .cms-login) {
   color: var(--wp-danger);
 }
 
+/* Settings › Webhooks: one event to a line. */
+.cms-admin .webhook-event {
+  display: block;
+  margin: 0 0 6px;
+}
+
 /* Tools › Scheduled Actions: a job's arguments, one to a line, and why it failed. */
 .cms-admin .job-arguments {
   margin: 0;

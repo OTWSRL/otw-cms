@@ -39,7 +39,7 @@ export async function signInAsAdmin(page: Page) {
 }
 
 /** The one-time message after a form post. */
-export function notice(page: Page, message: string) {
+export function notice(page: Page, message: string | RegExp) {
   return expect(page.getByRole('status').filter({ hasText: message })).toBeVisible()
 }
 

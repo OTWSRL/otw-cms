@@ -30,6 +30,7 @@ import { UpdatesScreen } from './screens/updates'
 import { NewUserScreen } from './screens/user-new'
 import { ScheduledActionsScreen } from './screens/scheduled-actions'
 import { UsersScreen } from './screens/users'
+import { WebhooksScreen } from './screens/webhooks'
 import { ProfileScreen } from './screens/profile'
 import { UserEditScreen } from './screens/user-edit'
 import { SettingsForm } from './settings-form'
@@ -65,6 +66,11 @@ const SCREENS: Readonly<Record<string, CoreScreen>> = {
   '/admin/users/roles': { title: 'Roles', capability: 'core.manage_users', Screen: RolesScreen },
   '/admin/profile': { title: 'Profile', Screen: ProfileScreen },
   '/admin/updates': { title: 'Updates', capability: 'core.manage_updates', Screen: UpdatesScreen },
+  '/admin/settings/webhooks': {
+    title: 'Webhooks',
+    capability: 'core.manage_webhooks',
+    Screen: WebhooksScreen,
+  },
   '/admin/tools/scheduled-actions': {
     title: 'Scheduled Actions',
     capability: 'core.manage_jobs',
