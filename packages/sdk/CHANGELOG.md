@@ -1,5 +1,19 @@
 # @otwdesign/sdk
 
+## 1.4.0
+
+### Minor Changes
+
+- 7aef5e6: `cms.cache`, as WordPress's object cache and transients: `get`, `set`, `delete`, `remember` and
+  `flush`, each plugin in keys of its own. Values live in the server's memory, in the database with
+  `durable` (they then survive a restart and are the same on every server), or in a store one plugin
+  provides with `cms.cache.store()`, such as Redis. Migration `core/0015_cache` adds the durable
+  values' table.
+- 03a08aa: **Delete Data** on the Plugins screen, as WordPress's Delete runs a plugin's `uninstall.php`: an
+  inactive plugin's data is deleted after a page that says what will go. A plugin's new
+  `uninstall({ db })` removes what it made, such as its tables; core then forgets its migrations, and
+  deletes its saved settings, jobs and cached values, all in one transaction.
+
 ## 1.3.0
 
 ### Minor Changes

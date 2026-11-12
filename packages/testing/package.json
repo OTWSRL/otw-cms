@@ -1,6 +1,6 @@
 {
   "name": "@otwdesign/testing",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Test OTW CMS plugins: a kernel with your plugin on an in-memory PostgreSQL (PGlite), with sign-in and requests.",
   "license": "Apache-2.0",
   "author": "OTW SRL",
