@@ -3,6 +3,7 @@ import { and, asc, eq, lt, sql } from 'drizzle-orm'
 import { PUBLISH_JOB, SCHEDULE_AHEAD_MS, type ContentService } from './content'
 import { entries, loginFailures, sessions, userTokens } from './core-schema'
 import type { DatabaseContext } from './database'
+import type { CacheService } from './cache'
 import type { JobService, JobStore } from './jobs'
 import { DELIVER_JOB, DELIVERY_ATTEMPTS, type WebhookService } from './webhooks'
 
@@ -22,11 +23,12 @@ export interface CoreJobDependencies {
   content: Pick<ContentService, 'delete' | 'get' | 'update'>
   jobs: Pick<JobService, 'enqueue' | 'prune'>
   webhooks: Pick<WebhookService, 'deliver'>
+  cache: Pick<CacheService, 'sweep'>
 }
 
 /** The site's own housekeeping, which WordPress does with WP-Cron. */
 export function registerCoreJobs(deps: CoreJobDependencies): void {
-  const { store, db, logger, content, jobs, webhooks } = deps
+  const { store, db, logger, content, jobs, webhooks, cache } = deps
 
   // One event to one webhook. A try that fails waits 1, 4, 16, then 64 minutes for the next.
   store.define(CORE, DELIVER_JOB, {
@@ -48,6 +50,7 @@ export function registerCoreJobs(deps: CoreJobDependencies): void {
         .delete(loginFailures)
         .where(lt(loginFailures.failedAt, sql`now() - interval '1 day'`))
       await jobs.prune(JOB_LOG_DAYS)
+      await cache.sweep()
     },
   })
 

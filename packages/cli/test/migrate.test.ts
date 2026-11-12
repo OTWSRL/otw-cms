@@ -55,6 +55,7 @@ describe('cms migrate', () => {
         'core/0012_jobs',
         'core/0013_scheduled_entries',
         'core/0014_webhooks',
+        'core/0015_cache',
         'shop/0001_products',
       ],
       backup: null,

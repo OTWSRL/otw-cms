@@ -4,6 +4,8 @@ import type {
   AdminDefinition,
   AdminPage,
   ApiRoute,
+  CacheApi,
+  CacheStore,
   CapabilityArgs,
   CapabilityName,
   ContentTemplate,
@@ -61,6 +63,7 @@ import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
 import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
+import { createCacheService, createMemoryCache, type MemoryCache } from './cache'
 import { registerCoreEvents } from './core-events'
 import { registerCoreJobs } from './core-jobs'
 import { createJobService, cronHandler, JobStore, type JobService } from './jobs'
@@ -179,6 +182,11 @@ export interface KernelOptions {
   onJobQueued?: (dueAt: Date) => void
   /** What sends webhook deliveries. Defaults to the global `fetch`; tests give their own. */
   fetch?: typeof fetch
+  /**
+   * This server's cached values (`createMemoryCache()`), for the app to share between its
+   * kernels, so what one deletes is gone for the others. Without it, the kernel has its own.
+   */
+  cacheMemory?: MemoryCache
   /** `fast` lowers the password hashing cost. Only for test suites. */
   passwordHashing?: HashCost
   /**
@@ -278,6 +286,8 @@ export interface Kernel {
   readonly jobs: JobService
   /** Events and the webhooks they're sent to: Settings › Webhooks. */
   readonly webhooks: WebhookService
+  /** `cms.cache` for the site's own code: its keys are apart from every plugin's. */
+  readonly cache: Omit<CacheApi, 'store'>
   /** People's own accounts: signing up, resetting passwords, changing their details. */
   readonly accounts: AccountService
   /** Users and the fields plugins give them. */
@@ -581,6 +591,26 @@ async function boot(
     transport: () => mailTransport?.transport ?? null,
     production: (options.env ?? process.env).NODE_ENV === 'production',
   })
+  let cacheStore: { pluginId: string; store: CacheStore } | null = null
+  const cache = createCacheService({
+    db,
+    memory: options.cacheMemory ?? createMemoryCache(),
+    store: () => cacheStore?.store ?? null,
+  })
+  /** A plugin's cache store: one, as one object-cache drop-in replaces WordPress's. */
+  const provideCacheStore = (pluginId: string, store: CacheStore) => {
+    assertOpen(`cache store from "${pluginId}"`)
+    if (cacheStore) {
+      throw new Error(
+        `Plugin "${pluginId}" provides a cache store, but "${cacheStore.pluginId}" already does; only one can`,
+      )
+    }
+    const methods = ['get', 'set', 'delete', 'flush'] as const
+    if (!store || methods.some((method) => typeof store[method] !== 'function')) {
+      throw new TypeError(`The cache store from "${pluginId}" needs ${methods.join(', ')}`)
+    }
+    cacheStore = { pluginId, store }
+  }
   /** A plugin's mail transport: one, as one SMTP plugin replaces wp_mail()'s mailer. */
   const provideTransport = (pluginId: string, transport: MailTransport) => {
     assertOpen(`mail transport from "${pluginId}"`)
@@ -826,7 +856,7 @@ async function boot(
     webhooks,
     permalinks: (list) => content.permalinks(list),
   })
-  registerCoreJobs({ store: jobStore, db, logger, content, jobs, webhooks })
+  registerCoreJobs({ store: jobStore, db, logger, content, jobs, webhooks, cache })
   const actions = coreActions({
     auth,
     jobs,
@@ -1201,6 +1231,17 @@ async function boot(
         emit: (name, data) => webhooks.emit(name, data),
         hasSubscribers: (name) => webhooks.hasSubscribers(name),
       },
+      cache: {
+        ...cache.for(plugin.id),
+        store: (store) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Provide the cache store in setup(): the site caches too, where the admin entry isn't loaded`,
+            )
+          }
+          provideCacheStore(plugin.id, store)
+        },
+      },
       admin: {
         page: (page) => {
           inAdminEntry(`admin page "${plugin.id}.${page.name}"`)
@@ -1427,6 +1468,7 @@ async function boot(
     mail,
     jobs,
     webhooks,
+    cache: cache.for(APP),
     accounts,
     resolveAccount,
     users,
@@ -1488,6 +1530,7 @@ function buildKernel(input: {
   mail: MailService
   jobs: JobService
   webhooks: WebhookService
+  cache: Omit<CacheApi, 'store'>
   accounts: AccountService
   resolveAccount: ReturnType<typeof createAccountPages>
   users: UsersService
@@ -1643,6 +1686,7 @@ function buildKernel(input: {
     mail: input.mail,
     jobs: input.jobs,
     webhooks: input.webhooks,
+    cache: input.cache,
     accounts: input.accounts,
     users: input.users,
     resolveAccount: (pathname, searchParams, user) =>

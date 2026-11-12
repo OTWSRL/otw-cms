@@ -1,4 +1,4 @@
-import { createKernel, type Env, type Kernel } from '@otwdesign/core'
+import { createKernel, type Env, type Kernel, type MemoryCache } from '@otwdesign/core'
 import type { Database } from '@otwdesign/sdk'
 import type { Site } from '../site-registry'
 import { activePluginsFromEnv, migrationModeFromEnv, uploadsFromEnv } from './settings'
@@ -12,6 +12,8 @@ export interface BootOptions {
   onChange?: () => void
   /** Called when a job is queued, with the time it's due: the app wakes what runs its jobs. */
   onJobQueued?: (dueAt: Date) => void
+  /** This process's cached values, shared by its kernels. */
+  cacheMemory?: MemoryCache
 }
 
 /**
@@ -21,7 +23,7 @@ export interface BootOptions {
 export function bootSite(
   site: Site,
   db: Database,
-  { env = process.env, onChange, onJobQueued }: BootOptions = {},
+  { env = process.env, onChange, onJobQueued, cacheMemory }: BootOptions = {},
 ): Promise<Kernel> {
   return createKernel({
     plugins: site.plugins,
@@ -39,5 +41,6 @@ export function bootSite(
     uploads: uploadsFromEnv(env),
     onChange,
     onJobQueued,
+    cacheMemory,
   })
 }

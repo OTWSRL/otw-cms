@@ -22,6 +22,7 @@ export { bodyLines, diffLines, diffRevisions, type DiffLine, type FieldDiff } fr
 export { formatDateTime, toDateField } from './dates'
 export { formatBytes, type MediaService } from './media'
 export { isMailbox, type MailService } from './mail'
+export { createMemoryCache, type MemoryCache } from './cache'
 export type { JobListFilter, JobService, StoredJob } from './jobs'
 export {
   DELIVERY_ATTEMPTS,

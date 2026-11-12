@@ -1,5 +1,11 @@
 import 'server-only'
-import { createKernelHolder, type Kernel, type KernelHolder } from '@otwdesign/core'
+import {
+  createKernelHolder,
+  createMemoryCache,
+  type Kernel,
+  type KernelHolder,
+  type MemoryCache,
+} from '@otwdesign/core'
 import { after } from 'next/server'
 import { currentSite, type Site } from '../site-registry'
 import { bootSite } from './boot'
@@ -14,6 +20,7 @@ const globalForCms = globalThis as typeof globalThis & {
   __cmsDatabase?: DatabaseHandle
   __cmsChanges?: number
   __cmsJobs?: { runner: JobRunner; kernel: () => Promise<Kernel> }
+  __cmsCache?: MemoryCache
 }
 
 /** After a server starts, how long until it first looks for jobs that came due while it was down. */
@@ -76,6 +83,8 @@ function holderFor(site: Site): KernelHolder {
               globalForCms.__cmsChanges = (globalForCms.__cmsChanges ?? 0) + 1
             },
             onJobQueued: (dueAt) => wakeJobs(runner, dueAt),
+            // One for the process: both bundles' kernels, and those that replace them.
+            cacheMemory: (globalForCms.__cmsCache ??= createMemoryCache()),
           },
         ),
       localChanges: () => globalForCms.__cmsChanges ?? 0,

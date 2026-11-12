@@ -1709,6 +1709,67 @@ export interface JobsApi {
   next<K extends JobName>(name: K, unique?: string): Promise<Date | null>
 }
 
+// ── Cache ────────────────────────────────────────────────────────────────────
+
+/** How long a cached value is kept, and where. */
+export interface CacheOptions {
+  /** Seconds until it's forgotten. Without it, it's kept until deleted or pushed out. */
+  ttlSeconds?: number
+  /**
+   * Keeps it in the database rather than this server's memory, like a WordPress transient: it
+   * survives a restart and is the same on every server, at the cost of a query to read it. For
+   * what is slow to get back, such as another service's answer. Without a `ttlSeconds` it stays
+   * until deleted. Ask for a durable value as it was kept: `get(key, { durable: true })`.
+   */
+  durable?: boolean
+}
+
+/** Which of a key's two homes to look in: this server's memory, or with `durable` the database. */
+export type CacheReadOptions = Pick<CacheOptions, 'durable'>
+
+/**
+ * Where cached values are kept when a plugin provides somewhere else than this server's memory
+ * and the database, such as Redis: WordPress's persistent object cache. Keys arrive with their
+ * plugin's id in front (`shop:rates`); values are JSON text.
+ */
+export interface CacheStore {
+  /** The value, or `null` when there's none or it has expired. */
+  get(key: string): Promise<string | null>
+  /** Keeps the value, for `ttlSeconds` when given. */
+  set(key: string, value: string, ttlSeconds: number | null): Promise<void>
+  delete(key: string): Promise<void>
+  /** Deletes every key that starts with `prefix`. */
+  flush(prefix: string): Promise<void>
+}
+
+/**
+ * `cms.cache`: values kept so they needn't be worked out again, like WordPress's `wp_cache_*`
+ * and transients. Each plugin has its own keys. Values must be plain data (they're stored as
+ * JSON), and what `get()` returns is frozen: change a copy, then `set()` it.
+ */
+export interface CacheApi {
+  /**
+   * The value, or `undefined` when there's none, like `wp_cache_get()`, or `get_transient()`
+   * with `durable`. A value kept in memory is never looked for in the database, nor the other
+   * way round.
+   */
+  get<T = unknown>(key: string, options?: CacheReadOptions): Promise<T | undefined>
+  /** Keeps a value, like `wp_cache_set()`, or `set_transient()` with `durable`. */
+  set(key: string, value: unknown, options?: CacheOptions): Promise<void>
+  /** Forgets a value: the one in memory, or with `durable` the one in the database. */
+  delete(key: string, options?: CacheReadOptions): Promise<void>
+  /**
+   * The cached value, or what `compute` returns, which is then kept. While one call computes,
+   * others on this server asking for the same key wait for it rather than computing too. A
+   * `compute` that throws caches nothing.
+   */
+  remember<T>(key: string, compute: () => T | Promise<T>, options?: CacheOptions): Promise<T>
+  /** Forgets everything this plugin cached, like `wp_cache_flush_group()`. */
+  flush(): Promise<void>
+  /** Keeps every plugin's cached values in `store`. In `setup()` only, by one plugin at most. */
+  store(store: CacheStore): void
+}
+
 // ── Events and webhooks ──────────────────────────────────────────────────────
 
 /** An event other systems can be told about: a topic a webhook can subscribe to. */
@@ -1878,6 +1939,7 @@ export interface PluginContext {
   readonly mail: MailApi
   readonly jobs: JobsApi
   readonly events: EventsApi
+  readonly cache: CacheApi
   readonly users: UsersApi
   readonly traces: TracesApi
   readonly logger: Logger

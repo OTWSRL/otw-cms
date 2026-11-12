@@ -424,4 +424,21 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    // cms.cache's durable values. Unlogged: a cache needn't survive a crash, and writes to an
+    // unlogged table skip the write-ahead log.
+    id: '0015_cache',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE UNLOGGED TABLE cms_cache (
+          key text PRIMARY KEY,
+          value text NOT NULL,
+          expires_at timestamptz
+        )
+      `)
+      await db.execute(
+        sql`CREATE INDEX cms_cache_expires_idx ON cms_cache (expires_at) WHERE expires_at IS NOT NULL`,
+      )
+    },
+  },
 ]

@@ -265,3 +265,14 @@ export const webhooks = pgTable('cms_webhooks', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/**
+ * `cms.cache`'s durable values, like WordPress's transients: what must outlast a restart or be
+ * the same on every server. Keys carry their plugin's id in front (`shop:rates`).
+ */
+export const cache = pgTable('cms_cache', {
+  key: text('key').primaryKey(),
+  /** JSON text, parsed by whoever reads it. */
+  value: text('value').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+})
