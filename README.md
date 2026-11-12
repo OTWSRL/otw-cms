@@ -123,6 +123,11 @@ The first visit to `/admin` creates the administrator account, as WordPress's in
   Set `CMS_TRUST_PROXY=1` so the admin trusts `X-Forwarded-Host` and `X-Forwarded-Proto`, or set
   `SITE_URL` (the site address on Settings › General); until one is set, admin forms answer 403.
   `cms serve` sets `CMS_TRUST_PROXY` for its releases.
+- **Adding and removing plugins.** `cms plugin add @acme/forum` and `cms plugin remove` edit
+  `package.json` and `cms.config.json`, install and regenerate. From the admin, Plugins › Add
+  Plugin lists the packages tagged `otw-cms-plugin` on npm, or takes a package name, and Delete
+  removes an inactive plugin's data and package: `cms serve` builds a release and switches, the
+  GitHub workflow opens a pull request. Both need `core.install_plugins`, administrators only.
 - **A new site:** `pnpm create otw-cms my-site`, with `--plugins` for plugins' packages, or
   `--link <checkout>` to try unreleased changes. It includes a Dockerfile for your own server.
 

@@ -296,8 +296,8 @@ Tried for real: `cms serve` on the embedded database, building, updating a plugi
 registry with a migration, and rolling back, all from the admin. Covered only with fakes: the
 Postgres path (both releases running through the switch, `pg_dump` backups) and the GitHub
 workflow, which hasn't run on GitHub yet. `cms serve` is one server; several instances update
-through git. Docker images update by rebuilding. Installing new plugins from the admin, as
-WordPress's Add New does, needs a plugin directory first.
+through git. Docker images update by rebuilding. Installing new plugins from the admin came in
+10e, with npm as the directory.
 
 ## 7. Content
 
@@ -804,6 +804,39 @@ is the database's. The plugin's package stays installed: removing code is a rebu
 Not in this part: `uninstall()` in the CMS's own plugins (Commerce, Courses, Mailer, Database),
 which each need it written; a `cms` command for it; and webhooks left subscribed to a deleted
 plugin's events, which show them as "Its plugin isn't active".
+
+### 10e. Adding and removing plugins from the admin (done)
+
+WordPress's Add Plugins and Delete. There is no plugin directory of our own: npm is it.
+
+- **Plugins › Add Plugin** (`plugin-install.php`) lists the packages tagged `otw-cms-plugin` on
+  npm, searched by what's typed, each with Install Now, and installs any plugin by its package
+  name, which is how one from a private registry is added. Search results are kept ten minutes
+  with `cms.cache`. `CMS_PLUGIN_SEARCH_URL` points it at a registry mirror.
+- **Installing is a rebuild**, so it's the update service's job, by the two routes updates have:
+  `cms serve` builds a release with the package added and switches to it (`install` and `remove`
+  jobs, with an update's steps on Dashboard › Updates); the GitHub workflow runs
+  `cms plugin add --commit` and opens a pull request. Elsewhere the screen says to run the
+  command. The plugin arrives inactive, as one installed later always has.
+- **`cms plugin add <package>` and `cms plugin remove <package>`** edit `package.json` and
+  `cms.config.json`, install and regenerate. The version added is the newest that supports the
+  site's core, looked up through npm from the site so `.npmrc` applies. A package with no peer
+  dependency on the SDK isn't a plugin for this CMS, and is refused.
+- **Delete** on an inactive plugin deletes its data (10d), then removes its package. A plugin
+  another installed plugin needs isn't removed. If the data went and the removal was refused,
+  the message says both.
+- **`core.install_plugins`**, administrators only, for both: WordPress's `install_plugins` and
+  `delete_plugins`. A package name is checked to be a name (no version, path or URL) in the
+  admin's action, in the supervisor's route and in the command.
+- **A change with no version to come from adds a package, one with none to go to removes it**:
+  `writeChanges` handles both files, so building a release, writing back to the site and rolling
+  back all follow. Rolling back to a release from before a plugin was added takes it off the
+  site's files again.
+- GitHub refuses an input a workflow file doesn't declare, so updates still send only the inputs
+  every site's file has; a file from before 1.5 is named in the error when a plugin is added.
+
+Not in this part: ratings, screenshots and a details page for a plugin; uploading a plugin as a
+file; installing several at once; and checking a package's publisher or signature.
 
 ## 11. Page cache plugin
 

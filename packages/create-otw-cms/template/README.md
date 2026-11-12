@@ -46,6 +46,7 @@ under Plugins in the admin.
 ## Updating
 
 ```sh
+{{exec}} cms plugin add @acme/forum   # add a plugin; `cms plugin remove` takes one off
 {{exec}} cms update --check   # what's new, and which plugins support it
 {{exec}} cms update           # update core and plugins, install and regenerate
 {{exec}} cms migrate          # back up the database, then migrate (stop the site first)
