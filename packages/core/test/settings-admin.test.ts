@@ -94,7 +94,7 @@ const seoAdmin = defineAdmin(seo, (cms) => {
 /** The shop, gateway and SEO plugins with their admin entries; tests that swap plugins name theirs. */
 function site(extra: Partial<KernelOptions> = {}) {
   const db = createDb()
-  return () =>
+  return (boot: Partial<KernelOptions> = {}) =>
     createKernel({
       db,
       plugins: [shop, gateway, seo],
@@ -103,6 +103,7 @@ function site(extra: Partial<KernelOptions> = {}) {
       strict: true,
       passwordHashing: 'fast',
       ...extra,
+      ...boot,
     })
 }
 
@@ -281,6 +282,22 @@ describe('saving settings pages', () => {
     expect(third.setting('shop.currency')).toBe('USD')
     expect(third.setting('shop.guests')).toBe(true)
     expect(third.setting('gateway.label')).toBe('Card')
+  })
+
+  it('keeps text that reads as JSON as the text it is', async () => {
+    const boot = site()
+    let kernel = await boot()
+    const { cookie } = await signIn(kernel)
+
+    // A number, a boolean, null, an object and a quoted string, each of them typed into a text field.
+    for (const text of ['90', 'true', 'null', '{"a":1}', '"quoted"', '1e3']) {
+      const response = await kernel.handleApi(save('shop.store', { 'gateway.label': text }, cookie))
+      expect(redirectOf(kernel, response).flash?.message).toBe('Settings saved.')
+      const logger = memoryLogger()
+      kernel = await boot({ logger })
+      expect(kernel.setting('gateway.label')).toBe(text)
+      expect(logger.entries.filter((entry) => entry.level === 'warn')).toEqual([])
+    }
   })
 
   it('saves only fields placed on that page, whatever the form sends', async () => {

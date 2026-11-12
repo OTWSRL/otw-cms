@@ -169,9 +169,16 @@ export function isLocked(setting: ResolvedSetting): boolean {
   )
 }
 
+/**
+ * Every stored value. The column is read as text and parsed here, once: drizzle parses a jsonb
+ * string a second time, so the text "90" would come back as a number and "true" as a boolean, and
+ * a text setting would lose its value.
+ */
 export async function loadStoredSettings(db: Database): Promise<Map<string, unknown>> {
-  const rows = await db.select().from(storedSettings)
-  return new Map(rows.map((row) => [row.key, row.value]))
+  const rows = await db
+    .select({ key: storedSettings.key, value: sql<string>`${storedSettings.value}::text` })
+    .from(storedSettings)
+  return new Map(rows.map((row) => [row.key, JSON.parse(row.value) as unknown]))
 }
 
 /** `undefined` deletes the stored value, so the default applies again. */
