@@ -3,6 +3,8 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import type { ReactNode } from 'react'
 import type {
   ActionName,
+  EventName,
+  Events,
   JobName,
   Jobs,
   Actions,
@@ -1707,6 +1709,71 @@ export interface JobsApi {
   next<K extends JobName>(name: K, unique?: string): Promise<Date | null>
 }
 
+// ── Events and webhooks ──────────────────────────────────────────────────────
+
+/** An event other systems can be told about: a topic a webhook can subscribe to. */
+export interface EventDefinition {
+  /** What Settings › Webhooks calls it, such as "Order paid". */
+  label: string
+  /** A line under the label, for what the event carries or when it happens. */
+  description?: string
+}
+
+/** An entry, as the `content.saved` and `content.deleted` events carry it. */
+export interface EntryEventData {
+  id: string
+  /** The content type, such as `core.post`. */
+  type: string
+  status: EntryStatus
+  slug: string
+  title: string
+  excerpt: string
+  authorId: string | null
+  parentId: string | null
+  /** Its address on the site, when it's published and its type has pages; otherwise `null`. */
+  url: string | null
+  /** ISO 8601, or `null` before it's published. */
+  publishedAt: string | null
+  /** ISO 8601. */
+  updatedAt: string
+}
+
+/** A file, as the `media.uploaded` and `media.deleted` events carry it. */
+export interface MediaEventData {
+  id: string
+  /** Its storage key, such as `2026/11/photo.jpg`. */
+  file: string
+  /** Where it's served. */
+  url: string
+  filename: string
+  mimeType: string
+  /** In bytes. */
+  size: number
+  authorId: string | null
+  /** The entry it was uploaded to, when it was. */
+  entryId: string | null
+}
+
+/**
+ * `cms.events`: what happened on the site, for other systems. An event that's emitted is sent to
+ * every webhook subscribed to it in Settings › Webhooks, like WooCommerce's webhook topics.
+ */
+export interface EventsApi {
+  /** Declares an event webhooks can subscribe to. In `setup()`; its name starts with the plugin's id. */
+  define<K extends EventName>(name: K, definition: EventDefinition): void
+  /**
+   * Tells every webhook subscribed to the event, in the background, with retries. The deliveries
+   * are queued in the caller's transaction, so they go out only if what happened was kept. The
+   * data must be plain data: it's sent as JSON. With no webhook subscribed, it does nothing.
+   */
+  emit<K extends EventName>(name: K, data: Events[K]): Promise<void>
+  /**
+   * Whether a webhook is subscribed to the event, so data that's costly to gather can be left
+   * ungathered when nobody is.
+   */
+  hasSubscribers(name: EventName): Promise<boolean>
+}
+
 // ── Tracing ──────────────────────────────────────────────────────────────────
 
 /** What a span in a request's trace timed. */
@@ -1810,6 +1877,7 @@ export interface PluginContext {
   readonly media: MediaApi
   readonly mail: MailApi
   readonly jobs: JobsApi
+  readonly events: EventsApi
   readonly users: UsersApi
   readonly traces: TracesApi
   readonly logger: Logger

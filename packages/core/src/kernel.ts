@@ -61,9 +61,11 @@ import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
 import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
+import { registerCoreEvents } from './core-events'
 import { registerCoreJobs } from './core-jobs'
 import { createJobService, cronHandler, JobStore, type JobService } from './jobs'
 import { createMailService, type MailService } from './mail'
+import { createWebhookService, EventStore, type WebhookService } from './webhooks'
 import { accountActions } from './account-actions'
 import { createAccountPages, type AccountResolution } from './account-pages'
 import { createAccountService, signInUrl, type AccountService } from './accounts'
@@ -169,6 +171,8 @@ export interface KernelOptions {
    * the app can wake what runs its jobs (`kernel.jobs.runDue()`).
    */
   onJobQueued?: (dueAt: Date) => void
+  /** What sends webhook deliveries. Defaults to the global `fetch`; tests give their own. */
+  fetch?: typeof fetch
   /** `fast` lowers the password hashing cost. Only for test suites. */
   passwordHashing?: HashCost
   /**
@@ -266,6 +270,8 @@ export interface Kernel {
   readonly mail: MailService
   /** The job queue: what a runner calls, and what Tools › Scheduled Actions lists. */
   readonly jobs: JobService
+  /** Events and the webhooks they're sent to: Settings › Webhooks. */
+  readonly webhooks: WebhookService
   /** People's own accounts: signing up, resetting passwords, changing their details. */
   readonly accounts: AccountService
   /** Users and the fields plugins give them. */
@@ -794,10 +800,27 @@ async function boot(
   }
 
   registerCoreContent({ register: registerContentType, taxonomy: registerTaxonomy })
-  registerCoreJobs({ store: jobStore, db, logger, content, jobs })
+  const eventStore = new EventStore(assertOpen)
+  const webhooks = createWebhookService({
+    db,
+    logger,
+    store: eventStore,
+    jobs,
+    fetch: options.fetch,
+    userAgent: `cms-webhooks/${coreVersion}`,
+    changed: () => changed(),
+  })
+  registerCoreEvents({
+    store: eventStore,
+    hooks: stores.hooks,
+    webhooks,
+    permalinks: (list) => content.permalinks(list),
+  })
+  registerCoreJobs({ store: jobStore, db, logger, content, jobs, webhooks })
   const actions = coreActions({
     auth,
     jobs,
+    webhooks,
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
     async activate(id) {
       if (options.active) throw new ActionError(PINNED)
@@ -1156,6 +1179,18 @@ async function boot(
         cancel: (name, unique) => jobs.cancel(name, unique),
         next: (name, unique) => jobs.next(name, unique),
       },
+      events: {
+        define: (name, definition) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Define the event "${name}" in setup(): events are emitted wherever the site runs, where the admin entry isn't loaded`,
+            )
+          }
+          eventStore.define(plugin.id, name, definition)
+        },
+        emit: (name, data) => webhooks.emit(name, data),
+        hasSubscribers: (name) => webhooks.hasSubscribers(name),
+      },
       admin: {
         page: (page) => {
           inAdminEntry(`admin page "${plugin.id}.${page.name}"`)
@@ -1381,6 +1416,7 @@ async function boot(
     maxUploadBytes,
     mail,
     jobs,
+    webhooks,
     accounts,
     resolveAccount,
     users,
@@ -1441,6 +1477,7 @@ function buildKernel(input: {
   maxUploadBytes: number
   mail: MailService
   jobs: JobService
+  webhooks: WebhookService
   accounts: AccountService
   resolveAccount: ReturnType<typeof createAccountPages>
   users: UsersService
@@ -1595,6 +1632,7 @@ function buildKernel(input: {
     media: input.media,
     mail: input.mail,
     jobs: input.jobs,
+    webhooks: input.webhooks,
     accounts: input.accounts,
     users: input.users,
     resolveAccount: (pathname, searchParams, user) =>

@@ -1,9 +1,11 @@
 import type {
   AdminDefinition,
   Entry,
+  EntryEventData,
   Term,
   EntryFields,
   EntryStatus,
+  MediaEventData,
   MediaItem,
   OutgoingMail,
   PluginContext,
@@ -138,11 +140,38 @@ export interface Jobs {
   'core.cleanup': Record<string, never>
   /** Daily, like `wp_scheduled_delete`: deletes what has been in the Trash for 30 days. */
   'core.empty_trash': Record<string, never>
+  /** Sends one event to one webhook: the delivery, with its retries. */
+  'core.deliver_webhook': {
+    /** The webhook's id. */
+    webhook: string
+    /** The event's own id, the same on every try: what a receiver can deduplicate by. */
+    event: string
+    /** The event's name. */
+    type: string
+    /** When it happened, in seconds since 1970. */
+    timestamp: number
+    data: unknown
+  }
   /**
    * Publishes a scheduled entry when its date comes, like `publish_future_post`. Core queues it
    * when an entry is scheduled, and cancels it when the entry no longer is.
    */
   'core.publish_entry': { id: string }
+}
+
+/**
+ * Event name -> the data it carries, which must be plain data. Declare the event itself with
+ * `cms.events.define()`. Webhooks subscribe to events in Settings › Webhooks.
+ */
+export interface Events {
+  /** An entry was added or changed, trashed and restored included: the `content.saved` action. */
+  'content.saved': EntryEventData
+  /** An entry was deleted for good. */
+  'content.deleted': EntryEventData
+  /** A file was added to the media library. */
+  'media.uploaded': MediaEventData
+  /** A file was deleted from the media library. */
+  'media.deleted': MediaEventData
 }
 
 /** Service name -> the API the providing plugin exposes to others. */
@@ -207,6 +236,11 @@ export interface Capabilities {
   'core.manage_users': true
   /** Update the CMS and plugins from Dashboard › Updates. Only administrators have it until a role is granted it. */
   'core.manage_updates': true
+  /**
+   * Add, change and delete webhooks in Settings › Webhooks, and see their secrets. Only
+   * administrators have it until a role is granted it: a webhook sends the site's data elsewhere.
+   */
+  'core.manage_webhooks': true
   /**
    * See the job queue in Tools › Scheduled Actions, and run or cancel its jobs. Only
    * administrators have it until a role is granted it: a job's arguments can name anything.
@@ -294,6 +328,8 @@ export type RegistryName = keyof Registries & string
 export type FilterName = keyof Filters & string
 /** Any declared action's name. */
 export type ActionName = keyof Actions & string
+/** Any declared event's name. */
+export type EventName = keyof Events & string
 /** Any declared job's name. */
 export type JobName = keyof Jobs & string
 /** Any declared service's name. */

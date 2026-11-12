@@ -130,6 +130,16 @@ export const CORE_MENU: readonly MenuEntry[] = [
     parent: 'users',
   },
   {
+    // After core's own settings pages (General, Reading, Media) and before plugins'.
+    key: 'core.webhooks',
+    pluginId: 'core',
+    label: 'Webhooks',
+    url: '/admin/settings/webhooks',
+    order: 3,
+    capability: 'core.manage_webhooks',
+    parent: 'settings',
+  },
+  {
     // Where Action Scheduler puts its screen: Tools › Scheduled Actions.
     key: 'core.scheduled-actions',
     pluginId: 'core',

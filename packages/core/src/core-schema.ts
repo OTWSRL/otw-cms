@@ -243,3 +243,25 @@ export const jobs = pgTable(
       .where(sql`unique_key IS NOT NULL AND status = 'pending'`),
   ],
 )
+
+/** Whether a webhook is sent events: `disabled` is what repeated failed deliveries make it. */
+export type WebhookStatus = 'active' | 'paused' | 'disabled'
+
+/** Where the site sends its events, like WooCommerce's webhooks. Deliveries are jobs. */
+export const webhooks = pgTable('cms_webhooks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  url: text('url').notNull(),
+  /** The events it's sent. */
+  topics: jsonb('topics').$type<string[]>().notNull().default([]),
+  status: text('status').$type<WebhookStatus>().notNull().default('active'),
+  /** Signs each delivery, as the Standard Webhooks specification has it: `whsec_` and base64. */
+  secret: text('secret').notNull(),
+  /** Deliveries in a row that failed every try. */
+  failures: integer('failures').notNull().default(0),
+  lastDeliveryAt: timestamp('last_delivery_at', { withTimezone: true }),
+  /** The last delivery's answer: a status code, or why there was none. */
+  lastResult: text('last_result'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})

@@ -148,6 +148,7 @@ describe('settings pages', () => {
       { key: 'core.general', label: 'General', url: '/admin/settings' },
       { key: 'core.reading', label: 'Reading', url: '/admin/settings/reading' },
       { key: 'core.media', label: 'Media', url: '/admin/settings/media' },
+      { key: 'core.webhooks', label: 'Webhooks', url: '/admin/settings/webhooks' },
       { key: 'shop.settings', label: 'Shop', url: '/admin/shop/settings' },
     ])
   })

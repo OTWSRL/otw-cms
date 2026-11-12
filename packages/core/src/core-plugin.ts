@@ -16,6 +16,8 @@ import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, READ, type CapabilityStore } from './capabilities'
 import { coreMigrations } from './core-migrations'
 import type { JobService } from './jobs'
+import { WebhookError, type WebhookService } from './webhooks'
+import type { WebhookStatus } from './core-schema'
 import type { SettingsLayoutStore } from './settings-pages'
 import type { AutoUpdateMode, UpdateService } from './updates'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
@@ -174,6 +176,8 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
   // No role gets it: updating rebuilds the site, so it stays with administrators unless granted.
   capabilities.capability(CORE, 'core.manage_updates', { label: 'Update the CMS and plugins' })
+  // Nor this: a webhook sends the site's data to an address of the holder's choosing.
+  capabilities.capability(CORE, 'core.manage_webhooks', { label: 'Manage webhooks' })
   // No role gets it either: the queue shows every plugin's jobs and what they were given.
   capabilities.capability(CORE, 'core.manage_jobs', { label: 'Run and cancel scheduled actions' })
   // WordPress's upload_files: authors and editors; contributors write without uploading.
@@ -324,6 +328,8 @@ export interface CoreActionDependencies {
   saveSettings(page: string, user: User, form: FormData): Promise<void>
   /** Tools › Scheduled Actions: each says whether the job was one it could act on. */
   jobs: Pick<JobService, 'runNow' | 'cancelOne'>
+  /** Settings › Webhooks. */
+  webhooks: Pick<WebhookService, 'create' | 'update' | 'delete' | 'test'>
 }
 
 function field(form: FormData, name: string): string {
@@ -338,6 +344,18 @@ function jobId(form: FormData): string {
   const id = field(form, 'id')
   if (!JOB_ID.test(id)) throw new ActionError('That action no longer exists.')
   return id
+}
+
+/** Settings › Webhooks, as WooCommerce has its webhooks under its settings. */
+export const WEBHOOKS_PATH = `${ADMIN_PREFIX}/settings/webhooks`
+
+async function asWebhookError<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (error) {
+    if (error instanceof WebhookError) throw new ActionError(error.message)
+    throw error
+  }
 }
 
 async function asActionError<T>(fn: () => Promise<T>): Promise<T> {
@@ -437,6 +455,48 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
           }),
         )
         return { redirect: '/admin/users', notice: `Added ${user.email}.` }
+      },
+    },
+    {
+      // WooCommerce's webhook form: Add when it names no webhook, Save when it does.
+      name: 'save-webhook',
+      capability: 'core.manage_webhooks',
+      async handler({ form }) {
+        const id = field(form, 'id')
+        const input = {
+          name: field(form, 'name'),
+          url: field(form, 'url'),
+          topics: form.getAll('topics').filter((value) => typeof value === 'string'),
+          status: field(form, 'status') as WebhookStatus,
+          newSecret: field(form, 'new_secret') !== '',
+        }
+        const saved = await asWebhookError(() =>
+          id ? deps.webhooks.update(id, input) : deps.webhooks.create(input),
+        )
+        return {
+          redirect: `${WEBHOOKS_PATH}?edit=${saved.id}`,
+          notice: id ? 'Webhook updated.' : 'Webhook added.',
+        }
+      },
+    },
+    {
+      name: 'delete-webhook',
+      capability: 'core.manage_webhooks',
+      async handler({ form }) {
+        if (!(await deps.webhooks.delete(field(form, 'id')))) {
+          throw new ActionError('That webhook no longer exists.')
+        }
+        return { redirect: WEBHOOKS_PATH, notice: 'Webhook deleted.' }
+      },
+    },
+    {
+      name: 'test-webhook',
+      capability: 'core.manage_webhooks',
+      async handler({ form }) {
+        if (!(await deps.webhooks.test(field(form, 'id')))) {
+          throw new ActionError('That webhook no longer exists.')
+        }
+        return { notice: 'A test delivery is on its way. Its result shows here once it has run.' }
       },
     },
     {

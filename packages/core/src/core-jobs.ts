@@ -4,6 +4,7 @@ import { PUBLISH_JOB, SCHEDULE_AHEAD_MS, type ContentService } from './content'
 import { entries, loginFailures, sessions, userTokens } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { JobService, JobStore } from './jobs'
+import { DELIVER_JOB, DELIVERY_ATTEMPTS, type WebhookService } from './webhooks'
 
 const CORE = 'core'
 const DAY = 24 * 60 * 60
@@ -20,11 +21,20 @@ export interface CoreJobDependencies {
   logger: Logger
   content: Pick<ContentService, 'delete' | 'get' | 'update'>
   jobs: Pick<JobService, 'enqueue' | 'prune'>
+  webhooks: Pick<WebhookService, 'deliver'>
 }
 
 /** The site's own housekeeping, which WordPress does with WP-Cron. */
 export function registerCoreJobs(deps: CoreJobDependencies): void {
-  const { store, db, logger, content, jobs } = deps
+  const { store, db, logger, content, jobs, webhooks } = deps
+
+  // One event to one webhook. A try that fails waits 1, 4, 16, then 64 minutes for the next.
+  store.define(CORE, DELIVER_JOB, {
+    label: 'Deliver an event to a webhook',
+    attempts: DELIVERY_ATTEMPTS,
+    timeoutSeconds: 30,
+    handler: (args, run) => webhooks.deliver(args as never, run),
+  })
 
   // What only a visit used to clean, or nothing did: sign-ins that ran out, emailed links never
   // used, failed sign-ins long past the window that counts them, and the job log itself.

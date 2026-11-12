@@ -403,4 +403,25 @@ export const coreMigrations: Migration[] = [
       await db.execute(sql`ANALYZE cms_entries`)
     },
   },
+  {
+    // Webhooks: where the site sends its events. Their deliveries wait in cms_jobs.
+    id: '0014_webhooks',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_webhooks (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          name text NOT NULL,
+          url text NOT NULL,
+          topics jsonb NOT NULL DEFAULT '[]',
+          status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'disabled')),
+          secret text NOT NULL,
+          failures integer NOT NULL DEFAULT 0,
+          last_delivery_at timestamptz,
+          last_result text,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `)
+    },
+  },
 ]
