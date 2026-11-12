@@ -162,6 +162,71 @@ test('posts go to the trash, come back as drafts, and are deleted for good', asy
   await expect(page.getByText('No posts found in Trash.')).toBeVisible()
 })
 
+test('a post scheduled from the editor is published on its date, by the site itself', async ({
+  page,
+}) => {
+  await signInAsAdmin(page)
+  await page.goto('/admin/posts/new')
+  await page.getByLabel('Add title').fill('Grand opening')
+  await editor(page).click()
+  await page.keyboard.type('Doors open at ten.')
+
+  // A date ahead turns Publish into Schedule, as in WordPress.
+  await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible()
+  await page.getByLabel('Or on (UTC):').fill('2031-05-06T09:30')
+  await page.getByRole('button', { name: 'Schedule', exact: true }).click()
+  await notice(page, 'Post scheduled for: May 6, 2031, 9:30 AM UTC.')
+  await expect(page.getByLabel('Status:')).toHaveValue('scheduled')
+  await expect(page.locator('.curtime')).toContainText('Scheduled for: May 6, 2031, 9:30 AM UTC')
+  await expect(page.getByLabel('Change the date (UTC):')).toHaveValue('2031-05-06T09:30')
+  await expect(page.getByRole('button', { name: 'Update' })).toBeVisible()
+  const id = new URL(page.url()).pathname.split('/').pop()!
+
+  // It has its view and its state in the list, and its address isn't open yet.
+  await page.goto('/admin/posts')
+  const row = page.getByRole('row', { name: /Grand opening/ })
+  await expect(row.locator('.post-state')).toHaveText('Scheduled')
+  await expect(row).toContainText('ScheduledMay 6, 2031, 9:30 AM UTC')
+  await page.getByRole('link', { name: /^Scheduled/ }).click()
+  await expect(page).toHaveURL(/status=scheduled/)
+  await expect(page.getByRole('row', { name: /Grand opening/ })).toHaveCount(1)
+  expect((await page.request.get('/grand-opening')).status()).toBe(404)
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'Grand opening' })).toHaveCount(0)
+
+  // The job that will publish it waits in the queue for that date.
+  await page.goto('/admin/tools/scheduled-actions?status=pending&s=publish_entry')
+  await expect(page.getByRole('row', { name: /Publish a scheduled entry/ })).toContainText(id)
+
+  // Time passes (the Library fixture's clock moves the date to two seconds from now). Nobody
+  // touches the site again: its own timer runs the job, and the post is there.
+  const moved = await page.evaluate(async (entry) => {
+    const response = await fetch('/api/p/library/time-passes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entry }),
+    })
+    return response.status
+  }, id)
+  expect(moved).toBe(200)
+  await page.goto('about:blank')
+  await expect
+    .poll(async () => (await page.request.get('/grand-opening')).status(), { timeout: 20_000 })
+    .toBe(200)
+  await page.goto('/grand-opening')
+  await expect(page.getByRole('heading', { name: 'Grand opening' })).toBeVisible()
+  await expect(page.getByText('Doors open at ten.')).toBeVisible()
+
+  await page.goto('/admin/posts')
+  const published = page.getByRole('row', { name: /Grand opening/ })
+  await expect(published.locator('.post-state')).toHaveCount(0)
+  await expect(published).toContainText('Published')
+  // Left as the other tests expect the site: without it.
+  await published.hover()
+  await published.getByRole('button', { name: 'Trash' }).click()
+  await notice(page, '1 post moved to the Trash.')
+})
+
 test('changes a refused save would lose are kept, and restored from the browser', async ({
   page,
   browser,

@@ -18,7 +18,7 @@ import { MediaThumbnail } from './media-thumbnail'
 const PATH = '/admin/media'
 const PER_PAGE = { list: 20, grid: 40 } as const
 const MONTH = /^(\d{4})(\d{2})$/
-const ALL_STATUSES = ['draft', 'pending', 'published', 'private', 'trash'] as const
+const ALL_STATUSES = ['draft', 'pending', 'scheduled', 'published', 'private', 'trash'] as const
 
 /** WordPress's "All media items" dropdown: each kind, then Unattached and Mine. */
 const TYPE_FILTERS: readonly { value: string; label: string }[] = [

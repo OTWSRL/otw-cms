@@ -109,7 +109,7 @@ const PRIVATE = { edit: 'editPrivate', delete: 'deletePrivate' } as const
 
 /**
  * WordPress's `map_meta_cap` for `edit_post` and `delete_post`. An author needs the type's
- * `edit`, or `editPublished` once it's published; anyone else needs `editOthers`, plus
+ * `edit`, or `editPublished` once it's published or scheduled; anyone else needs `editOthers`, plus
  * `editPublished` or `editPrivate` for those statuses. An entry in the trash goes by the status it
  * had, for anyone else too: WordPress asks only `editOthers` for another's trashed post, so
  * someone who may not edit published posts could restore and edit one. An entry of another type
@@ -124,10 +124,12 @@ export function mapChange(
   if (entry.type !== type.name) return false
   const caps = type.capabilities
   const status = entry.trashedFrom ?? entry.status
+  // A scheduled entry is as good as published, as WordPress treats `future`.
+  const published = status === 'published' || status === 'scheduled'
   if (entry.authorId !== null && entry.authorId === user.id) {
-    return [status === 'published' ? caps[PUBLISHED[change]] : caps[OWN[change]]]
+    return [published ? caps[PUBLISHED[change]] : caps[OWN[change]]]
   }
-  if (status === 'published') return [caps[OTHERS[change]], caps[PUBLISHED[change]]]
+  if (published) return [caps[OTHERS[change]], caps[PUBLISHED[change]]]
   if (status === 'private') return [caps[OTHERS[change]], caps[PRIVATE[change]]]
   return [caps[OTHERS[change]]]
 }

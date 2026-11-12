@@ -17,6 +17,7 @@ import { safeRedirectPath, type InternalAction } from './admin'
 import type { ContentService } from './content'
 import type { ContentScreenStore } from './content-screens'
 import { inSentence, type ContentTypeStore } from './content-types'
+import { formatDateTime, fromDateField, toDateField } from './dates'
 import { firstSpellings } from './terms'
 
 export interface ContentActionDependencies {
@@ -25,12 +26,21 @@ export interface ContentActionDependencies {
   screens: ContentScreenStore
   can(user: User, capability: CapabilityName | MetaCapabilityName, ...args: unknown[]): boolean
   transaction<T>(fn: () => Promise<T>): Promise<T>
+  /** The site's locale, for the date in "Post scheduled for: …". */
+  locale(): string | undefined
 }
 
 /** What the Publish box asks for: Save Draft (or Update), or Publish (or Submit for Review). */
 export type SaveIntent = 'save' | 'publish'
 
-const ALL_STATUSES: readonly EntryStatus[] = ['draft', 'pending', 'published', 'private', 'trash']
+const ALL_STATUSES: readonly EntryStatus[] = [
+  'draft',
+  'pending',
+  'scheduled',
+  'published',
+  'private',
+  'trash',
+]
 const MAX_BULK = 100
 const PAGE = 100
 
@@ -42,13 +52,15 @@ function field(form: FormData, name: string): string {
   return typeof value === 'string' ? value : ''
 }
 
+/** Published, or about to be: a scheduled entry is published once its date comes. */
 const isPublished = (status: EntryStatus | undefined) =>
-  status === 'published' || status === 'private'
+  status === 'published' || status === 'private' || status === 'scheduled'
 
 /**
  * The status a save asks for, as WordPress's Publish box sets it. Publish publishes, privately
  * when visibility says so; Save keeps a published entry published (or private) unless the status
- * dropdown changes it, and otherwise saves the dropdown's draft or pending.
+ * dropdown changes it, and otherwise saves the dropdown's draft or pending. A scheduled entry
+ * asks for published too: the content service keeps it scheduled while its date is ahead.
  */
 export function requestedStatus(input: {
   intent: SaveIntent
@@ -58,20 +70,50 @@ export function requestedStatus(input: {
 }): Exclude<EntryStatus, 'trash'> {
   const published = input.visibility === 'private' ? 'private' : 'published'
   if (input.intent === 'publish') return published
-  if (input.status === 'published') return published
+  if (input.status === 'published' || input.status === 'scheduled') return published
   if (input.status === 'draft' || input.status === 'pending') return input.status
   return isPublished(input.previous?.status) ? published : 'draft'
 }
 
-/** WordPress's messages after a save: "Post published.", "Post submitted.", and so on. */
-export function savedNotice(type: ContentType, previous: Entry | null, entry: Entry): string {
+/**
+ * WordPress's messages after a save: "Post published.", "Post submitted.", "Post scheduled for:
+ * Nov 14, 2026, 9:30 AM UTC.", and so on.
+ */
+export function savedNotice(
+  type: ContentType,
+  previous: Entry | null,
+  entry: Entry,
+  locale?: string,
+): string {
   const name = type.labels.singular
   const changed = previous?.status !== entry.status
+  if (entry.status === 'scheduled' && entry.publishedAt) {
+    const moved = previous?.publishedAt?.getTime() !== entry.publishedAt.getTime()
+    if (changed || moved) {
+      return `${name} scheduled for: ${formatDateTime(entry.publishedAt, locale)}.`
+    }
+  }
   if (entry.status === 'pending' && changed) return `${name} submitted.`
   if (entry.status === 'published' && changed) return `${name} published.`
   if (entry.status === 'private' && changed) return `${name} published privately.`
   if (entry.status === 'draft') return `${name} draft updated.`
   return `${name} updated.`
+}
+
+/**
+ * The date the Publish box sent, or `undefined` to leave the entry's as it is. The field holds
+ * minutes, so a date it shows unchanged keeps its seconds; emptied, a draft is published
+ * "immediately" again, while an entry that is published or scheduled keeps its date.
+ */
+export function publishDate(text: string, previous: Entry | null): Date | null | undefined {
+  const current = previous?.publishedAt ?? null
+  if (text === '') return current && isPublished(previous?.status) ? undefined : null
+  if (current && toDateField(current) === text) return undefined
+  const date = fromDateField(text)
+  if (!date) {
+    throw new ActionError('The publish date could not be read. Use a date and time.')
+  }
+  return date
 }
 
 /** "1 post", "3 posts". */
@@ -219,13 +261,21 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
           visibility: field(form, 'visibility'),
           previous,
         })
-        // Publishing, or switching between public and private, takes the publish capability;
-        // without it, Publish submits for review, as in WordPress.
-        if (isPublished(status) && status !== previous?.status) {
-          const candidate = { ...(previous ?? draftOf(type, changes, user)), ...changes, status }
-          if (!can(user, caps.publishEntry, candidate)) status = 'pending'
-        }
+        const candidate = { ...(previous ?? draftOf(type, changes, user)), ...changes, status }
+        const mayPublish = can(user, caps.publishEntry, candidate)
+        // Publishing, scheduling, or switching between public and private, takes the publish
+        // capability; without it, Publish submits for review, as in WordPress. A scheduled
+        // entry asks for published, which is no change.
+        const kept =
+          status === previous?.status ||
+          (status === 'published' && previous?.status === 'scheduled')
+        if (isPublished(status) && !kept && !mayPublish) status = 'pending'
         changes.status = status
+        // The Publish box's date is theirs who may publish, as in WordPress.
+        if (mayPublish && form.has('date')) {
+          const date = publishDate(field(form, 'date'), previous)
+          if (date !== undefined) changes.publishedAt = date
+        }
 
         const by = { by: user.id }
         const entry = await asActionError(() =>
@@ -239,7 +289,7 @@ export function contentActions(deps: ContentActionDependencies): InternalAction[
         }
         return {
           redirect: `${type.adminPath}/${entry.id}`,
-          notice: savedNotice(type, previous, entry),
+          notice: savedNotice(type, previous, entry, deps.locale()),
         }
       })
     },

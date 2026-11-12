@@ -541,9 +541,10 @@ export interface SlotsApi {
 
 /**
  * Where an entry stands, like WordPress's post statuses. Only `published` entries are public;
- * `private` ones are published for those who may read private entries of their type.
+ * `private` ones are published for those who may read private entries of their type. A
+ * `scheduled` entry, WordPress's `future`, is published by the site when its `publishedAt` comes.
  */
-export type EntryStatus = 'draft' | 'pending' | 'published' | 'private' | 'trash'
+export type EntryStatus = 'draft' | 'pending' | 'scheduled' | 'published' | 'private' | 'trash'
 
 /** A piece of an entry's body, such as a paragraph. The editor's block types come with the editor. */
 export interface Block {
@@ -558,9 +559,10 @@ export interface Entry {
   type: string
   status: EntryStatus
   /**
-   * Its address among its type's entries. Published and private entries own theirs: no other
-   * published or private entry of the type (with the same parent, for hierarchical types) has it.
-   * Empty on a draft until it's set or the entry is published, when it's made from the title.
+   * Its address among its type's entries. Published, private and scheduled entries own theirs:
+   * no other such entry of the type (with the same parent, for hierarchical types) has it. Empty
+   * on a draft until it's set or the entry is published or scheduled, when it's made from the
+   * title.
    */
   slug: string
   title: string
@@ -578,7 +580,10 @@ export interface Entry {
    * WordPress's `_thumbnail_id`. `null` once the image is deleted.
    */
   thumbnailId: string | null
-  /** When it was first published, or published privately. */
+  /**
+   * When it was first published, or published privately; for a `scheduled` entry, when it will
+   * be.
+   */
   publishedAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -600,7 +605,11 @@ export type EntryMetaChanges = { [K in EntryMetaKey]?: EntryMeta[K] | null }
 
 /** What an entry is saved with. The `content.entry` filter receives and returns it. */
 export interface EntryFields {
-  /** Entries go to the trash with `trash()`, not through a status. */
+  /**
+   * Entries go to the trash with `trash()`, not through a status. As in WordPress, `published`
+   * with a `publishedAt` a minute or more ahead is saved as `scheduled`, and `scheduled` with a
+   * date that has come as `published`.
+   */
   status: Exclude<EntryStatus, 'trash'>
   slug: string
   title: string
@@ -611,7 +620,10 @@ export interface EntryFields {
   position: number
   /** An image's id, for types with the `thumbnail` feature. */
   thumbnailId: string | null
-  /** Set when the entry is first published; set it to backdate one. Never in the future. */
+  /**
+   * Set when the entry is first published. Set it to backdate one, or to a time ahead to
+   * schedule it: the site publishes it then.
+   */
   publishedAt: Date | null
   /** Every custom field the entry will have, defaults left out. */
   meta: EntryMetaValues

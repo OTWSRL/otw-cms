@@ -34,6 +34,7 @@ import { entryTermsCondition, type createTermService } from './terms'
 import { entries, media, revisions, users } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { HookBus } from './hooks'
+import type { JobService } from './jobs'
 import { firstFreeSlug, slugify, slugStem } from './slugs'
 
 /** `cms.content` without the registrations, which only plugins make, in setup. */
@@ -47,14 +48,30 @@ export interface ContentServiceOptions {
   meta: MetaStore
   /** Where entries live on the site, once every plugin has set up, and the static homepage. */
   links: { routes(): ContentRoutes | null; frontPage(): string | null }
+  /** The job queue, for the job that publishes a scheduled entry on its date. */
+  jobs: Pick<JobService, 'enqueue' | 'cancel'>
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
-const STATUSES: readonly EntryStatus[] = ['draft', 'pending', 'published', 'private', 'trash']
-const WRITABLE: readonly EntryStatus[] = ['draft', 'pending', 'published', 'private']
-/** Published and private entries own their slugs, as `wp_unique_post_slug()` has it. */
-const OWNS_SLUG: readonly EntryStatus[] = ['published', 'private']
+const STATUSES: readonly EntryStatus[] = [
+  'draft',
+  'pending',
+  'scheduled',
+  'published',
+  'private',
+  'trash',
+]
+const WRITABLE: readonly EntryStatus[] = ['draft', 'pending', 'scheduled', 'published', 'private']
+/**
+ * Published, private and scheduled entries own their slugs, as `wp_unique_post_slug()` has it:
+ * only drafts and pending ones go without. A scheduled entry's address is known before its day.
+ */
+const OWNS_SLUG: readonly EntryStatus[] = ['scheduled', 'published', 'private']
+/** The entries an address on the site can lead to. A scheduled one's isn't open yet. */
+const LIVE: readonly EntryStatus[] = ['published', 'private']
+/** The job that publishes a scheduled entry when its date comes: WordPress's `publish_future_post`. */
+export const PUBLISH_JOB = 'core.publish_entry'
 const FIELDS: readonly (keyof EntryFields)[] = [
   'status',
   'slug',
@@ -78,7 +95,8 @@ const MAX_OUTLINE = 5_000
 const MAX_LIMIT = 100
 /** Two saves can pick the same free slug; the unique index stops the second, which tries again. */
 const SLUG_ATTEMPTS = 5
-const CLOCK_SKEW_MS = 60_000
+/** How far ahead a publish date schedules the entry: a minute, as `wp_insert_post()` has it. */
+export const SCHEDULE_AHEAD_MS = 60_000
 
 /**
  * A changed entry's `updated_at`: now, but always at least a millisecond after the last change,
@@ -128,6 +146,7 @@ export function createContentService({
   terms,
   meta,
   links,
+  jobs,
 }: ContentServiceOptions): ContentService {
   /** An entry as callers see it: its type's custom field defaults under what it stores. */
   const present = (row: Entry): Entry => ({ ...row, meta: meta.withDefaults(row.type, row.meta) })
@@ -156,7 +175,7 @@ export function createContentService({
     return row ?? notFound()
   }
 
-  /** The first free form of `base` among the published and private entries beside `parentId`. */
+  /** The first free form of `base` among the entries that own their slugs beside `parentId`. */
   const freeSlug = async (
     type: string,
     parentId: string | null,
@@ -261,7 +280,7 @@ export function createContentService({
     return rowsOf(result).length > 0
   }
 
-  /** Inserts or updates the row, giving a published or private entry a slug of its own. */
+  /** Inserts or updates the row, giving an entry that owns its slug one of its own. */
   const write = async (
     type: ContentType,
     id: string,
@@ -276,6 +295,7 @@ export function createContentService({
       const values = {
         ...fields,
         slug,
+        // A scheduled entry always has its date: cleanFields() refuses one without.
         publishedAt: fields.publishedAt ?? (owns ? sql`now()` : null),
       }
       try {
@@ -297,6 +317,26 @@ export function createContentService({
         if (owns && attempt < SLUG_ATTEMPTS && isUniqueViolation(error)) continue
         throw error
       }
+    }
+  }
+
+  /**
+   * Keeps the job that publishes a scheduled entry in step with it, in the save's transaction:
+   * queued for its date when it's scheduled, cancelled when it no longer is, both when its date
+   * moved. A save that neither starts nor ends as scheduled asks the queue nothing.
+   */
+  const reschedule = async (entry: Entry, previous: Entry | null): Promise<void> => {
+    const was = previous?.status === 'scheduled'
+    const is = entry.status === 'scheduled'
+    if (!was && !is) return
+    if (was && is && previous.publishedAt?.getTime() === entry.publishedAt?.getTime()) return
+    if (was) await jobs.cancel(PUBLISH_JOB, entry.id)
+    if (is) {
+      await jobs.enqueue(
+        PUBLISH_JOB,
+        { id: entry.id },
+        { at: entry.publishedAt!, unique: entry.id },
+      )
     }
   }
 
@@ -487,6 +527,7 @@ export function createContentService({
         const fields = await prepare(type, NEW_ENTRY, input, null)
         await checkRelations(type, id, fields, null)
         const row = await write(type, id, fields, null)
+        await reschedule(row, null)
         await saveRevision(type, row, null, options?.by)
         const entry = present(row)
         await terms.applyDefaultTerms(entry)
@@ -502,6 +543,7 @@ export function createContentService({
         const fields = await prepare(type, fieldsOf(previous), changes, previous)
         await checkRelations(type, previous.id, fields, previous)
         const row = await write(type, previous.id, fields, previous)
+        await reschedule(row, previous)
         await saveRevision(type, row, previous, options?.by)
         const entry = present(row)
         await terms.applyDefaultTerms(entry)
@@ -524,7 +566,7 @@ export function createContentService({
           and(
             eq(entries.type, type),
             eq(entries.slug, slug),
-            inArray(entries.status, OWNS_SLUG),
+            inArray(entries.status, LIVE),
             parentId === null ? isNull(entries.parentId) : eq(entries.parentId, parentId),
           ),
         )
@@ -642,6 +684,7 @@ export function createContentService({
           })
           .where(eq(entries.id, previous.id))
           .returning()
+        if (previous.status === 'scheduled') await jobs.cancel(PUBLISH_JOB, previous.id)
         const entry = present(row!)
         await announce(entry, present(previous))
         await hooks.doAction('content.trashed', { entry })
@@ -668,6 +711,7 @@ export function createContentService({
         const entry = await lock(id)
         await moveChildrenUp(entry)
         await db.current.delete(entries).where(eq(entries.id, entry.id))
+        if (entry.status === 'scheduled') await jobs.cancel(PUBLISH_JOB, entry.id)
         await hooks.doAction('content.deleted', { entry: present(entry) })
       }),
   }
@@ -701,8 +745,9 @@ export function cleanFields(fields: EntryFields): EntryFields {
         : `Unknown status "${String(fields.status)}"`,
     )
   }
+  const publishedAt = cleanDate(fields.publishedAt)
   return {
-    status: fields.status,
+    status: settledStatus(fields.status, publishedAt),
     slug: cleanSlug(fields.slug),
     title: cleanTitle(fields.title),
     body: cleanBody(fields.body),
@@ -711,7 +756,7 @@ export function cleanFields(fields: EntryFields): EntryFields {
     parentId: cleanId(fields.parentId, 'The parent'),
     position: cleanPosition(fields.position),
     thumbnailId: cleanId(fields.thumbnailId, 'The featured image'),
-    publishedAt: cleanDate(fields.publishedAt),
+    publishedAt,
     meta: fields.meta,
   }
 }
@@ -764,13 +809,28 @@ function cleanPosition(position: unknown): number {
   return position as number
 }
 
-/** Backdating is fine; scheduling waits for the job queue that would publish on time. */
+/** Any time: one in the past backdates the entry, one ahead schedules it. */
 function cleanDate(date: unknown): Date | null {
   if (date === null) return null
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) invalid('Invalid publish date')
-  if (date.getTime() > Date.now() + CLOCK_SKEW_MS)
-    invalid('The publish date cannot be in the future')
   return date
+}
+
+/**
+ * The status the entry is saved with, as `wp_insert_post()` decides it: published with a date a
+ * minute or more ahead is scheduled, and scheduled with a date that has come is published. A
+ * private entry is never scheduled, as in WordPress.
+ */
+function settledStatus(
+  status: EntryFields['status'],
+  publishedAt: Date | null,
+): EntryFields['status'] {
+  if (status !== 'published' && status !== 'scheduled') return status
+  if (status === 'scheduled' && publishedAt === null) {
+    invalid('A scheduled entry needs the date it is published on')
+  }
+  const ahead = publishedAt !== null && publishedAt.getTime() - Date.now() >= SCHEDULE_AHEAD_MS
+  return ahead ? 'scheduled' : 'published'
 }
 
 /** The `WHERE`, page and order a query asks for; `where` is `null` when nothing can match. */

@@ -84,6 +84,7 @@ describe('entry counts and months', () => {
     expect(await kernel.content.count('core.post')).toEqual({
       draft: 1,
       pending: 0,
+      scheduled: 0,
       published: 2,
       private: 0,
       trash: 0,
@@ -109,6 +110,24 @@ describe('entry counts and months', () => {
       year: 2025,
       month: 12,
     })
+
+    // A scheduled entry counts as scheduled, in its month, and not among the published ones.
+    const year = new Date().getUTCFullYear() + 1
+    const scheduled = await kernel.content.create('core.post', {
+      title: 'Next year',
+      status: 'published',
+      publishedAt: new Date(Date.UTC(year, 6, 1)),
+    })
+    await expectSummaryToMatchEntries(db)
+    expect(await kernel.content.count('core.post')).toMatchObject({ scheduled: 1, published: 3 })
+    expect(await kernel.content.months('core.post', { status: ['scheduled'] })).toEqual([
+      { year, month: 7 },
+    ])
+    expect(await kernel.content.months('core.post', { status: ['published'] })).not.toContainEqual({
+      year,
+      month: 7,
+    })
+    await kernel.content.delete(scheduled.id)
 
     await kernel.content.trash(march.id)
     await expectSummaryToMatchEntries(db)

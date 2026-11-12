@@ -138,15 +138,18 @@ describe('entries', () => {
     expect(again.publishedAt).toEqual(post.publishedAt)
   })
 
-  it('accept a backdated publish date, but not a future one', async () => {
+  it('accept a backdated publish date, and keep a draft’s date ahead for when it’s published', async () => {
     const { content } = await site()
     const then = new Date('2020-01-02T03:04:05Z')
     const post = await content.create('core.post', { status: 'published', publishedAt: then })
     expect(post.publishedAt).toEqual(then)
+    const later = new Date(Date.now() + 3_600_000)
+    const draft = await content.create('core.post', { publishedAt: later })
+    expect(draft).toMatchObject({ status: 'draft', publishedAt: later })
     await refused(
-      content.create('core.post', { publishedAt: new Date(Date.now() + 3_600_000) }),
+      content.create('core.post', { publishedAt: new Date('nope') }),
       'invalid_input',
-      'cannot be in the future',
+      'Invalid publish date',
     )
   })
 })
@@ -572,6 +575,7 @@ describe('list, for the admin', () => {
     expect(await content.count('core.post')).toEqual({
       draft: 0,
       pending: 0,
+      scheduled: 0,
       published: 2,
       private: 0,
       trash: 1,

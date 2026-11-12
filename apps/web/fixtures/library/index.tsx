@@ -25,7 +25,13 @@ declare module '@otwdesign/sdk' {
     'library.manage_loans': true
     'library.manage_settings': true
   }
+  interface Jobs {
+    /** Does nothing, at the time it's given: what wakes the site's job runner for the tests. */
+    'library.tick': Record<string, never>
+  }
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const library = definePlugin({
   id: 'library',
@@ -109,6 +115,35 @@ const library = definePlugin({
         const book = BOOKS.find((candidate) => candidate.slug === slug)
         if (!book) throw new HttpError(400, 'Choose a book on the shelves')
         return Response.json({ book: book.slug }, { status: 201 })
+      },
+    })
+
+    // The e2e tests' clock. A scheduled entry is published a minute or more after it's saved, at
+    // the soonest; this moves its date, and the job that publishes it, to a moment from now, as
+    // if the wait had passed, and has the site's own runner look then. Nothing else is touched:
+    // the timer, the job and the publishing are the site's.
+    cms.jobs.define('library.tick', { label: 'Nothing, on time', handler: async () => {} })
+    cms.routes.api({
+      method: 'POST',
+      path: '/time-passes',
+      handler: async (request, context) => {
+        const user = await context.user()
+        if (!user || !cms.auth.can(user, 'core.manage_jobs')) throw new HttpError(403, 'Not yours')
+        const body: unknown = await request.json().catch(() => null)
+        const id = typeof body === 'object' && body !== null && 'entry' in body ? body.entry : null
+        if (typeof id !== 'string' || !UUID.test(id)) throw new HttpError(400, 'Name the entry')
+        const at = new Date(Date.now() + 2000)
+        // Plain SQL, as the migration above: the id and the time are checked, not typed in.
+        await cms.db.execute(
+          `UPDATE cms_entries SET published_at = '${at.toISOString()}'
+            WHERE id = '${id}' AND status = 'scheduled'`,
+        )
+        await cms.db.execute(
+          `UPDATE cms_jobs SET run_at = '${at.toISOString()}'
+            WHERE name = 'core.publish_entry' AND status = 'pending' AND args ->> 'id' = '${id}'`,
+        )
+        await cms.jobs.enqueue('library.tick', {}, { at })
+        return Response.json({ at: at.toISOString() })
       },
     })
 

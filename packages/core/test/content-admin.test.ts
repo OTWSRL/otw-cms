@@ -245,6 +245,137 @@ describe('saving from the edit screen', () => {
     expect(draft.entry?.status).toBe('draft')
   })
 
+  it('schedules an entry whose date is ahead, for those who may publish', async () => {
+    const kernel = await site()
+    const author = await signIn(kernel, 'author')
+    const contributor = await signIn(kernel, 'contributor')
+    const date = '2031-05-06T09:30'
+    const at = new Date('2031-05-06T09:30:00Z')
+
+    const scheduled = await save(kernel, author.cookie, { title: 'A', intent: 'publish', date })
+    expect(scheduled.entry).toMatchObject({ status: 'scheduled', publishedAt: at, slug: 'a' })
+    expect(scheduled.flash?.message).toBe('Post scheduled for: May 6, 2031, 9:30 AM UTC.')
+
+    // Without the capability the date isn't theirs to set, and Publish submits for review.
+    const submitted = await save(kernel, contributor.cookie, {
+      title: 'C',
+      intent: 'publish',
+      date,
+    })
+    expect(submitted.entry).toMatchObject({ status: 'pending', publishedAt: null })
+  })
+
+  it('keeps a scheduled entry scheduled on Update, and follows its date', async () => {
+    const kernel = await site()
+    const author = await signIn(kernel, 'author')
+    const date = '2031-05-06T09:30'
+    let { entry } = await save(kernel, author.cookie, { title: 'A', intent: 'publish', date })
+
+    // As the screen sends it back: the dropdown's Scheduled, and the date it showed.
+    const same = await save(
+      kernel,
+      author.cookie,
+      { title: 'A2', status: 'scheduled', date },
+      entry!,
+    )
+    expect([same.entry?.status, same.flash?.message]).toEqual(['scheduled', 'Post updated.'])
+    entry = same.entry
+
+    const moved = await save(
+      kernel,
+      author.cookie,
+      { title: 'A2', status: 'scheduled', date: '2031-06-01T08:00' },
+      entry!,
+    )
+    expect(moved.entry?.publishedAt).toEqual(new Date('2031-06-01T08:00:00Z'))
+    expect(moved.flash?.message).toBe('Post scheduled for: Jun 1, 2031, 8:00 AM UTC.')
+    entry = moved.entry
+
+    // An emptied date leaves a scheduled entry's alone; a date that has come publishes it.
+    const emptied = await save(
+      kernel,
+      author.cookie,
+      { title: 'A2', status: 'scheduled', date: '' },
+      entry!,
+    )
+    expect(emptied.entry).toMatchObject({ status: 'scheduled', publishedAt: entry!.publishedAt })
+    const now = await save(
+      kernel,
+      author.cookie,
+      { title: 'A2', status: 'scheduled', date: '2020-01-02T03:04' },
+      emptied.entry!,
+    )
+    expect(now.entry).toMatchObject({
+      status: 'published',
+      publishedAt: new Date('2020-01-02T03:04:00Z'),
+    })
+    expect(now.flash?.message).toBe('Post published.')
+  })
+
+  it('takes a scheduled entry back to a draft, and schedules a published one given a date ahead', async () => {
+    const kernel = await site()
+    const author = await signIn(kernel, 'author')
+    const date = '2031-05-06T09:30'
+    const scheduled = await save(kernel, author.cookie, { title: 'A', intent: 'publish', date })
+    const draft = await save(
+      kernel,
+      author.cookie,
+      { title: 'A', status: 'draft', date },
+      scheduled.entry!,
+    )
+    expect(draft.entry?.status).toBe('draft')
+    // Its date stays for when it's published, until the field is emptied: "immediately".
+    expect(draft.entry?.publishedAt).toEqual(new Date('2031-05-06T09:30:00Z'))
+    const cleared = await save(
+      kernel,
+      author.cookie,
+      { title: 'A', status: 'draft', date: '' },
+      draft.entry!,
+    )
+    expect(cleared.entry?.publishedAt).toBeNull()
+
+    const published = await save(kernel, author.cookie, { title: 'B', intent: 'publish' })
+    const later = await save(
+      kernel,
+      author.cookie,
+      { title: 'B', status: 'published', date },
+      published.entry!,
+    )
+    expect(later.entry?.status).toBe('scheduled')
+    expect(later.flash?.message).toBe('Post scheduled for: May 6, 2031, 9:30 AM UTC.')
+  })
+
+  it('backdates with the date field, keeps the seconds of a date it only showed, and refuses one it can’t read', async () => {
+    const kernel = await site()
+    const author = await signIn(kernel, 'author')
+    const published = await save(kernel, author.cookie, { title: 'A', intent: 'publish' })
+    const first = published.entry!.publishedAt!
+    // The field holds minutes: sent back unchanged, the entry keeps the moment it was published.
+    const shown = first.toISOString().slice(0, 16)
+    const same = await save(kernel, author.cookie, { title: 'A2', date: shown }, published.entry!)
+    expect(same.entry?.publishedAt).toEqual(first)
+
+    const backdated = await save(
+      kernel,
+      author.cookie,
+      { title: 'A2', date: '2019-12-31T23:59' },
+      same.entry!,
+    )
+    expect(backdated.entry).toMatchObject({
+      status: 'published',
+      publishedAt: new Date('2019-12-31T23:59:00Z'),
+    })
+    expect(backdated.flash?.message).toBe('Post updated.')
+
+    for (const date of ['next tuesday', '2026-02-31T10:00', '2026-13-01T10:00']) {
+      const refused = await save(kernel, author.cookie, { title: 'A3', date }, backdated.entry!)
+      expect(refused.flash).toEqual({
+        kind: 'error',
+        message: 'The publish date could not be read. Use a date and time.',
+      })
+    }
+  })
+
   it('refuses what the user may not do, whatever the form says', async () => {
     const kernel = await site()
     const author = await signIn(kernel, 'author')

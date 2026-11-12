@@ -1,5 +1,5 @@
 import { Button, EditColumns, FormButton, Notice, Postbox } from '@otwdesign/admin-ui'
-import { inSentence, type Kernel } from '@otwdesign/core'
+import { inSentence, toDateField, type Kernel } from '@otwdesign/core'
 import type {
   ContentType,
   ContentTypeName,
@@ -12,8 +12,9 @@ import type {
 import { EditorLoader } from '../editor/editor-loader'
 import { FeaturedImage } from '../featured-image'
 import type { PickedMedia } from '../media-picker'
+import { PublishButton } from '../publish-button'
 import { AdminScreen } from '../screen'
-import { formatDate } from './content-dates'
+import { formatDate, schedules } from './content-dates'
 import { MetaFields } from './meta-fields'
 
 /** A parent dropdown lists at most this many entries, as a page of 100 at a time. */
@@ -86,6 +87,9 @@ export async function ContentEditScreen({
   const supports = (feature: ContentType['supports'][number]) => type.supports.includes(feature)
   const extensions = kernel.contentScreens(type.name)
   const published = entry?.status === 'published' || entry?.status === 'private'
+  const scheduled = entry?.status === 'scheduled'
+  // Past being a draft: WordPress offers Update, and no Save Draft, for both.
+  const settled = published || scheduled
   const canPublish = entry
     ? kernel.can(user, caps.publishEntry, entry)
     : kernel.can(user, caps.publish)
@@ -171,9 +175,9 @@ export async function ContentEditScreen({
     <Postbox id="submitdiv" title="Publish">
       <div className="submitbox">
         <div className="minor-publishing">
-          {(!published || (entry && type.public)) && (
+          {(!settled || (entry && type.public)) && (
             <div className="minor-publishing-actions">
-              {!published && (
+              {!settled && (
                 <Button type="submit" name="intent" value="save">
                   Save Draft
                 </Button>
@@ -204,6 +208,7 @@ export async function ContentEditScreen({
                     {entry.status === 'private' ? 'Privately Published' : 'Published'}
                   </option>
                 )}
+                {scheduled && <option value="scheduled">Scheduled</option>}
                 <option value="pending">Pending Review</option>
                 <option value="draft">Draft</option>
               </select>
@@ -237,15 +242,33 @@ export async function ContentEditScreen({
                 <a href={`${type.adminPath}/${entry.id}/revisions`}>Browse</a>
               </div>
             )}
-            <div className="misc-pub-section">
+            <div className="misc-pub-section curtime">
               {published && entry.publishedAt ? (
                 <>
                   Published on: <b>{formatDate(entry.publishedAt, locale)}</b>
+                </>
+              ) : scheduled && entry.publishedAt ? (
+                <>
+                  Scheduled for: <b>{formatDate(entry.publishedAt, locale)}</b>
                 </>
               ) : (
                 <>
                   Publish <b>immediately</b>
                 </>
+              )}
+              {/* The date is theirs who may publish, as in WordPress. A time ahead schedules. */}
+              {canPublish && (
+                <div className="publish-date">
+                  <label htmlFor="entry-date">
+                    {settled ? 'Change the date (UTC):' : 'Or on (UTC):'}
+                  </label>{' '}
+                  <input
+                    type="datetime-local"
+                    id="entry-date"
+                    name="date"
+                    defaultValue={entry?.publishedAt ? toDateField(entry.publishedAt) : ''}
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -253,14 +276,18 @@ export async function ContentEditScreen({
         {/* Update or Publish comes first in the form, so Enter in a field never trashes. */}
         <div className="major-publishing-actions">
           <div className="publishing-action">
-            <Button
-              type="submit"
-              name="intent"
-              value={published ? 'save' : 'publish'}
-              variant="primary"
-            >
-              {published ? 'Update' : canPublish ? 'Publish' : 'Submit for Review'}
-            </Button>
+            {settled || !canPublish ? (
+              <Button
+                type="submit"
+                name="intent"
+                value={settled ? 'save' : 'publish'}
+                variant="primary"
+              >
+                {settled ? 'Update' : 'Submit for Review'}
+              </Button>
+            ) : (
+              <PublishButton dateField="entry-date" scheduling={schedules(entry?.publishedAt)} />
+            )}
           </div>
           {entry && kernel.can(user, caps.deleteEntry, entry) && (
             <div className="delete-action">

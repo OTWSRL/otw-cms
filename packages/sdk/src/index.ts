@@ -138,6 +138,11 @@ export interface Jobs {
   'core.cleanup': Record<string, never>
   /** Daily, like `wp_scheduled_delete`: deletes what has been in the Trash for 30 days. */
   'core.empty_trash': Record<string, never>
+  /**
+   * Publishes a scheduled entry when its date comes, like `publish_future_post`. Core queues it
+   * when an entry is scheduled, and cancels it when the entry no longer is.
+   */
+  'core.publish_entry': { id: string }
 }
 
 /** Service name -> the API the providing plugin exposes to others. */

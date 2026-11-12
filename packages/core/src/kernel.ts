@@ -509,6 +509,14 @@ async function boot(
   let contentRoutes: ContentRoutes | null = null
   const frontPage = () =>
     values['reading.show_on_front'] === 'page' ? (values['reading.page_on_front'] ?? null) : null
+  const jobStore = new JobStore(assertOpen)
+  const jobs = createJobService({
+    db,
+    logger,
+    hooks: stores.hooks,
+    store: jobStore,
+    onQueued: options.onJobQueued,
+  })
   const content = createContentService({
     db,
     types: contentTypes,
@@ -516,6 +524,7 @@ async function boot(
     terms: createTermService({ db, taxonomies, hooks: stores.hooks }),
     meta: metaFields,
     links: { routes: () => contentRoutes, frontPage: () => frontPage() || null },
+    jobs,
   })
   const contentScreens = new ContentScreenStore(assertOpen)
   const typesInMenu = new Map<string, number>()
@@ -556,14 +565,6 @@ async function boot(
     from: () => values['mail.from'] ?? '',
     transport: () => mailTransport?.transport ?? null,
     production: (options.env ?? process.env).NODE_ENV === 'production',
-  })
-  const jobStore = new JobStore(assertOpen)
-  const jobs = createJobService({
-    db,
-    logger,
-    hooks: stores.hooks,
-    store: jobStore,
-    onQueued: options.onJobQueued,
   })
   /** A plugin's mail transport: one, as one SMTP plugin replaces wp_mail()'s mailer. */
   const provideTransport = (pluginId: string, transport: MailTransport) => {
@@ -870,6 +871,7 @@ async function boot(
     screens: contentScreens,
     can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
     transaction: (fn) => db.transaction(() => fn()),
+    locale: () => values['site.locale'],
   })
   for (const action of contentForms) registerAction(CORE, action)
   // WordPress's upload.php, media-new.php and the attachment's edit screen.

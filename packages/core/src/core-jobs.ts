@@ -1,6 +1,6 @@
 import type { Logger } from '@otwdesign/sdk'
 import { and, asc, eq, lt, sql } from 'drizzle-orm'
-import type { ContentService } from './content'
+import { PUBLISH_JOB, SCHEDULE_AHEAD_MS, type ContentService } from './content'
 import { entries, loginFailures, sessions, userTokens } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { JobService, JobStore } from './jobs'
@@ -18,7 +18,7 @@ export interface CoreJobDependencies {
   store: JobStore
   db: DatabaseContext
   logger: Logger
-  content: Pick<ContentService, 'delete'>
+  content: Pick<ContentService, 'delete' | 'get' | 'update'>
   jobs: Pick<JobService, 'enqueue' | 'prune'>
 }
 
@@ -38,6 +38,28 @@ export function registerCoreJobs(deps: CoreJobDependencies): void {
         .delete(loginFailures)
         .where(lt(loginFailures.failedAt, sql`now() - interval '1 day'`))
       await jobs.prune(JOB_LOG_DAYS)
+    },
+  })
+
+  // WordPress's check_and_publish_future_post(): publishes a scheduled entry whose date has
+  // come, through the content service, so content.status and content.saved run as for any
+  // publish. An entry that is no longer scheduled, or is gone, is left alone.
+  store.define(CORE, PUBLISH_JOB, {
+    label: 'Publish a scheduled entry',
+    // The entry stays scheduled if this fails for good, so a passing problem gets more tries.
+    attempts: 3,
+    handler: async (args) => {
+      const { id } = args as { id: string }
+      const entry = await content.get(id)
+      if (!entry || entry.status !== 'scheduled' || !entry.publishedAt) return
+      // Whether its date has come is decided as a save decides it, to the same minute, so a
+      // clock a moment behind the database's doesn't send the job round again.
+      if (entry.publishedAt.getTime() - Date.now() >= SCHEDULE_AHEAD_MS) {
+        // Run before its time, from Tools › Scheduled Actions say: it waits for its date again.
+        await jobs.enqueue(PUBLISH_JOB, { id }, { at: entry.publishedAt, unique: id })
+        return
+      }
+      await content.update(id, { status: 'published' })
     },
   })
 

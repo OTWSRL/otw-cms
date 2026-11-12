@@ -15,10 +15,11 @@ export {
   type NewUser,
 } from './auth'
 export { DEFAULT_BRAND, type Brand } from './brand'
-export type { ContentService } from './content'
+export { SCHEDULE_AHEAD_MS, type ContentService } from './content'
 export type { ContentScreenExtensions, Keyed } from './content-screens'
 export { metaOptions } from './content-meta'
 export { bodyLines, diffLines, diffRevisions, type DiffLine, type FieldDiff } from './diff'
+export { formatDateTime, toDateField } from './dates'
 export { formatBytes, type MediaService } from './media'
 export { isMailbox, type MailService } from './mail'
 export type { JobListFilter, JobService, StoredJob } from './jobs'

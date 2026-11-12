@@ -374,4 +374,29 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    // Scheduled entries, WordPress's `future`: a status of their own, which the trash remembers,
+    // and which owns its slug as published and private entries do (wp_unique_post_slug()).
+    id: '0013_scheduled_entries',
+    up: async (db) => {
+      await db.execute(sql`
+        ALTER TABLE cms_entries
+          DROP CONSTRAINT cms_entries_status_check,
+          DROP CONSTRAINT cms_entries_trashed_from_check,
+          DROP CONSTRAINT cms_entries_check1,
+          ADD CONSTRAINT cms_entries_status_check CHECK
+            (status IN ('draft', 'pending', 'scheduled', 'published', 'private', 'trash')),
+          ADD CONSTRAINT cms_entries_trashed_from_check CHECK
+            (trashed_from IN ('draft', 'pending', 'scheduled', 'published', 'private')),
+          ADD CONSTRAINT cms_entries_check1 CHECK
+            (status NOT IN ('scheduled', 'published', 'private') OR slug <> '')
+      `)
+      await db.execute(sql`DROP INDEX cms_entries_slug_key`)
+      await db.execute(sql`
+        CREATE UNIQUE INDEX cms_entries_slug_key ON cms_entries
+          (type, coalesce(parent_id, '00000000-0000-0000-0000-000000000000'), slug)
+          WHERE status IN ('scheduled', 'published', 'private')
+      `)
+    },
+  },
 ]

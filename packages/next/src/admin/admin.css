@@ -2331,6 +2331,20 @@ body:has(> .cms-login) {
   border: 0;
 }
 
+/* The Publish box's date: a time ahead schedules the entry. */
+.cms-admin .publish-date {
+  margin-top: 6px;
+}
+
+.cms-admin .publish-date input {
+  max-width: 100%;
+}
+
+/* A scheduled entry past its date, in the list's Date column: WordPress's "Missed schedule". */
+.cms-admin .error-message {
+  color: var(--wp-danger);
+}
+
 .cms-admin fieldset.misc-pub-section legend {
   float: left;
   margin-right: 6px;

@@ -78,6 +78,40 @@ describe('site content', () => {
     expect(found?.metadata.noindex).toBe(true)
   })
 
+  it('keeps a scheduled entry off the site until it’s published, but for a preview', async () => {
+    const { kernel, content } = await site()
+    const author = await signIn(kernel, 'author')
+    const editor = await signIn(kernel, 'editor')
+    const publishedAt = new Date(Date.now() + 3_600_000)
+    const post = await content.create('core.post', {
+      title: 'Tomorrow',
+      status: 'published',
+      publishedAt,
+      authorId: author.user.id,
+    })
+    const page = await content.create('core.page', {
+      title: 'Soon',
+      status: 'published',
+      publishedAt,
+    })
+    await content.create('core.page', { title: 'Inside', status: 'published', parentId: page.id })
+    await content.create('core.post', { title: 'Today', status: 'published' })
+    expect(post.status).toBe('scheduled')
+
+    // Not at its address, for visitors or its author; not under it; not in the list of posts.
+    expect(await at(kernel, '/tomorrow')).toBeNull()
+    expect(await at(kernel, '/tomorrow', author.user)).toBeNull()
+    expect(await at(kernel, '/tomorrow', editor.user)).toBeNull()
+    expect(await at(kernel, '/soon')).toBeNull()
+    expect(await at(kernel, '/soon/inside')).toBeNull()
+    expect(await at(kernel, '/')).toBe('archive core.post: Today')
+    expect((await content.permalinks([post])).get(post.id)).toBeNull()
+
+    const preview = { preview: post.id }
+    expect(await at(kernel, '/', author.user, preview)).toBe('core.post: Tomorrow (preview)')
+    expect(await at(kernel, '/', null, preview)).toBeNull()
+  })
+
   it('lists the latest posts on the home page, a page at a time', async () => {
     const { kernel, content } = await site({
       plugins: [],

@@ -18,6 +18,7 @@ import { entryDate } from './content-dates'
 const PER_PAGE = 20
 const STATUS_VIEWS: readonly { status: EntryStatus; label: string }[] = [
   { status: 'published', label: 'Published' },
+  { status: 'scheduled', label: 'Scheduled' },
   { status: 'draft', label: 'Drafts' },
   { status: 'pending', label: 'Pending' },
   { status: 'private', label: 'Private' },
@@ -27,6 +28,7 @@ const STATES: Partial<Record<EntryStatus, string>> = {
   draft: 'Draft',
   pending: 'Pending',
   private: 'Private',
+  scheduled: 'Scheduled',
 }
 const MONTH = /^(\d{4})(\d{2})$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -173,7 +175,7 @@ export async function ContentListScreen({
 
   const sum = (statuses: readonly EntryStatus[], from: Record<EntryStatus, number>) =>
     statuses.reduce((total, status) => total + from[status], 0)
-  const live: EntryStatus[] = ['draft', 'pending', 'published', 'private']
+  const live: EntryStatus[] = ['draft', 'pending', 'scheduled', 'published', 'private']
   const all = sum(live, counts)
   const ownCount = sum(live, mine)
   const views: View[] = [
