@@ -24,7 +24,14 @@ const plan = (changes: UpdatePlan['changes'], extra: Partial<UpdatePlan> = {}): 
 const UPDATE = plan([{ name: FORUM, from: '1.0.0', to: '1.1.0' }])
 
 /** Fake side effects that record, in order, what happened to which release. */
-function harness(options: { fail?: Partial<Record<string, string>>; plans?: UpdatePlan[] } = {}) {
+function harness(
+  options: {
+    fail?: Partial<Record<string, string>>
+    plans?: UpdatePlan[]
+    /** What adding or removing a plugin would change, by its package name. */
+    plugins?: Record<string, UpdatePlan>
+  } = {},
+) {
   const events: string[] = []
   const saved: ServeState[] = []
   const plans = [...(options.plans ?? [UPDATE])]
@@ -39,14 +46,28 @@ function harness(options: { fail?: Partial<Record<string, string>>; plans?: Upda
       events.push(`plan ${release.id} ${JSON.stringify(scope)}`)
       return plans.length > 1 ? plans.shift()! : plans[0]!
     },
+    async planInstall(release, name) {
+      events.push(`plan install ${release.id} ${name}`)
+      return options.plugins?.[name] ?? plan([])
+    },
+    async planRemove(release, name) {
+      events.push(`plan remove ${release.id} ${name}`)
+      return options.plugins?.[name] ?? plan([])
+    },
     async build(id, changes) {
       events.push(`build ${id} ${changes.map((c) => `${c.name}@${c.to}`).join(' ')}`)
       fail('build', id)
+      // What the release runs: the forum, and whatever was added and not removed.
+      const versions: Record<string, string> = { [FORUM]: '1.0.0' }
+      for (const change of changes) {
+        if (change.to === '') delete versions[change.name]
+        else versions[change.name] = change.to
+      }
       return {
         id,
         dir: `/site/.cms/releases/${id}`,
         createdAt: new Date(clock).toISOString(),
-        versions: { [FORUM]: changes[0]?.to ?? '1.0.0' },
+        versions,
       }
     },
     async migrate(release) {
@@ -279,6 +300,70 @@ describe('Supervisor', () => {
     expect(events).toEqual(['start r1', 'stop 20261101-100200', `write back r1 ${FORUM}@1.0.0`])
     expect(supervisor.overview().current?.id).toBe('r1')
     expect(() => supervisor.rollback('nope')).toThrow('There is no earlier release')
+  })
+
+  it('installs a plugin in a new release, and says to activate it', async () => {
+    const WIKI = '@acme/wiki'
+    const { supervisor, events } = await started('postgres', {
+      plugins: { [WIKI]: plan([{ name: WIKI, from: '', to: '2.1.0' }]) },
+    })
+    expect(supervisor.install(WIKI)).toBe(
+      `Installing ${WIKI}. Dashboard › Updates shows the progress.`,
+    )
+    await supervisor.idle()
+    const [, id] = /^build (\S+)/.exec(events[1]!)!
+    expect(events).toEqual([
+      `plan install r1 ${WIKI}`,
+      `build ${id} ${WIKI}@2.1.0`,
+      `migrate ${id}`,
+      `start ${id}`,
+      'stop r1',
+      `write back ${id} ${WIKI}@2.1.0`,
+    ])
+    const overview = supervisor.overview()
+    expect(overview.job).toMatchObject({
+      kind: 'install',
+      status: 'succeeded',
+      summary: `Installed ${WIKI} 2.1.0. Activate it on the Plugins screen.`,
+    })
+    expect(overview.current?.versions).toEqual({ [FORUM]: '1.0.0', [WIKI]: '2.1.0' })
+
+    // Rolling back takes it off the site's own files again.
+    events.length = 0
+    supervisor.rollback('r1')
+    await supervisor.idle()
+    expect(events.at(-1)).toBe(`write back r1 ${WIKI}@`)
+  })
+
+  it('removes a plugin in a new release, and installs or removes nothing that is refused', async () => {
+    const { supervisor, events } = await started('postgres', {
+      plugins: {
+        [FORUM]: plan([{ name: FORUM, from: '1.0.0', to: '' }]),
+        'left-pad': plan([], { blockers: ['left-pad isn’t a plugin for this CMS.'] }),
+      },
+    })
+    supervisor.install('left-pad')
+    await supervisor.idle()
+    expect(supervisor.overview().job).toMatchObject({
+      kind: 'install',
+      status: 'failed',
+      summary: 'Not installed: left-pad isn’t a plugin for this CMS.',
+    })
+    expect(events).toEqual(['plan install r1 left-pad'])
+
+    events.length = 0
+    expect(supervisor.remove(FORUM)).toBe(
+      `Removing ${FORUM}. Dashboard › Updates shows the progress.`,
+    )
+    await supervisor.idle()
+    expect(events[0]).toBe(`plan remove r1 ${FORUM}`)
+    expect(events[1]).toMatch(new RegExp(`^build \\S+ ${FORUM}@$`))
+    expect(supervisor.overview().job).toMatchObject({
+      kind: 'remove',
+      status: 'succeeded',
+      summary: `Removed ${FORUM}.`,
+    })
+    expect(supervisor.overview().current?.versions).toEqual({})
   })
 
   it('records a check, including one that fails', async () => {

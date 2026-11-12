@@ -110,7 +110,10 @@ export interface PluginReport {
 
 export interface UpdatePlan {
   core: { from: string; to: string } | null
-  /** Every package.json change, core and plugins. */
+  /**
+   * Every package.json change, core and plugins. An empty `from` adds a plugin to the site (and
+   * to cms.config.json), an empty `to` removes one.
+   */
   changes: { name: string; from: string; to: string }[]
   /** The plugins this update looked at. */
   plugins: PluginReport[]
@@ -414,27 +417,177 @@ export async function planSite(
   return planUpdate(site, packuments, { ...scope, only })
 }
 
+/** What plugin packages are tagged with on npm, so the admin's Add Plugin search finds them. */
+export const PLUGIN_KEYWORD = 'otw-cms-plugin'
+
+/** npm's own rule for a package name, scoped or not: nothing that could be a path, URL or range. */
+const PACKAGE_NAME = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
+
+/** The name as npm knows it, or an error for the person who typed it. */
+export function packageName(name: string): string {
+  const trimmed = name.trim()
+  if (trimmed.length > 214 || !PACKAGE_NAME.test(trimmed)) {
+    throw new Error(
+      `"${trimmed}" isn't a package name. Use the plugin's name on npm, such as @acme/forum.`,
+    )
+  }
+  return trimmed
+}
+
+const emptyPlan = (): UpdatePlan => ({
+  core: null,
+  changes: [],
+  plugins: [],
+  blockers: [],
+  warnings: [],
+  linked: [],
+})
+
+/**
+ * Plans adding a plugin to the site at `root`: the newest version on npm that says it works with
+ * the CMS the site runs. Through npm, so `.npmrc` applies and private plugins can be added. A
+ * package that says nothing about the CMS isn't one of its plugins, and is refused.
+ */
+export async function planInstall(
+  root: string,
+  name: string,
+  fetchVersions: FetchVersions = npmView(root),
+): Promise<UpdatePlan> {
+  const plan = emptyPlan()
+  const wanted = packageName(name)
+  const site = await readSitePackages(root)
+  if (isCore(wanted)) {
+    plan.blockers.push(`${wanted} is part of the CMS, not a plugin.`)
+    return plan
+  }
+  if (site.plugins.includes(wanted)) {
+    plan.blockers.push(`${wanted} is already installed.`)
+    return plan
+  }
+  const core = site.installed[CORE_VERSION_FROM]
+  if (!core) throw new Error(`${CORE_VERSION_FROM} is not installed in ${root}`)
+  let packument: Packument
+  try {
+    packument = await fetchVersions(wanted, '0.0.0')
+  } catch (error) {
+    plan.blockers.push(
+      `npm has no package ${wanted} that this site can read: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    return plan
+  }
+  const versions = semver.rsort(candidates(packument, '0.0.0'))
+  const peersOf = (version: string) => packument.versions[version]?.peerDependencies ?? {}
+  const latest = versions[0] ?? null
+  if (!latest) {
+    plan.blockers.push(`${wanted} has no released version.`)
+    return plan
+  }
+  const supported = versions.find((version) => coreSupport(peersOf(version), core) === 'yes')
+  if (!supported) {
+    plan.blockers.push(
+      versions.every((version) => coreSupport(peersOf(version), core) === 'unknown')
+        ? `${wanted} isn't a plugin for this CMS: it doesn't say which version of ${COMPATIBILITY_PEERS[0]} it works with.`
+        : `No version of ${wanted} supports core ${core}. The newest is ${latest}.`,
+    )
+    return plan
+  }
+  // What it needs of plugins already on the site must hold for the versions they're at. A
+  // plugin it needs that isn't installed shows when it's activated: "Stripe requires Commerce".
+  for (const [peer, range] of Object.entries(peersOf(supported))) {
+    const installed = site.plugins.includes(peer) ? site.installed[peer] : undefined
+    if (installed && !semver.satisfies(installed, range, INCLUDE_PRERELEASE)) {
+      plan.blockers.push(
+        `${wanted} ${supported} needs ${peer} ${range}; ${installed} is installed.`,
+      )
+    }
+  }
+  plan.changes.push({ name: wanted, from: '', to: supported })
+  plan.plugins.push({
+    name: wanted,
+    from: '',
+    to: supported,
+    latest,
+    compatible: 'yes',
+    ...(supported === latest ? {} : { note: `${latest} doesn't support core ${core}` }),
+  })
+  return plan
+}
+
+/** Plans taking a plugin's package off the site at `root`. Other plugins mustn't need it. */
+export async function planRemove(root: string, name: string): Promise<UpdatePlan> {
+  const plan = emptyPlan()
+  const site = await readSitePackages(root)
+  const [wanted] = resolveTargets(site, [name])
+  if (!wanted || !site.plugins.includes(wanted)) {
+    plan.blockers.push(`${name} is not an installed plugin.`)
+    return plan
+  }
+  for (const other of site.plugins.filter((plugin) => plugin !== wanted)) {
+    if (site.peers[other]?.[wanted])
+      plan.blockers.push(`${other} needs ${wanted}: remove that first.`)
+  }
+  plan.changes.push({
+    name: wanted,
+    from: site.installed[wanted] ?? site.specs[wanted] ?? '',
+    to: '',
+  })
+  return plan
+}
+
 /** Keeps the spec's style: `^1.2.0` stays a caret range, `1.2.0` stays exact. */
 export function nextSpec(current: string, version: string): string {
   const prefix = /^[\^~]/.exec(current)?.[0] ?? ''
   return `${prefix}${version}`
 }
 
-/** Rewrites package.json in place, leaving everything else in it as it was. */
+async function rewriteJson<T>(file: string, change: (json: T) => void): Promise<void> {
+  const raw = await readFile(file, 'utf8')
+  const json = JSON.parse(raw) as T
+  change(json)
+  const indent = /^(\s+)"/m.exec(raw)?.[1] ?? '  '
+  await writeFile(file, `${JSON.stringify(json, null, indent)}\n`)
+}
+
+/**
+ * Rewrites package.json in place, leaving everything else in it as it was. A plugin that is
+ * added or removed is also added to or removed from cms.config.json's `plugins`.
+ */
 export async function writeChanges(
   root: string,
   changes: readonly UpdatePlan['changes'][number][],
 ): Promise<void> {
-  const file = join(root, 'package.json')
-  const raw = await readFile(file, 'utf8')
-  const manifest = JSON.parse(raw) as PackageJson
-  for (const { name, to } of changes) {
-    for (const deps of [manifest.dependencies, manifest.devDependencies]) {
-      if (deps?.[name]) deps[name] = nextSpec(deps[name], to)
+  const added = changes.filter((change) => change.from === '' && change.to !== '')
+  const removed = changes.filter((change) => change.to === '')
+  await rewriteJson<PackageJson>(join(root, 'package.json'), (manifest) => {
+    for (const { name, from, to } of changes) {
+      if (to === '') {
+        for (const deps of [manifest.dependencies, manifest.devDependencies]) delete deps?.[name]
+      } else if (
+        from === '' &&
+        !manifest.dependencies?.[name] &&
+        !manifest.devDependencies?.[name]
+      ) {
+        manifest.dependencies = { ...manifest.dependencies, [name]: `^${to}` }
+      } else {
+        for (const deps of [manifest.dependencies, manifest.devDependencies]) {
+          if (deps?.[name]) deps[name] = nextSpec(deps[name], to)
+        }
+      }
     }
-  }
-  const indent = /^(\s+)"/m.exec(raw)?.[1] ?? '  '
-  await writeFile(file, `${JSON.stringify(manifest, null, indent)}\n`)
+    // npm keeps dependencies in order; one added by hand goes where npm would have put it.
+    if (added.length > 0 && manifest.dependencies) {
+      manifest.dependencies = Object.fromEntries(
+        Object.entries(manifest.dependencies).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+      )
+    }
+  })
+  if (added.length === 0 && removed.length === 0) return
+  await rewriteJson<{ plugins?: string[] }>(join(root, 'cms.config.json'), (config) => {
+    const gone = new Set(removed.map((change) => change.name))
+    const plugins = (config.plugins ?? []).filter((name) => !gone.has(name))
+    for (const { name } of added) if (!plugins.includes(name)) plugins.push(name)
+    config.plugins = plugins
+  })
 }
 
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'

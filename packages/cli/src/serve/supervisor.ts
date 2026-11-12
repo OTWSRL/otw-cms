@@ -38,6 +38,10 @@ export type Log = (line: string) => void
 export interface SupervisorDeps {
   /** What an update would change, judged from what a release has installed. */
   plan(release: Release, scope: UpdateScope): Promise<UpdatePlan>
+  /** What adding a plugin's package to a release would change. */
+  planInstall(release: Release, packageName: string): Promise<UpdatePlan>
+  /** What taking a plugin's package off a release would change. */
+  planRemove(release: Release, packageName: string): Promise<UpdatePlan>
   /** Copies the site into a new release, applies `changes`, installs and builds it. */
   build(id: string, changes: readonly PackageChange[], log: Log): Promise<BuiltRelease>
   /** Runs the release's own `cms migrate`, so its migrations are the ones that run. */
@@ -117,7 +121,29 @@ const UPDATE_STEPS = [
 ] as const
 
 function describeChanges(changes: readonly PackageChange[]): string {
-  return changes.map((change) => `${change.name} ${change.from} → ${change.to}`).join(', ')
+  return changes
+    .map((change) =>
+      change.from === ''
+        ? `${change.name} ${change.to} added`
+        : change.to === ''
+          ? `${change.name} removed`
+          : `${change.name} ${change.from} → ${change.to}`,
+    )
+    .join(', ')
+}
+
+/** What a job that builds and switches to a new release says, by what it's for. */
+interface Wording {
+  /** The plan changes nothing. */
+  unchanged: string
+  refused(blockers: readonly string[]): string
+  done(changes: readonly PackageChange[]): string
+}
+
+const UPDATE_WORDING: Wording = {
+  unchanged: 'Already up to date.',
+  refused: (blockers) => `Not updated: ${blockers.join(' ')}`,
+  done: (changes) => `Updated: ${describeChanges(changes)}.`,
 }
 
 function toCheck(plan: UpdatePlan, at: Date): UpdateCheck {
@@ -247,24 +273,60 @@ export class Supervisor {
       pluginsOnly: request.pluginsOnly,
       patchOnly: request.patchOnly,
     }
-    this.#running = this.#update(run, current, scope).finally(() => {
+    this.#running = this.#apply(run, current, () => this.#deps.plan(current, scope)).finally(() => {
       this.#running = null
     })
     return 'Updating. This page shows the progress.'
   }
 
-  async #update(run: JobRun, current: Release, scope: UpdateScope): Promise<void> {
+  /** Adds a plugin's package in a new release, like WordPress's Install Now. It arrives inactive. */
+  install(packageName: string): string {
+    const current = this.#current()
+    if (!current) throw new ControlError(409, 'The site has no release yet.')
+    const run = this.#begin('install', UPDATE_STEPS)
+    this.#running = this.#apply(run, current, () => this.#deps.planInstall(current, packageName), {
+      unchanged: `${packageName} was not installed.`,
+      refused: (blockers) => `Not installed: ${blockers.join(' ')}`,
+      done: (changes) =>
+        `Installed ${changes.map((change) => `${change.name} ${change.to}`).join(', ')}. Activate it on the Plugins screen.`,
+    }).finally(() => {
+      this.#running = null
+    })
+    return `Installing ${packageName}. Dashboard › Updates shows the progress.`
+  }
+
+  /** Takes a plugin's package off the site in a new release, like WordPress's Delete. */
+  remove(packageName: string): string {
+    const current = this.#current()
+    if (!current) throw new ControlError(409, 'The site has no release yet.')
+    const run = this.#begin('remove', UPDATE_STEPS)
+    this.#running = this.#apply(run, current, () => this.#deps.planRemove(current, packageName), {
+      unchanged: `${packageName} was not removed.`,
+      refused: (blockers) => `Not removed: ${blockers.join(' ')}`,
+      done: (changes) => `Removed ${changes.map((change) => change.name).join(', ')}.`,
+    }).finally(() => {
+      this.#running = null
+    })
+    return `Removing ${packageName}. Dashboard › Updates shows the progress.`
+  }
+
+  /** Builds the release a plan describes, and switches to it: an update, an install, a removal. */
+  async #apply(
+    run: JobRun,
+    current: Release,
+    planner: () => Promise<UpdatePlan>,
+    wording: Wording = UPDATE_WORDING,
+  ): Promise<void> {
     const { now } = this.#deps
     let plan: UpdatePlan
     try {
-      plan = await run.step('Check versions', () => this.#deps.plan(current, scope))
+      plan = await run.step('Check versions', planner)
     } catch (error) {
       return run.finish('failed', `Couldn't check versions: ${message(error)}`, now())
     }
-    if (plan.changes.length === 0) return run.finish('succeeded', 'Already up to date.', now())
-    if (plan.blockers.length > 0) {
-      return run.finish('failed', `Not updated: ${plan.blockers.join(' ')}`, now())
-    }
+    // Why not comes before "nothing to do": a refused install changes nothing either.
+    if (plan.blockers.length > 0) return run.finish('failed', wording.refused(plan.blockers), now())
+    if (plan.changes.length === 0) return run.finish('succeeded', wording.unchanged, now())
 
     let release: BuiltRelease
     try {
@@ -319,7 +381,7 @@ export class Supervisor {
       await this.#prune()
       await this.#deps.save(this.#state)
     })
-    run.finish('succeeded', `Updated: ${describeChanges(plan.changes)}.`, now())
+    run.finish('succeeded', wording.done(plan.changes), now())
   }
 
   /** After a failed update: the old release serves again, on its own database. */
@@ -390,9 +452,16 @@ export class Supervisor {
       )
     }
     await run.step('Finish', async () => {
-      const changes = Object.entries(target.versions)
-        .filter(([name, version]) => current.versions[name] !== version)
-        .map(([name, version]) => ({ name, from: current.versions[name] ?? version, to: version }))
+      // What the release going live has that the one leaving doesn't, and the other way round:
+      // a plugin added since goes from the site's files, one removed since comes back.
+      const changes = [
+        ...Object.entries(target.versions)
+          .filter(([name, version]) => current.versions[name] !== version)
+          .map(([name, version]) => ({ name, from: current.versions[name] ?? '', to: version })),
+        ...Object.entries(current.versions)
+          .filter(([name]) => !(name in target.versions))
+          .map(([name, version]) => ({ name, from: version, to: '' })),
+      ]
       await this.#deps.writeBack(target, changes)
       current.status = 'previous'
       target.status = 'live'

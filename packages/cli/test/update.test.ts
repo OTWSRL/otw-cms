@@ -1,10 +1,13 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   nextSpec,
   npmView,
+  packageName,
+  planInstall,
+  planRemove,
   planUpdate,
   resolveTargets,
   updateCommitMessage,
@@ -445,5 +448,145 @@ describe('writeChanges', () => {
     ['1.0.0', '1.1.0', '1.1.0'],
   ])('turns %s into %s → %s', (current, version, expected) => {
     expect(nextSpec(current, version)).toBe(expected)
+  })
+})
+
+describe('adding and removing a plugin', () => {
+  let root: string
+  const FORUM = '@acme/forum'
+  const json = async (file: string) => JSON.parse(await readFile(join(root, file), 'utf8'))
+
+  /** A site on core 1.3.0 with Commerce and Stripe, as files: what `planInstall` reads. */
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'cms-plugins-'))
+    const installed: Record<string, { version: string; peerDependencies?: Peers }> = {
+      '@otwdesign/next': { version: '1.3.0' },
+      [COMMERCE]: { version: '1.0.0', peerDependencies: { '@otwdesign/sdk': '^1.0.0' } },
+      [STRIPE]: {
+        version: '1.0.0',
+        peerDependencies: { '@otwdesign/sdk': '^1.0.0', [COMMERCE]: '^1.0.0' },
+      },
+    }
+    await writeFile(
+      join(root, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'site',
+          dependencies: {
+            '@otwdesign/next': '^1.3.0',
+            [COMMERCE]: '^1.0.0',
+            [STRIPE]: '^1.0.0',
+            next: '^16.4.0',
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    )
+    await writeFile(
+      join(root, 'cms.config.json'),
+      `${JSON.stringify({ brand: { name: 'Acme' }, plugins: [COMMERCE, STRIPE] }, null, 2)}\n`,
+    )
+    for (const [name, manifest] of Object.entries(installed)) {
+      const dir = join(root, 'node_modules', ...name.split('/'))
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'package.json'), JSON.stringify({ name, ...manifest }))
+    }
+  })
+  afterEach(() => rm(root, { recursive: true, force: true }))
+
+  const published = (versions: Record<string, string | Peers | null>) => async () =>
+    packument(FORUM, versions)
+
+  it('adds the newest version that supports the site’s core, to package.json and cms.config.json', async () => {
+    const plan = await planInstall(
+      root,
+      ` ${FORUM} `,
+      published({
+        '1.0.0': '^1.0.0',
+        '1.4.0': '^1.2.0',
+        '2.0.0': '^2.0.0',
+        '2.1.0-beta.1': '^1.0.0',
+      }),
+    )
+    expect(plan).toMatchObject({
+      changes: [{ name: FORUM, from: '', to: '1.4.0' }],
+      blockers: [],
+      plugins: [
+        { name: FORUM, to: '1.4.0', latest: '2.0.0', note: "2.0.0 doesn't support core 1.3.0" },
+      ],
+    })
+
+    await writeChanges(root, plan.changes)
+    expect(Object.entries((await json('package.json')).dependencies)).toEqual([
+      [FORUM, '^1.4.0'],
+      ['@otwdesign/next', '^1.3.0'],
+      [COMMERCE, '^1.0.0'],
+      [STRIPE, '^1.0.0'],
+      ['next', '^16.4.0'],
+    ])
+    // The rest of the site's configuration is as it was.
+    expect(await json('cms.config.json')).toEqual({
+      brand: { name: 'Acme' },
+      plugins: [COMMERCE, STRIPE, FORUM],
+    })
+  })
+
+  it('refuses what isn’t a plugin for this CMS, what doesn’t support it, and what is there already', async () => {
+    const blockers = async (name: string, versions: Record<string, string | Peers | null>) =>
+      (await planInstall(root, name, published(versions))).blockers
+    expect(await blockers('left-pad', { '1.3.0': null })).toEqual([
+      "left-pad isn't a plugin for this CMS: it doesn't say which version of @otwdesign/sdk it works with.",
+    ])
+    expect(await blockers(FORUM, { '2.0.0': '^2.0.0' })).toEqual([
+      `No version of ${FORUM} supports core 1.3.0. The newest is 2.0.0.`,
+    ])
+    expect(await blockers(FORUM, {})).toEqual([`${FORUM} has no released version.`])
+    expect(await blockers(COMMERCE, { '1.0.0': '^1.0.0' })).toEqual([
+      `${COMMERCE} is already installed.`,
+    ])
+    expect(await blockers('@otwdesign/core', {})).toEqual([
+      '@otwdesign/core is part of the CMS, not a plugin.',
+    ])
+    // A version that needs a newer Commerce than the site has.
+    expect(
+      await blockers(FORUM, { '1.0.0': { '@otwdesign/sdk': '^1.0.0', [COMMERCE]: '^2.0.0' } }),
+    ).toEqual([`${FORUM} 1.0.0 needs ${COMMERCE} ^2.0.0; 1.0.0 is installed.`])
+  })
+
+  it('says why npm couldn’t find a package', async () => {
+    const plan = await planInstall(root, FORUM, async () => {
+      throw new Error('404 Not Found')
+    })
+    expect(plan.blockers).toEqual([
+      `npm has no package ${FORUM} that this site can read: 404 Not Found`,
+    ])
+    expect(plan.changes).toEqual([])
+  })
+
+  it.each(['../evil', 'https://example.com/x.tgz', 'forum@latest', 'Forum', 'a b', ''])(
+    'takes only a package name, not %j',
+    (name) => {
+      expect(() => packageName(name)).toThrow("isn't a package name")
+    },
+  )
+
+  it('removes a plugin from both files, unless another plugin needs it', async () => {
+    expect((await planRemove(root, COMMERCE)).blockers).toEqual([
+      `${STRIPE} needs ${COMMERCE}: remove that first.`,
+    ])
+    expect(
+      (await planRemove(root, FORUM).catch((error: Error) => error.message)) as string,
+    ).toMatch(/is not an installed plugin/)
+
+    // By its short name, as `cms update` takes them.
+    const plan = await planRemove(root, 'commerce-stripe')
+    expect(plan).toMatchObject({ changes: [{ name: STRIPE, from: '1.0.0', to: '' }], blockers: [] })
+    await writeChanges(root, plan.changes)
+    expect(await json('package.json')).toEqual({
+      name: 'site',
+      dependencies: { '@otwdesign/next': '^1.3.0', [COMMERCE]: '^1.0.0', next: '^16.4.0' },
+    })
+    expect(await json('cms.config.json')).toEqual({ brand: { name: 'Acme' }, plugins: [COMMERCE] })
   })
 })

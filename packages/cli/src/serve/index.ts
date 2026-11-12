@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { join, resolve } from 'node:path'
 import type { UpdateRequest } from '@otwdesign/core'
 import { loadEnv } from '../site.ts'
-import { detectPackageManager, planSite } from '../update.ts'
+import { detectPackageManager, packageName, planInstall, planRemove, planSite } from '../update.ts'
 import { ControlError, createControlServer } from './control.ts'
 import { startRelease } from './processes.ts'
 import { createProxy } from './proxy.ts'
@@ -23,6 +23,17 @@ export interface ServeOptions {
   /** For Postgres hosts that take their own backups; the embedded database is always copied. */
   backup: boolean
   checkEveryMs?: number
+}
+
+/** The package a request names, checked to be a package name and nothing else. */
+function packageOf(body: unknown): string {
+  const name = (body as { package?: unknown } | null)?.package
+  if (typeof name !== 'string') throw new ControlError(400, '"package" is required')
+  try {
+    return packageName(name)
+  } catch (error) {
+    throw new ControlError(400, error instanceof Error ? error.message : String(error))
+  }
 }
 
 function parseUpdateRequest(body: unknown): UpdateRequest {
@@ -90,6 +101,8 @@ export async function serve(options: ServeOptions): Promise<void> {
     await loadState(stateFile),
     {
       plan: (release, scope) => planSite(release.dir, scope),
+      planInstall: (release, name) => planInstall(release.dir, name),
+      planRemove: (release, name) => planRemove(release.dir, name),
       build: (id, changes, log) => buildRelease(builder, id, changes, log),
       migrate: (release, log) =>
         migrateRelease(release, log, {
@@ -126,6 +139,8 @@ export async function serve(options: ServeOptions): Promise<void> {
       if (typeof release !== 'string') throw new ControlError(400, '"release" is required')
       return { notice: supervisor.rollback(release) }
     },
+    'POST /install': (body: unknown) => ({ notice: supervisor.install(packageOf(body)) }),
+    'POST /remove': (body: unknown) => ({ notice: supervisor.remove(packageOf(body)) }),
     'PUT /auto-update': async (body: unknown) => {
       const mode = (body as { mode?: unknown } | null)?.mode
       if (mode !== 'off' && mode !== 'patch') {

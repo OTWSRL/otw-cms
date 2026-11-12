@@ -8,7 +8,9 @@ export type AutoUpdateMode = 'off' | 'patch'
 
 export interface PackageChange {
   name: string
+  /** Empty when the package is being added to the site. */
   from: string
+  /** Empty when it is being removed. */
   to: string
 }
 
@@ -53,7 +55,7 @@ export interface UpdateJobStep {
 
 export interface UpdateJob {
   id: string
-  kind: 'check' | 'update' | 'rollback'
+  kind: 'check' | 'update' | 'rollback' | 'install' | 'remove'
   status: 'running' | 'succeeded' | 'failed'
   startedAt: string
   finishedAt?: string
@@ -104,4 +106,11 @@ export interface UpdateService {
   update(request: UpdateRequest): Promise<string>
   rollback(releaseId: string): Promise<string>
   setAutoUpdate(mode: AutoUpdateMode): Promise<string>
+  /**
+   * Adds a plugin's npm package to the site and rebuilds it, like WordPress's Install Now. The
+   * plugin arrives inactive. Missing where the hosting can't.
+   */
+  install?(packageName: string): Promise<string>
+  /** Takes a plugin's package off the site and rebuilds it, like WordPress's Delete. */
+  remove?(packageName: string): Promise<string>
 }
