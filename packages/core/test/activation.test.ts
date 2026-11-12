@@ -1,4 +1,5 @@
 import type { PluginDefinition } from '@otwdesign/sdk'
+import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { createKernel, type KernelOptions } from '../src/kernel'
 import { CORE_VERSION } from '../src/version'
@@ -51,6 +52,28 @@ describe('plugin activation', () => {
       createKernel({ db, plugins, logger: memoryLogger(), strict: true })
     await boot([base])
     expect((await boot([base, addon])).active).toEqual(['commerce'])
+  })
+
+  it('starts a site’s first plugin inactive too, when the site began with none', async () => {
+    // As a new site from create-otw-cms, which has no plugins until one is added.
+    const { boot } = site([])
+    expect((await boot()).active).toEqual([])
+    const later = await boot({ plugins: [base] })
+    expect(later.active).toEqual([])
+    expect(later.plugins().map((each) => [each.id, each.status])).toEqual([
+      ['commerce', 'inactive'],
+    ])
+  })
+
+  it('takes a site from before first boots were recorded as one that has booted', async () => {
+    const { boot } = site([base])
+    const kernel = await boot()
+    // An older site: plugins on record, and no record of a first boot.
+    await kernel.db.execute(sql`DELETE FROM cms_options WHERE key = 'core.plugins_initialized'`)
+    expect((await boot({ plugins: [base, addon] })).active).toEqual(['commerce'])
+    // And it's recorded now: deleting every row wouldn't switch everything on again.
+    await kernel.db.execute(sql`DELETE FROM cms_plugins`)
+    expect((await boot({ plugins: [base, addon] })).active).toEqual([])
   })
 
   it('deactivates and reactivates in dependency order, invalidating running kernels', async () => {

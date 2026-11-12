@@ -6,6 +6,7 @@ import { options } from './core-schema'
 const GENERATION = 'core.generation'
 const SECRET = 'core.secret'
 const WEBHOOK_TOPICS = 'core.webhook_topics'
+const PLUGINS_INITIALIZED = 'core.plugins_initialized'
 
 /** The active webhooks' ids by the event each is sent. */
 export type WebhookTopics = Record<string, string[]>
@@ -16,16 +17,30 @@ export type WebhookTopics = Record<string, string[]>
  */
 export async function readBootState(
   db: Database,
-): Promise<{ generation: number; webhookTopics: WebhookTopics }> {
+): Promise<{ generation: number; webhookTopics: WebhookTopics; pluginsInitialized: boolean }> {
   const rows = await db
     .select()
     .from(options)
-    .where(inArray(options.key, [GENERATION, WEBHOOK_TOPICS]))
+    .where(inArray(options.key, [GENERATION, WEBHOOK_TOPICS, PLUGINS_INITIALIZED]))
   const value = (key: string) => rows.find((row) => row.key === key)?.value
   return {
     generation: Number(value(GENERATION) ?? 0),
     webhookTopics: JSON.parse(value(WEBHOOK_TOPICS) ?? '{}') as WebhookTopics,
+    pluginsInitialized: value(PLUGINS_INITIALIZED) !== undefined,
   }
+}
+
+/**
+ * Records that the site has had its first boot, when every installed plugin starts active.
+ * True when this call is the one that recorded it: the first boot is now.
+ */
+export async function markPluginsInitialized(db: Database): Promise<boolean> {
+  const marked = await db
+    .insert(options)
+    .values({ key: PLUGINS_INITIALIZED, value: '1' })
+    .onConflictDoNothing()
+    .returning({ key: options.key })
+  return marked.length > 0
 }
 
 /** Keeps `readBootState()`'s copy of the subscriptions, after a webhook changed. */

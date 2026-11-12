@@ -393,7 +393,7 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
     await runMigrations(db, [coreDefinition], logger)
   }
   // Read the generation before the state it guards, so a change in between triggers a reboot.
-  const { generation, webhookTopics } = await readBootState(db.root)
+  const { generation, webhookTopics, pluginsInitialized } = await readBootState(db.root)
   const prepared: Prepared = {
     options,
     logger,
@@ -401,7 +401,9 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
     generation,
     webhookTopics,
     flash: createFlashCodec(options.secret ?? (await ensureSecret(db.root))),
-    configured: options.active ?? (await loadActiveIds(db.root, options.plugins)),
+    configured:
+      options.active ??
+      (await loadActiveIds(db.root, options.plugins, pluginsInitialized || undefined)),
     stored: start.stored ?? (await loadStoredSettings(db.root)),
     databaseUpdates: [],
     adminEntries: adminEntriesByPlugin(options),
@@ -871,7 +873,7 @@ async function boot(
       const plugin = installed.get(id)
       if (!plugin) throw new ActionError('That plugin is not installed.')
       const name = displayName(plugin, id)
-      const current = await loadActiveIds(db.root, options.plugins)
+      const current = await loadActiveIds(db.root, options.plugins, true)
       if (current.includes(id)) return `${name} is already active.`
       const blockers = activationBlockers(plugin, installed, new Set(current), coreVersion)
       if (blockers.length > 0) throw new ActionError(blockers.join(' '))
@@ -892,7 +894,7 @@ async function boot(
     async deactivate(id) {
       if (options.active) throw new ActionError(PINNED)
       const name = displayName(installed.get(id), id)
-      const current = new Set(await loadActiveIds(db.root, options.plugins))
+      const current = new Set(await loadActiveIds(db.root, options.plugins, true))
       if (!current.has(id)) return `${name} is already inactive.`
       const blockers = deactivationBlockers(id, options.plugins, current)
       if (blockers.length > 0) throw new ActionError(blockers.join(' '))
@@ -905,7 +907,7 @@ async function boot(
       const plugin = installed.get(id)
       if (!plugin) throw new ActionError('That plugin is not installed.')
       const name = displayName(plugin, id)
-      if ((await loadActiveIds(db.root, options.plugins)).includes(id)) {
+      if ((await loadActiveIds(db.root, options.plugins, true)).includes(id)) {
         throw new ActionError(`Deactivate ${name} before deleting its data.`)
       }
       try {

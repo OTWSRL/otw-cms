@@ -2,6 +2,7 @@ import type { Database, PluginDefinition } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import semver from 'semver'
 import { pluginStates } from './core-schema'
+import { markPluginsInitialized } from './options'
 import { validatePlugin } from './resolver'
 
 const CORE = 'core'
@@ -9,13 +10,22 @@ const CORE = 'core'
 /**
  * The plugins the site has switched on. On first boot every installed plugin starts active;
  * plugins installed later start inactive, as in WordPress.
+ *
+ * The first boot is recorded, so a site that started with no plugins and gets its first one
+ * later doesn't mistake that for it. `initialized` is what the caller already read of that
+ * record (a booting kernel reads it with its generation); without it, it's looked up, but only
+ * when no plugin is on record, which is when it matters.
  */
 export async function loadActiveIds(
   db: Database,
   installed: readonly PluginDefinition[],
+  initialized?: boolean,
 ): Promise<string[]> {
   let rows = await db.select().from(pluginStates)
-  if (rows.length === 0 && installed.length > 0) {
+  if (initialized === true) return rows.filter((row) => row.active).map((row) => row.id)
+  // A site from before the record existed has plugins on record: it has booted before.
+  const first = (await markPluginsInitialized(db)) && rows.length === 0
+  if (first && installed.length > 0) {
     await db
       .insert(pluginStates)
       .values(installed.map((plugin) => ({ id: plugin.id, active: true })))
