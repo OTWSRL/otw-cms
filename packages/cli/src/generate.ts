@@ -135,6 +135,8 @@ export interface SiteLayout {
 }
 
 const SITE_MODULE = 'cms/site.generated.ts'
+/** Beside `app`, where Next.js looks for it. */
+const PROXY_FILE = 'proxy.ts'
 const ADMIN_MODULE = 'cms/admin.generated.ts'
 
 /** Where the generated site module lives, relative to the site's root. */
@@ -190,6 +192,8 @@ export function managedFiles(
   admin: readonly string[] = [],
   /** Whether the site has its own templates, `cms/templates.tsx`, which only its pages need. */
   templates = false,
+  /** The plugins whose packages have a proxy entry (`./proxy`). */
+  proxy: readonly string[] = [],
 ): ManagedFile[] {
   const at = (path: string) => (srcDir ? `${srcDir}/${path}` : path)
   const site = siteModulePath({ srcDir })
@@ -252,6 +256,25 @@ export function managedFiles(
     // catch-all would claim / as well, and Next.js allows only one.
     route('app/(site)/page.tsx', storefront, true),
     route('app/(site)/[...slug]/page.tsx', storefront),
+    // Only for a site with a plugin that has one: without, the site has no proxy, and no request
+    // pays for one. A site with a proxy of its own keeps it, and calls createProxy() from there.
+    ...(proxy.length > 0
+      ? [
+          file(
+            at(PROXY_FILE),
+            [
+              "import { createProxy } from '@otwdesign/next/proxy'",
+              ...proxy.map((name, i) => `import proxy${i} from ${JSON.stringify(`${name}/proxy`)}`),
+              '',
+              `export const proxy = createProxy([${proxy.map((_, i) => `proxy${i}`).join(', ')}])`,
+              '',
+              "// Next.js's own files never reach a plugin's proxy.",
+              "export const config = { matcher: ['/((?!_next/static|_next/image).*)'] }",
+            ],
+            true,
+          ),
+        ]
+      : []),
   ]
 }
 
@@ -304,7 +327,8 @@ export async function generate({
 }): Promise<GenerateResult> {
   const config = await readConfig(configPath)
   const layout: SiteLayout = { srcDir: (await exists(join(root, 'src', 'app'))) ? 'src' : '' }
-  const admin = await pluginsWithAdmin(root, config.plugins)
+  const admin = await pluginsWith(root, config.plugins, './admin')
+  const proxy = await pluginsWith(root, config.plugins, './proxy')
   const cmsDir = join(root, layout.srcDir, 'cms')
   const templates =
     (await exists(join(cmsDir, 'templates.tsx'))) || (await exists(join(cmsDir, 'templates.ts')))
@@ -322,7 +346,16 @@ export async function generate({
       for (const path of retired.replacedBy) clashing.add(path)
     }
   }
-  for (const managed of managedFiles(config, layout, admin, templates)) {
+  // The proxy this wrote for a plugin that has since gone: a site with no plugin proxy has none.
+  if (proxy.length === 0) {
+    const path = layout.srcDir ? `${layout.srcDir}/${PROXY_FILE}` : PROXY_FILE
+    const target = join(root, ...path.split('/'))
+    if ((await readIfExists(target))?.startsWith(MARKER)) {
+      await unlink(target)
+      files.push({ path, status: 'removed' })
+    }
+  }
+  for (const managed of managedFiles(config, layout, admin, templates, proxy)) {
     if (clashing.has(managed.path)) continue
     const target = join(root, ...managed.path.split('/'))
     const existing = await readIfExists(target)
@@ -340,15 +373,20 @@ export async function generate({
 }
 
 /**
- * The plugins whose package exports an admin entry (`./admin`), found as Node resolves packages:
- * in `node_modules` here or in a folder above, where workspaces install them.
+ * The plugins whose package exports an entry, such as the admin's (`./admin`) or a proxy
+ * (`./proxy`), found as Node resolves packages: in `node_modules` here or in a folder above,
+ * where workspaces install them.
  */
-async function pluginsWithAdmin(root: string, plugins: readonly string[]): Promise<string[]> {
+async function pluginsWith(
+  root: string,
+  plugins: readonly string[],
+  entry: './admin' | './proxy',
+): Promise<string[]> {
   const found: string[] = []
   for (const name of plugins) {
     const manifest = await packageManifest(root, name)
     const exports = manifest?.exports
-    if (exports && typeof exports === 'object' && './admin' in exports) found.push(name)
+    if (exports && typeof exports === 'object' && entry in exports) found.push(name)
   }
   return found
 }

@@ -32,7 +32,8 @@
     "./site": "./src/site/index.ts",
     "./tracing": "./src/tracing.ts",
     "./uploads": "./src/uploads.ts",
-    "./instrumentation": "./src/instrumentation.ts"
+    "./instrumentation": "./src/instrumentation.ts",
+    "./proxy": "./src/proxy.ts"
   },
   "files": [
     "src",

@@ -256,6 +256,51 @@ describe('generate', () => {
     expect(admin).not.toContain('@acme/quiz/admin')
   })
 
+  it('writes a proxy only for a site with a plugin that has one, and removes it with the plugin', async () => {
+    const plugins = ['@acme/lms', '@acme/page-cache', '@acme/geo']
+    await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins }))
+    await install(root, '@acme/lms', { '.': './src/index.ts', './admin': './src/admin.tsx' })
+    // No plugin with a proxy: the site has none, so no request pays for one.
+    expect(await statuses()).not.toHaveProperty('src/proxy.ts')
+    await expect(stat(join(root, 'src/proxy.ts'))).rejects.toThrow('ENOENT')
+
+    await install(root, '@acme/page-cache', { '.': './src/index.ts', './proxy': './src/proxy.ts' })
+    await install(root, '@acme/geo', { '.': './src/index.ts', './proxy': './src/proxy.ts' })
+    expect((await statuses())['src/proxy.ts']).toBe('written')
+    expect(await readFile(join(root, 'src/proxy.ts'), 'utf8')).toBe(
+      [
+        MARKER,
+        "import { createProxy } from '@otwdesign/next/proxy'",
+        'import proxy0 from "@acme/page-cache/proxy"',
+        'import proxy1 from "@acme/geo/proxy"',
+        '',
+        'export const proxy = createProxy([proxy0, proxy1])',
+        '',
+        "// Next.js's own files never reach a plugin's proxy.",
+        "export const config = { matcher: ['/((?!_next/static|_next/image).*)'] }",
+        '',
+      ].join('\n'),
+    )
+
+    // The plugins go: so does the proxy written for them.
+    await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: ['@acme/lms'] }))
+    expect((await statuses())['src/proxy.ts']).toBe('removed')
+    await expect(stat(join(root, 'src/proxy.ts'))).rejects.toThrow('ENOENT')
+  })
+
+  it('keeps a proxy the site wrote itself, with or without plugins that have one', async () => {
+    const own = 'export function proxy() {}\n'
+    await writeFile(join(root, 'src/proxy.ts'), own)
+    expect(await statuses()).not.toHaveProperty('src/proxy.ts')
+    await writeFile(
+      join(root, 'cms.config.json'),
+      JSON.stringify({ plugins: ['@acme/page-cache'] }),
+    )
+    await install(root, '@acme/page-cache', { '.': './src/index.ts', './proxy': './src/proxy.ts' })
+    expect((await statuses())['src/proxy.ts']).toBe('own')
+    expect(await readFile(join(root, 'src/proxy.ts'), 'utf8')).toBe(own)
+  })
+
   it('finds packages a workspace installs in a parent folder', async () => {
     const site = join(root, 'apps', 'web')
     await mkdir(join(site, 'src', 'app'), { recursive: true })

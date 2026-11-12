@@ -1923,6 +1923,16 @@ export interface Migration {
   up: (db: Database) => Promise<unknown>
 }
 
+/**
+ * A plugin's proxy: the default export of its package's `./proxy` entry. It sees every request
+ * to the site before any page or route does, like a WordPress `advanced-cache.php` drop-in, and
+ * may answer it; `null` lets it through. It runs apart from `setup()`, with no `cms`: keep it
+ * small, and fast for the requests it lets through.
+ */
+export type ProxyHandler = (
+  request: Request,
+) => Response | null | undefined | Promise<Response | null | undefined>
+
 /** What a plugin's `uninstall()` receives. The plugin isn't loaded: there is no `cms`. */
 export interface UninstallContext {
   readonly plugin: { readonly id: string; readonly version: string }
