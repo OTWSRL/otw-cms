@@ -8,6 +8,7 @@ const CORE_SECTIONS = {
   pages: { label: 'Pages', icon: 'page' },
   plugins: { label: 'Plugins', icon: 'plugins' },
   users: { label: 'Users', icon: 'users' },
+  tools: { label: 'Tools', icon: 'tools' },
   settings: { label: 'Settings', icon: 'settings' },
 } as const satisfies Record<string, { label: string; icon: AdminIcon }>
 
@@ -129,6 +130,16 @@ export const CORE_MENU: readonly MenuEntry[] = [
     parent: 'users',
   },
   {
+    // Where Action Scheduler puts its screen: Tools › Scheduled Actions.
+    key: 'core.scheduled-actions',
+    pluginId: 'core',
+    label: 'Scheduled Actions',
+    url: '/admin/tools/scheduled-actions',
+    order: 0,
+    capability: 'core.manage_jobs',
+    parent: 'tools',
+  },
+  {
     // Everyone's own profile.php; for those who may not manage users, the section's only item.
     key: 'core.profile',
     pluginId: 'core',
@@ -186,7 +197,10 @@ export class AdminMenu {
         ...CORE_SECTIONS[id],
       })),
       ...input.active.map((id) => ({ id, label: input.label(id), icon: input.icon(id) })),
-      ...(['plugins', 'users', 'settings'] as const).map((id) => ({ id, ...CORE_SECTIONS[id] })),
+      ...(['plugins', 'users', 'tools', 'settings'] as const).map((id) => ({
+        id,
+        ...CORE_SECTIONS[id],
+      })),
     ]
     return warnings
   }

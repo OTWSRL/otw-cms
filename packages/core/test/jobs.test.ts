@@ -1,6 +1,7 @@
 import { defineAdmin, type JobDefinition, type JobRun, type PluginContext } from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
+import type { JobListFilter } from '../src/jobs'
 import { createKernel, type Kernel, type KernelOptions } from '../src/kernel'
 import { bootKernel, createDb, memoryLogger, plugin } from './helpers'
 
@@ -60,8 +61,19 @@ const pass = (kernel: Kernel, seconds: number) =>
      WHERE status = 'pending'
   `)
 
+/** The shop's jobs: every site also has core's own two, which repeat daily. */
+const shopJobs = async (kernel: Kernel, filter: JobListFilter = {}) =>
+  (await kernel.jobs.list({ perPage: 100, ...filter, search: 'shop.' })).jobs
+
+/** How many of the shop's jobs have each status. */
+const tally = async (kernel: Kernel) => {
+  const counts: Record<string, number> = {}
+  for (const job of await shopJobs(kernel)) counts[job.status] = (counts[job.status] ?? 0) + 1
+  return counts
+}
+
 const rows = async (kernel: Kernel) => {
-  const { jobs } = await kernel.jobs.list({ perPage: 100 })
+  const jobs = await shopJobs(kernel)
   return jobs.map((job) => ({ name: job.name, status: job.status, attempts: job.attempts }))
 }
 
@@ -120,11 +132,11 @@ describe('queueing and running', () => {
     const kernel = await bootKernel({ plugins: [definition] })
     const id = await cms().jobs.enqueue('shop.send-receipt', { order: 'A-1' })
 
-    expect(await kernel.jobs.runDue()).toEqual({ ran: 1, nextDue: null })
+    expect((await kernel.jobs.runDue()).ran).toBe(1)
     expect(ran).toEqual([{ args: { order: 'A-1' }, run: { id, attempt: 1 } }])
     expect(await rows(kernel)).toEqual([{ name: 'shop.send-receipt', status: 'done', attempts: 1 }])
     // Nothing is left to run.
-    expect(await kernel.jobs.runDue()).toEqual({ ran: 0, nextDue: null })
+    expect((await kernel.jobs.runDue()).ran).toBe(0)
   })
 
   it('queues with the transaction that asked, and wakes the runner once it commits', async () => {
@@ -206,7 +218,7 @@ describe('queueing and running', () => {
     expect(await cms().jobs.cancel('shop.reindex')).toBe(2)
     expect((await kernel.jobs.runDue()).ran).toBe(0)
     expect(ran).toEqual([])
-    expect(await kernel.jobs.counts()).toMatchObject({ cancelled: 3, pending: 0 })
+    expect(await tally(kernel)).toEqual({ cancelled: 3 })
   })
 
   it('refuses a job nobody defines, and arguments that aren’t plain data', async () => {
@@ -261,7 +273,7 @@ describe('failing', () => {
     state.fail = 1
 
     expect((await kernel.jobs.runDue()).ran).toBe(1)
-    const { jobs } = await kernel.jobs.list()
+    const jobs = await shopJobs(kernel)
     expect(jobs[0]).toMatchObject({
       status: 'failed',
       attempts: 1,
@@ -318,7 +330,7 @@ describe('failing', () => {
 
     expect((await kernel.jobs.runDue()).ran).toBe(1)
     expect(signal?.aborted).toBe(true)
-    const { jobs } = await kernel.jobs.list()
+    const jobs = await shopJobs(kernel)
     expect(jobs[0]).toMatchObject({
       status: 'failed',
       lastError: 'It ran longer than its 1 seconds',
@@ -343,7 +355,7 @@ describe('failing', () => {
     await kernel.db.execute(sql`UPDATE cms_jobs SET locked_until = now() - interval '1 second'`)
     expect((await kernel.jobs.runDue()).ran).toBe(2)
     expect(ran.map((job) => job.args)).toEqual([{ order: 'retried' }])
-    const { jobs } = await kernel.jobs.list({ perPage: 10 })
+    const jobs = await shopJobs(kernel)
     expect(Object.fromEntries(jobs.map((job) => [job.name, [job.status, job.lastError]]))).toEqual({
       'shop.flaky': ['done', null],
       'shop.send-receipt': ['failed', 'The server stopped while this job ran'],
@@ -387,7 +399,7 @@ describe('repeating jobs', () => {
     await pass(kernel, HOUR + 1)
     state.fail = 1
     expect((await kernel.jobs.runDue()).ran).toBe(1)
-    expect(await kernel.jobs.counts()).toMatchObject({ failed: 1, pending: 1 })
+    expect(await tally(kernel)).toEqual({ failed: 1, pending: 1 })
   })
 
   it('follows the definition: a new interval, no longer repeating, or its plugin gone', async () => {
@@ -400,11 +412,12 @@ describe('repeating jobs', () => {
         strict: true,
         passwordHashing: 'fast',
       })
-      const { nextDue } = await kernel.jobs.runDue()
-      const { jobs } = await kernel.jobs.list({ status: 'pending' })
+      const { ran } = await kernel.jobs.runDue()
+      const jobs = await shopJobs(kernel, { status: 'pending' })
       return {
         kernel,
-        inSeconds: nextDue ? Math.round((nextDue.getTime() - Date.now()) / 1000) : null,
+        ran,
+        inSeconds: Math.round((jobs[0]?.runAt.getTime() ?? Number.NaN) - Date.now()) / 1000,
         waiting: jobs.map((job) => [job.name, job.everySeconds, job.defined]),
       }
     }
@@ -415,16 +428,18 @@ describe('repeating jobs', () => {
     // Booting again changes nothing.
     const again = await boot([shop({ 'sync-stock': { everySeconds: HOUR } }).definition])
     expect(again.waiting).toEqual(hourly.waiting)
-    expect(await again.kernel.jobs.counts()).toMatchObject({ pending: 1 })
+    expect(await tally(again.kernel)).toEqual({ pending: 1 })
 
     const daily = await boot([shop({ 'sync-stock': { everySeconds: 24 * HOUR } }).definition])
     expect(daily.waiting).toEqual([['shop.sync-stock', 24 * HOUR, true]])
     expect(daily.inSeconds).toBeGreaterThan(23 * HOUR)
 
-    // Its plugin is off: the run waits, and nothing looks for it.
+    // Its plugin is off: though due, the run waits, while core's own two jobs run.
+    await pass(daily.kernel, 25 * HOUR)
     const off = await boot([plugin('other')])
+    expect(off.ran).toBe(2)
     expect(off.waiting).toEqual([['shop.sync-stock', 24 * HOUR, false]])
-    expect(off.inSeconds).toBeNull()
+    expect(off.inSeconds).toBeLessThan(0)
 
     const once = await boot([shop({ 'sync-stock': {} }).definition])
     expect(once.waiting).toEqual([])
@@ -487,21 +502,23 @@ describe('the admin’s view', () => {
     const waiting = await cms().jobs.enqueue('shop.send-receipt', { order: 'A-2' }, inMinutes(30))
     const unwanted = await cms().jobs.enqueue('shop.reindex', {}, inMinutes(60))
 
+    expect(await tally(kernel)).toEqual({ pending: 2, failed: 1 })
+    // Every status has its count, core's two daily jobs included.
     expect(await kernel.jobs.counts()).toEqual({
-      pending: 2,
+      pending: 4,
       running: 0,
       done: 0,
       failed: 1,
       cancelled: 0,
     })
-    const pending = await kernel.jobs.list({ status: 'pending' })
+    const pending = await kernel.jobs.list({ status: 'pending', search: 'shop.' })
     expect(pending.total).toBe(2)
     // Waiting jobs come soonest first.
     expect(pending.jobs.map((job) => job.label)).toEqual(['Send a receipt', 'shop.reindex'])
     expect((await kernel.jobs.list({ search: 'REINDEX' })).jobs.map((job) => job.id)).toEqual([
       unwanted,
     ])
-    expect((await kernel.jobs.list({ perPage: 1, page: 2 })).jobs).toHaveLength(1)
+    expect((await kernel.jobs.list({ search: 'shop.', perPage: 2, page: 2 })).jobs).toHaveLength(1)
 
     expect(await kernel.jobs.cancelOne(unwanted!)).toBe(true)
     expect(await kernel.jobs.cancelOne(unwanted!)).toBe(false)
@@ -514,7 +531,7 @@ describe('the admin’s view', () => {
     expect(woken).toHaveLength(2)
     expect((await kernel.jobs.runDue()).ran).toBe(2)
     expect(ran).toHaveLength(3)
-    expect(await kernel.jobs.counts()).toMatchObject({ done: 2, failed: 0, cancelled: 1 })
+    expect(await tally(kernel)).toEqual({ done: 2, cancelled: 1 })
   })
 
   it('deletes what finished long ago', async () => {

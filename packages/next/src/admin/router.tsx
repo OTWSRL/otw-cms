@@ -28,6 +28,7 @@ import { RolesScreen } from './screens/roles'
 import { SetupScreen } from './screens/setup'
 import { UpdatesScreen } from './screens/updates'
 import { NewUserScreen } from './screens/user-new'
+import { ScheduledActionsScreen } from './screens/scheduled-actions'
 import { UsersScreen } from './screens/users'
 import { ProfileScreen } from './screens/profile'
 import { UserEditScreen } from './screens/user-edit'
@@ -64,6 +65,11 @@ const SCREENS: Readonly<Record<string, CoreScreen>> = {
   '/admin/users/roles': { title: 'Roles', capability: 'core.manage_users', Screen: RolesScreen },
   '/admin/profile': { title: 'Profile', Screen: ProfileScreen },
   '/admin/updates': { title: 'Updates', capability: 'core.manage_updates', Screen: UpdatesScreen },
+  '/admin/tools/scheduled-actions': {
+    title: 'Scheduled Actions',
+    capability: 'core.manage_jobs',
+    Screen: ScheduledActionsScreen,
+  },
 }
 
 /** Signed-out screens, in wp-login.php's frame rather than the admin's. */

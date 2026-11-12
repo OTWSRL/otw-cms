@@ -15,6 +15,7 @@ import { ACCOUNT_PATH } from './accounts'
 import { AuthError, type AuthService } from './auth'
 import { ADMINISTRATOR, READ, type CapabilityStore } from './capabilities'
 import { coreMigrations } from './core-migrations'
+import type { JobService } from './jobs'
 import type { SettingsLayoutStore } from './settings-pages'
 import type { AutoUpdateMode, UpdateService } from './updates'
 import { clearedSessionCookies, sessionCookie } from './session-cookie'
@@ -173,6 +174,8 @@ export function registerCoreCapabilities(capabilities: CapabilityStore): void {
   capabilities.capability(CORE, 'core.manage_users', { label: 'Add users and change roles' })
   // No role gets it: updating rebuilds the site, so it stays with administrators unless granted.
   capabilities.capability(CORE, 'core.manage_updates', { label: 'Update the CMS and plugins' })
+  // No role gets it either: the queue shows every plugin's jobs and what they were given.
+  capabilities.capability(CORE, 'core.manage_jobs', { label: 'Run and cancel scheduled actions' })
   // WordPress's upload_files: authors and editors; contributors write without uploading.
   capabilities.capability(CORE, 'core.upload_files', { label: 'Upload files' })
   capabilities.grant(CORE, 'editor', ['core.upload_files'])
@@ -319,11 +322,22 @@ export interface CoreActionDependencies {
   updates: UpdateService | null
   /** Checks the page's own capability, which may be a plugin's rather than core's. */
   saveSettings(page: string, user: User, form: FormData): Promise<void>
+  /** Tools › Scheduled Actions: each says whether the job was one it could act on. */
+  jobs: Pick<JobService, 'runNow' | 'cancelOne'>
 }
 
 function field(form: FormData, name: string): string {
   const value = form.get(name)
   return typeof value === 'string' ? value : ''
+}
+
+const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The job a form names, checked before it reaches a uuid column. */
+function jobId(form: FormData): string {
+  const id = field(form, 'id')
+  if (!JOB_ID.test(id)) throw new ActionError('That action no longer exists.')
+  return id
 }
 
 async function asActionError<T>(fn: () => Promise<T>): Promise<T> {
@@ -423,6 +437,26 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
           }),
         )
         return { redirect: '/admin/users', notice: `Added ${user.email}.` }
+      },
+    },
+    {
+      name: 'run-job',
+      capability: 'core.manage_jobs',
+      async handler({ form }) {
+        if (!(await deps.jobs.runNow(jobId(form)))) {
+          throw new ActionError('Only a waiting or failed action can be run.')
+        }
+        return { notice: 'The action runs now.' }
+      },
+    },
+    {
+      name: 'cancel-job',
+      capability: 'core.manage_jobs',
+      async handler({ form }) {
+        if (!(await deps.jobs.cancelOne(jobId(form)))) {
+          throw new ActionError('Only a waiting action can be cancelled.')
+        }
+        return { notice: 'Action cancelled.' }
       },
     },
     {

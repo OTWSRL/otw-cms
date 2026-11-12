@@ -61,6 +61,7 @@ import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
 import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
 import { serveUpload } from './media-serve'
+import { registerCoreJobs } from './core-jobs'
 import { createJobService, cronHandler, JobStore, type JobService } from './jobs'
 import { createMailService, type MailService } from './mail'
 import { accountActions } from './account-actions'
@@ -792,8 +793,10 @@ async function boot(
   }
 
   registerCoreContent({ register: registerContentType, taxonomy: registerTaxonomy })
+  registerCoreJobs({ store: jobStore, db, logger, content, jobs })
   const actions = coreActions({
     auth,
+    jobs,
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
     async activate(id) {
       if (options.active) throw new ActionError(PINNED)

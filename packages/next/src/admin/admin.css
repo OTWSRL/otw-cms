@@ -1361,6 +1361,22 @@ body:has(> .cms-login) {
   color: var(--wp-danger);
 }
 
+/* Tools › Scheduled Actions: a job's arguments, one to a line, and why it failed. */
+.cms-admin .job-arguments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin .job-arguments code {
+  overflow-wrap: anywhere;
+}
+
+.cms-admin .job-error {
+  color: var(--wp-danger);
+  overflow-wrap: anywhere;
+}
+
 .cms-admin .user-identity {
   display: inline-flex;
   align-items: center;

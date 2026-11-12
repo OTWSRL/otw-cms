@@ -130,7 +130,15 @@ export interface Actions {
  * Job name -> its arguments, which must be plain data. Declare the job itself with
  * `cms.jobs.define()`. A job that repeats takes none: `Record<string, never>`.
  */
-export interface Jobs {}
+export interface Jobs {
+  /**
+   * Core's daily housekeeping: sessions and emailed links that ran out, old failed sign-ins, and
+   * jobs that finished more than 30 days ago.
+   */
+  'core.cleanup': Record<string, never>
+  /** Daily, like `wp_scheduled_delete`: deletes what has been in the Trash for 30 days. */
+  'core.empty_trash': Record<string, never>
+}
 
 /** Service name -> the API the providing plugin exposes to others. */
 export interface Services {}
@@ -194,6 +202,11 @@ export interface Capabilities {
   'core.manage_users': true
   /** Update the CMS and plugins from Dashboard › Updates. Only administrators have it until a role is granted it. */
   'core.manage_updates': true
+  /**
+   * See the job queue in Tools › Scheduled Actions, and run or cancel its jobs. Only
+   * administrators have it until a role is granted it: a job's arguments can name anything.
+   */
+  'core.manage_jobs': true
   /**
    * Read published entries and one's own, like WordPress's `read`. Every role has it unless it's
    * revoked.

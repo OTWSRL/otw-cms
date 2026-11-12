@@ -199,6 +199,18 @@ describe('admin pages', () => {
         ],
       },
       {
+        id: 'tools',
+        label: 'Tools',
+        icon: 'tools',
+        items: [
+          {
+            key: 'core.scheduled-actions',
+            label: 'Scheduled Actions',
+            url: '/admin/tools/scheduled-actions',
+          },
+        ],
+      },
+      {
         id: 'settings',
         label: 'Settings',
         icon: 'settings',
@@ -256,6 +268,7 @@ describe('admin pages', () => {
       ['shop', 'cart'],
       ['plugins', 'plugins'],
       ['users', 'users'],
+      ['tools', 'tools'],
       ['settings', 'settings'],
     ])
     expect(kernel.skipped).toEqual([
@@ -303,6 +316,7 @@ describe('admin pages', () => {
       'reports',
       'plugins',
       'users',
+      'tools',
       'settings',
     ])
     expect(items('shop')).toEqual(['shop.products', 'reports.sales', 'shop.orders'])
