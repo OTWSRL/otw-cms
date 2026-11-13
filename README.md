@@ -579,7 +579,21 @@ changed from a confirming link, password, Log Out Everywhere Else) and Edit User
 (`user-edit.php`: role, name, email changed at once with the old address told, fields, Send
 Reset Link, Log Out Everywhere) show them with no form code. Plugins add account page sections
 with the `account.sections` slot; Commerce lists the orders placed with the account's address
-once it's proven.
+once it's proven. `admin.profile` and `admin.user` are the same for the admin's Profile and Edit
+User screens.
+
+## Sign-in steps
+
+`cms.auth.signInStep()` puts a step between a correct password and a session, as two-factor
+plugins do; one plugin at most adds one. Core holds the sign-in for ten minutes (`cms_sign_ins`,
+under a cookie only the browser has), shows the code's screen (`/admin/login/verify`, and the
+account template's `verify` view at `/account/verify`), counts wrong codes over all an account's
+sign-ins (five in fifteen minutes end it), and hands a browser an id to be remembered by. The
+plugin says which ways a person has (`methods`), sends codes (`send`) and checks them
+(`verify`). A password set from an emailed link goes through the step too, told `via: 'link'`.
+If the step throws, nobody is signed in. Without a step, signing in runs no added query.
+`cms.auth.checkPassword()` asks for a password again, throttled as sign-in is. The OTP plugin
+(`../otw-plugin-otp`) is built on it.
 
 ## Security model
 
@@ -596,6 +610,10 @@ methods. Payment webhooks verify their signatures and are idempotent.
 - **Sign-in** is throttled to 5 failures per email per 15 minutes. Unknown emails cost the same
   hash as wrong passwords, so timing doesn't reveal accounts. Throttling per IP belongs at the
   edge (WAF or proxy), where the client address is trustworthy.
+- **A sign-in step's codes** are throttled apart from passwords, to 5 wrong ones per account per
+  15 minutes, so a correct password doesn't buy more guesses. A held sign-in is 32 random bytes,
+  stored as its SHA-256, in an `HttpOnly` cookie for ten minutes, and ends when the password
+  changes.
 - **Plugin API routes** are public, and ask for the signed-in user with `context.user()`. An unsafe
   request (POST, PUT, PATCH, DELETE) counts as signed in only when it carries this site's `Origin`,
   so a cookie on a request no browser vouched for can't act as its owner.

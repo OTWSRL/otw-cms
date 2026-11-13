@@ -1,5 +1,12 @@
 # @otwdesign/admin-ui
 
+## 1.7.0
+
+### Patch Changes
+
+- Updated dependencies [8f31621]
+  - @otwdesign/sdk@1.7.0
+
 ## 1.6.0
 
 ### Patch Changes

@@ -880,6 +880,36 @@ Not built: a shared store (Redis) for several servers, which today each keep the
 until their time is up; purging only the pages a change shows on; caching client-side
 navigations; and purging a CDN.
 
+## 12. OTP plugin (done)
+
+Two-step sign-in, and one-time codes for any form: `@otwdesign/plugin-otp`, in a repository of
+its own (`../otw-plugin-otp`). WordPress's Two-Factor and WP 2FA.
+
+- **In core, for it (1.7): sign-in steps.** `cms.auth.signInStep()`: after a correct password
+  the sign-in is held, not made, until the plugin's `verify()` passes a code. Core owns the held
+  sign-in (`cms_sign_ins`, ten minutes), both code screens (the admin's sign-in frame, and the
+  account template's new `verify` view), the count of wrong codes (five in fifteen minutes per
+  account, apart from wrong passwords, so a right password buys no guesses) and the cookie a
+  remembered browser carries. A password set from an emailed link goes through the step, so an
+  inbox alone doesn't open an account that has an app. Also `cms.auth.checkPassword()`, and the
+  `admin.profile` and `admin.user` slots. A site with no such plugin runs no added query.
+- **Ways**: an authenticator app (RFC 6238, a QR code drawn on the server, a code works once),
+  email, text message, and ten backup codes. Channels are a registry (`otp.channels`), so
+  WhatsApp is an add-on, not a change.
+- **Text messages**: Twilio (account token or API key), any service over an HTTP request, or a
+  provider a plugin adds to `otp.sms`. Secrets from the environment only.
+- **Policy**: roles that must use a code, who get theirs by email until they set up their own
+  way, so nobody needs walking through setup; remembered browsers (off by default); a reset on
+  Edit User; `OTP_DISABLED` for when no one can sign in.
+- **For forms**: the `otp` service's `send()`, `check()` and `consume()`, the `<OtpField>`
+  component, and two JSON endpoints that only answer for purposes a plugin declared. One code a
+  minute and five an hour to an address, and an hourly ceiling for the whole site.
+- **Kept safe**: sent codes, backup codes and remembered browsers as hashes; app secrets
+  encrypted with `OTP_SECRET_KEY` (AES-256-GCM) when it's set.
+
+Not built: passkeys (WebAuthn), asking for a code again before a sensitive action while signed
+in, WhatsApp, and limits by IP address, which belong in front of the site.
+
 ## Later
 
 A community plugin (BuddyPress-style profiles, groups, activity) as the third proof, themes and

@@ -235,10 +235,6 @@ export type CapabilityExtension<K extends MetaCapabilityName> = (
   ...args: CapabilityArgs<K>
 ) => RequiredCapabilities
 
-/**
- * `cms.auth`: roles, capabilities and checks, as in WordPress. Add and change roles and
- * capabilities in `setup()`, so every part of the site agrees on them; checks work anywhere.
- */
 /** One way to pass a sign-in step: an app's code, or one sent by email or text message. */
 export interface SignInMethod {
   /** Such as `app`, `email` or `sms`: what the step's `send()` and `verify()` are given. */
@@ -299,6 +295,10 @@ export interface SignInStep {
   remember?(user: User, device: string, days: number): void | Promise<void>
 }
 
+/**
+ * `cms.auth`: roles, capabilities and checks, as in WordPress. Add and change roles and
+ * capabilities in `setup()`, so every part of the site agrees on them; checks work anywhere.
+ */
 export interface AuthApi {
   /** Adds a role, like WordPress's `add_role()`. */
   role(id: string, definition: RoleDefinition): void
