@@ -907,8 +907,15 @@ its own (`../otw-plugin-otp`). WordPress's Two-Factor and WP 2FA.
 - **Kept safe**: sent codes, backup codes and remembered browsers as hashes; app secrets
   encrypted with `OTP_SECRET_KEY` (AES-256-GCM) when it's set.
 
+- **1.1, with core 1.8's settings fields** (`roles`, `pairs`, `multiline`, `showWhen`, a
+  section's `link`): the settings page ticks roles from the site's own and shows a channel's
+  section, and a provider's fields, only once chosen. The HTTP request became a service's own
+  (method, custom headers with `env:NAME` values, a body template escaped for its content
+  type), and **WhatsApp** arrived: an approved authentication template through Meta's Cloud API
+  or Twilio, or a provider added to `otp.whatsapp`.
+
 Not built: passkeys (WebAuthn), asking for a code again before a sensitive action while signed
-in, WhatsApp, and limits by IP address, which belong in front of the site.
+in, and limits by IP address, which belong in front of the site.
 
 ## Later
 

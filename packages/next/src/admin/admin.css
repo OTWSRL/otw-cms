@@ -1073,7 +1073,7 @@ body:has(> .cms-login) {
 }
 
 /* Settings: role checkboxes one to a line, and a pairs field's rows. */
-.cms-admin .setting-choice {
+.cms-admin .form-table fieldset .setting-choice {
   display: block;
   margin: 0 0 6px;
 }

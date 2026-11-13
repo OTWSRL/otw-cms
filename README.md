@@ -394,7 +394,13 @@ Rules the kernel enforces or relies on:
   settings but not the site's. Saving a page writes only the editable fields on it. Plugins that
   read a changed setting during `setup()` are first booted with the new values (with what they
   depend on); if one can't start, nothing is saved. The rest can't fail on the change and aren't
-  booted, so a save costs what it touches, not every plugin.
+  booted, so a save costs what it touches, not every plugin. Fields are text (one line, or
+  `multiline`), a checkbox, a select, an entry, a secret (environment only), `roles` (a checkbox
+  per role of the site) and `pairs` (rows of a name and a value, added and removed). `showWhen`
+  on a field or a section shows it only while another setting has a value, as a provider's
+  fields once it's chosen: the form carries a style rule with `:has()` that reads its own
+  controls, so it follows the form before saving and without script, and a hidden field keeps
+  its value.
 
 ## Content
 
