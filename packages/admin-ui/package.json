@@ -1,6 +1,6 @@
 {
   "name": "@otwdesign/admin-ui",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "React components for OTW CMS admin screens: list tables, postboxes, forms, notices and buttons.",
   "license": "Apache-2.0",
   "author": "OTW SRL",

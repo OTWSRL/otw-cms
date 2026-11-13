@@ -1,5 +1,15 @@
 # @otwdesign/cli
 
+## 1.7.1
+
+### Patch Changes
+
+- ce4f572: The `proxy.ts` that `cms generate` writes for plugins' proxies quotes every import the same way,
+  as Prettier would, so a site that checks its formatting passes with it.
+- @otwdesign/core@1.7.1
+  - @otwdesign/next@1.7.1
+  - @otwdesign/sdk@1.7.1
+
 ## 1.7.0
 
 ### Patch Changes

@@ -1,5 +1,9 @@
 # @otwdesign/sdk
 
+## 1.7.1
+
+No changes in this release.
+
 ## 1.7.0
 
 ### Minor Changes

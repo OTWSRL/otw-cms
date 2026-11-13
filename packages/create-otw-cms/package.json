@@ -1,6 +1,6 @@
 {
   "name": "create-otw-cms",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Create an OTW CMS site: npm create otw-cms@latest my-site",
   "license": "Apache-2.0",
   "author": "OTW SRL",
