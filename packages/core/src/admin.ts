@@ -17,7 +17,7 @@ import { ActionError, ForbiddenError } from '@otwdesign/sdk'
 import { apiPath } from './api'
 import { isSiteOrigin, publicOrigin, type OriginPolicy } from './origins'
 import { withFlash, type Flash, type FlashCodec } from './flash'
-import { sessionTokenFromHeader } from './session-cookie'
+import { cookieValue, parseCookies, SESSION_COOKIE_NAMES } from './session-cookie'
 import type { SettingsPageView } from './settings-pages'
 
 export const ADMIN_PREFIX = '/admin'
@@ -75,6 +75,8 @@ export interface ActionInput {
   /** `null` only for actions that work signed out. */
   user: User | null
   sessionToken: string | null
+  /** The first of these cookies the request carries, or `null`. */
+  cookie(names: readonly string[]): string | null
   form: FormData
   /** Whether cookies set by this response should be Secure. */
   secure: boolean
@@ -172,7 +174,8 @@ export function createActionHandler(action: InternalAction, deps: ActionDependen
     }
 
     const back = refererPath(request, deps.origins) ?? ADMIN_PREFIX
-    const sessionToken = sessionTokenFromHeader(request.headers.get('cookie'))
+    const cookies = parseCookies(request.headers.get('cookie'))
+    const sessionToken = cookieValue(cookies, SESSION_COOKIE_NAMES)
     const user = await deps.userForSession(sessionToken)
     if (action.capability !== null) {
       if (!user) return redirect(`${LOGIN_PATH}?next=${encodeURIComponent(back)}`)
@@ -208,6 +211,7 @@ export function createActionHandler(action: InternalAction, deps: ActionDependen
         (await action.handler({
           user,
           sessionToken,
+          cookie: (names) => cookieValue(cookies, names),
           form,
           secure,
           origin: new URL(site).origin,

@@ -1,10 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { notice, signInAsAdmin } from './helpers'
-
-// The e2e site's mail plugin writes each email here (MAIL_FILE_DIR in playwright.config.ts).
-const MAIL = join(import.meta.dirname, '..', '.data', 'e2e-mail')
+import { mailTo, notice, signInAsAdmin } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -13,34 +8,6 @@ const CLEO = {
   name: 'Cleo Reader',
   email: `cleo-${run}@example.com`,
   password: 'a long cleo password',
-}
-
-interface Mail {
-  to: string[]
-  subject: string
-  text: string
-}
-
-/** The newest email to `to` about `subject`, waiting for it to arrive. */
-async function mailTo(to: string, subject: string): Promise<Mail> {
-  let found: Mail | null = null
-  await expect
-    .poll(
-      async () => {
-        const files = (await readdir(MAIL).catch(() => [] as string[]))
-          .filter((name) => name.endsWith('.json'))
-          .sort()
-          .reverse()
-        for (const name of files) {
-          const mail = JSON.parse(await readFile(join(MAIL, name), 'utf8')) as Mail
-          if (mail.to.includes(to) && mail.subject.endsWith(subject)) return (found = mail)
-        }
-        return null
-      },
-      { message: `an email to ${to} about "${subject}"` },
-    )
-    .toBeTruthy()
-  return found!
 }
 
 /** The account link in that email, as a path: the browser is on the test's own address. */

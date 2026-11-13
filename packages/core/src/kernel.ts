@@ -12,6 +12,7 @@ import type {
   ContentTypeDefinition,
   ContentView,
   MailTransport,
+  SignInStep,
   MediaStorage,
   Database,
   TaxonomyDefinition,
@@ -56,7 +57,9 @@ import {
 import { resolve as resolvePath } from 'node:path'
 import { AdminMenu, type AdminMenuSection } from './admin-menu'
 import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
-import { createAuthService, type AuthService } from './auth'
+import { AuthError, createAuthService, type AuthService } from './auth'
+import { createSignInService, type SignInService } from './sign-in'
+import { signInActions } from './sign-in-actions'
 import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
 import { createContentService, type ContentService } from './content'
@@ -70,7 +73,7 @@ import { createJobService, cronHandler, JobStore, type JobService } from './jobs
 import { createMailService, type MailService } from './mail'
 import { createWebhookService, EventStore, type WebhookService } from './webhooks'
 import { accountActions } from './account-actions'
-import { createAccountPages, type AccountResolution } from './account-pages'
+import { createAccountPages, type AccountCookies, type AccountResolution } from './account-pages'
 import { createAccountService, signInUrl, type AccountService } from './accounts'
 import { uninstallPlan, uninstallPlugin, type UninstallPlan } from './uninstall'
 import { createUsersService, UserMetaStore, type UsersService } from './users'
@@ -277,6 +280,8 @@ export interface Kernel {
   handleApi(request: Request): Promise<Response>
 
   readonly auth: AuthService
+  /** Sign-ins held for a plugin's sign-in step, for the screen that asks for their code. */
+  readonly signIns: SignInService
   /** Content types and their entries, for the admin's screens and the site's pages. */
   readonly content: ContentService
   /** The media library. */
@@ -300,6 +305,7 @@ export interface Kernel {
     pathname: string,
     searchParams: SearchParams,
     user: User | null,
+    cookies?: AccountCookies,
   ): Promise<AccountResolution | null>
   /** The largest file one upload may be, in bytes. */
   readonly maxUploadBytes: number
@@ -531,6 +537,26 @@ async function boot(
     roleExists: (role) => stores.capabilities.hasRole(role),
     hashCost: options.passwordHashing,
   })
+  let signInStep: { pluginId: string; step: SignInStep } | null = null
+  const signIns = createSignInService({
+    db,
+    auth,
+    step: () => signInStep?.step ?? null,
+    message: (error) => (error instanceof ActionError ? error.message : null),
+  })
+  /** A plugin's sign-in step: one, so a person is asked for one code, by one plugin's rules. */
+  const provideSignInStep = (pluginId: string, step: SignInStep) => {
+    assertOpen(`sign-in step from "${pluginId}"`)
+    if (signInStep) {
+      throw new Error(
+        `Plugin "${pluginId}" adds a sign-in step, but "${signInStep.pluginId}" already does; only one can`,
+      )
+    }
+    if (!step || typeof step.methods !== 'function' || typeof step.verify !== 'function') {
+      throw new TypeError(`The sign-in step from "${pluginId}" needs methods() and verify()`)
+    }
+    signInStep = { pluginId, step }
+  }
   const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
   const taxonomies = new TaxonomyStore(assertOpen, stores.capabilities)
   const metaFields = new MetaStore(assertOpen)
@@ -864,6 +890,7 @@ async function boot(
   registerCoreJobs({ store: jobStore, db, logger, content, jobs, webhooks, cache })
   const actions = coreActions({
     auth,
+    signIns,
     jobs,
     webhooks,
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
@@ -988,7 +1015,10 @@ async function boot(
     hashCost: options.passwordHashing,
   })
   const users = createUsersService({ db, fields: userFields, accounts })
-  for (const action of accountActions({ auth, accounts, users })) registerAction(CORE, action)
+  for (const action of accountActions({ auth, signIns, accounts, users })) {
+    registerAction(CORE, action)
+  }
+  for (const action of signInActions(signIns)) registerAction(CORE, action)
   const userForms = userActions({
     auth,
     accounts,
@@ -1000,6 +1030,7 @@ async function boot(
   stores.adminPages.add('core.user-edit', '/admin/users/:id', { pluginId: CORE, user: 'edit' })
   const resolveAccount = createAccountPages({
     accounts,
+    signIns,
     users,
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
     actionUrl: (name) => actionPath(CORE, name),
@@ -1156,6 +1187,22 @@ async function boot(
           stores.capabilities.extendCapability(plugin.id, name, extension as never)
         },
         can: (user, capability, ...args) => stores.capabilities.can(user, capability, ...args),
+        signInStep: (step) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Add the sign-in step in setup(): people sign in on the site too, where the admin entry isn't loaded`,
+            )
+          }
+          provideSignInStep(plugin.id, step)
+        },
+        checkPassword: async (user, password) => {
+          try {
+            return await auth.checkPassword(user.email, password)
+          } catch (error) {
+            if (error instanceof AuthError) throw new ActionError(error.message)
+            throw error
+          }
+        },
       },
       content: {
         ...content,
@@ -1485,6 +1532,7 @@ async function boot(
     settingsPages,
     installed,
     auth,
+    signIns,
     content,
     contentTypes,
     contentScreens,
@@ -1546,6 +1594,7 @@ function buildKernel(input: {
   settingsPages: ReadonlyMap<string, ResolvedSettingsPage>
   installed: ReadonlyMap<string, PluginDefinition>
   auth: AuthService
+  signIns: SignInService
   content: ContentService
   contentTypes: ContentTypeStore
   contentScreens: ContentScreenStore
@@ -1709,6 +1758,7 @@ function buildKernel(input: {
       }),
 
     auth: input.auth,
+    signIns: input.signIns,
     content: input.content,
     media: input.media,
     mail: input.mail,
@@ -1721,8 +1771,8 @@ function buildKernel(input: {
     cache: input.cache,
     accounts: input.accounts,
     users: input.users,
-    resolveAccount: (pathname, searchParams, user) =>
-      input.resolveAccount(pathname, searchParams, user),
+    resolveAccount: (pathname, searchParams, user, cookies) =>
+      input.resolveAccount(pathname, searchParams, user, cookies),
     maxUploadBytes: input.maxUploadBytes,
     serveUpload: (request, key) => serveUpload(input.mediaStorage(), key, request),
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),

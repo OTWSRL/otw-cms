@@ -1,3 +1,5 @@
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 
 export const ADMIN = {
@@ -65,4 +67,35 @@ export async function openSection(page: Page, label: string) {
 /** The submenu of the current section. Other sections' submenus only fly out on hover. */
 export function submenu(page: Page, label: string) {
   return mainMenu(page).getByRole('list', { name: label })
+}
+
+// The e2e site's mail plugin writes each email here (MAIL_FILE_DIR in playwright.config.ts).
+const MAIL = join(import.meta.dirname, '..', '.data', 'e2e-mail')
+
+export interface Mail {
+  to: string[]
+  subject: string
+  text: string
+}
+
+/** The newest email to `to` about `subject`, waiting for it to arrive. */
+export async function mailTo(to: string, subject: string): Promise<Mail> {
+  let found: Mail | null = null
+  await expect
+    .poll(
+      async () => {
+        const files = (await readdir(MAIL).catch(() => [] as string[]))
+          .filter((name) => name.endsWith('.json'))
+          .sort()
+          .reverse()
+        for (const name of files) {
+          const mail = JSON.parse(await readFile(join(MAIL, name), 'utf8')) as Mail
+          if (mail.to.includes(to) && mail.subject.endsWith(subject)) return (found = mail)
+        }
+        return null
+      },
+      { message: `an email to ${to} about "${subject}"` },
+    )
+    .toBeTruthy()
+  return found!
 }

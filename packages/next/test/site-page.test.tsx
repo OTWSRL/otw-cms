@@ -18,7 +18,10 @@ const runtime = vi.hoisted(() => ({
   resolvePage: vi.fn(),
 }))
 vi.mock('next/navigation', () => navigation)
-vi.mock('../src/runtime/session', () => ({ getCurrentUser: runtime.getCurrentUser }))
+vi.mock('../src/runtime/session', () => ({
+  getCurrentUser: runtime.getCurrentUser,
+  signInCookies: async () => ({ signIn: null, device: null }),
+}))
 vi.mock('../src/runtime/kernel', () => ({
   getKernel: async () => ({
     resolvePage: runtime.resolvePage,

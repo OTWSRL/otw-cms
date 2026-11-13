@@ -5,7 +5,9 @@ import { ACCOUNT_PATH, type AccountService } from './accounts'
 import { AuthError, type AuthService } from './auth'
 import { metaFromForm } from './content-actions'
 import type { UsersService } from './users'
-import { clearedSessionCookies, sessionCookie } from './session-cookie'
+import { clearedSessionCookies, DEVICE_COOKIE_NAMES } from './session-cookie'
+import type { SignInService } from './sign-in'
+import { startedSignIn } from './sign-in-actions'
 
 function field(form: FormData, name: string): string {
   const value = form.get(name)
@@ -28,6 +30,7 @@ async function asActionError<T>(fn: () => Promise<T>): Promise<T> {
 
 export interface AccountActionDependencies {
   auth: AuthService
+  signIns: SignInService
   accounts: AccountService
   users: UsersService
 }
@@ -45,6 +48,7 @@ export function metaChanges(fields: readonly UserMetaField[], form: FormData): U
  */
 export function accountActions({
   auth,
+  signIns,
   accounts,
   users,
 }: AccountActionDependencies): InternalAction[] {
@@ -56,14 +60,14 @@ export function accountActions({
     {
       name: 'account-sign-in',
       capability: null,
-      async handler({ form, secure }) {
-        const { token } = await asActionError(() =>
-          auth.signIn(field(form, 'email'), field(form, 'password')),
-        )
-        return {
-          redirect: safeRedirectPath(field(form, 'next')) ?? ACCOUNT_PATH,
-          cookies: [sessionCookie(token, secure)],
-        }
+      async handler({ form, secure, cookie }) {
+        const next = safeRedirectPath(field(form, 'next')) ?? ACCOUNT_PATH
+        const start = await asActionError(async () => {
+          const user = await auth.identify(field(form, 'email'), field(form, 'password'))
+          const device = cookie(DEVICE_COOKIE_NAMES)
+          return signIns.begin(user, { via: 'password', next, device })
+        })
+        return startedSignIn(start, { secure, next, screen: 'account' })
       },
     },
     {
@@ -94,15 +98,20 @@ export function accountActions({
     {
       name: 'account-reset',
       capability: null,
-      async handler({ form, secure }) {
-        const user = await asActionError(() =>
-          accounts.setPassword(field(form, 'token'), field(form, 'password')),
-        )
-        // The link proved the address; signing in spares a second step.
+      async handler({ form, secure, cookie }) {
+        // The link proved the address, which spares signing in with the new password. A
+        // sign-in step still asks for its code: an inbox alone mustn't open the account.
+        const start = await asActionError(async () => {
+          const user = await accounts.setPassword(field(form, 'token'), field(form, 'password'))
+          const device = cookie(DEVICE_COOKIE_NAMES)
+          return signIns.begin(user, { via: 'link', next: ACCOUNT_PATH, device })
+        })
+        const held = start.kind === 'held'
         return {
-          redirect: ACCOUNT_PATH,
-          notice: 'Your password is set, and you’re signed in.',
-          cookies: [sessionCookie(await auth.createSession(user.id), secure)],
+          ...startedSignIn(start, { secure, next: ACCOUNT_PATH, screen: 'account' }),
+          notice: held
+            ? (start.problem ?? 'Your password is set. Enter a code to finish signing in.')
+            : 'Your password is set, and you’re signed in.',
         }
       },
     },

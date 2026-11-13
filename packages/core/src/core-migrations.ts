@@ -441,4 +441,24 @@ export const coreMigrations: Migration[] = [
       )
     },
   },
+  {
+    // Sign-ins a step is holding, between a correct password and a code that passes.
+    id: '0016_sign_in_steps',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_sign_ins (
+          token_hash text PRIMARY KEY,
+          user_id uuid NOT NULL REFERENCES cms_users(id) ON DELETE CASCADE,
+          next text NOT NULL,
+          via text NOT NULL,
+          failures integer NOT NULL DEFAULT 0,
+          expires_at timestamptz NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `)
+      await db.execute(
+        sql`CREATE INDEX cms_sign_ins_user_idx ON cms_sign_ins (user_id, created_at)`,
+      )
+    },
+  },
 ]

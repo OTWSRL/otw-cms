@@ -28,7 +28,7 @@ describe('core’s daily jobs', () => {
     expect(jobs[0]!.label).not.toBe(jobs[0]!.name)
   })
 
-  it('clear out sessions and links that ran out, old failed sign-ins and old job logs', async () => {
+  it('clear out sessions and links that ran out, old failed and held sign-ins and old job logs', async () => {
     const kernel = await bootKernel({ plugins: [] })
     const { user } = await signIn(kernel)
     await kernel.auth.createSession(user.id)
@@ -52,8 +52,17 @@ describe('core’s daily jobs', () => {
         ('shop.gone', 'done', now() - interval '29 days')
     `)
 
+    await kernel.db.execute(sql`
+      INSERT INTO cms_sign_ins (token_hash, user_id, next, via, expires_at, created_at) VALUES
+        ('old', ${user.id}, '/admin', 'password', now() - interval '2 days', now() - interval '2 days'),
+        ('counted', ${user.id}, '/admin', 'password', now() - interval '1 minute', now() - interval '11 minutes')
+    `)
+
     expect((await run(kernel, 'core.cleanup')).ran).toBe(1)
     expect(await count(kernel, 'cms_sessions')).toBe(1)
+    // A held sign-in that ran out stays for the day: its wrong codes still count.
+    expect(await count(kernel, 'cms_sign_ins', `token_hash = 'counted'`)).toBe(1)
+    expect(await count(kernel, 'cms_sign_ins')).toBe(1)
     expect(await count(kernel, 'cms_user_tokens', `token_hash = 'still-good'`)).toBe(1)
     expect(await count(kernel, 'cms_user_tokens')).toBe(1)
     expect(await count(kernel, 'cms_login_failures', `email = 'recent@cms.test'`)).toBe(1)

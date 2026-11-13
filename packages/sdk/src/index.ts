@@ -322,6 +322,16 @@ export interface Slots {
    */
   'site.footer': { user: User | null }
   /**
+   * Sections of the admin's Profile screen, after its own, like WordPress's `show_user_profile`:
+   * what a plugin lets people set for themselves.
+   */
+  'admin.profile': { user: User }
+  /**
+   * Sections of the admin's Edit User screen, like `edit_user_profile`: what a plugin lets
+   * whoever manages users see or change for `target`.
+   */
+  'admin.user': { user: User; target: User }
+  /**
    * Sections of the signed-in person's account page, after its own, like WooCommerce's My Account
    * tabs: a shop's orders, a course's progress.
    */

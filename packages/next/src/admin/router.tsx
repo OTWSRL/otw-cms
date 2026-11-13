@@ -1,4 +1,4 @@
-import type { Kernel, SettingsPageView } from '@otwdesign/core'
+import { ADMIN_VERIFY_PATH, type Kernel, type SettingsPageView } from '@otwdesign/core'
 import type { CapabilityName, ContentTypeName, SearchParams, User } from '@otwdesign/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound, redirect } from 'next/navigation'
@@ -23,6 +23,7 @@ import { ContentTermsScreen } from './screens/content-terms'
 import type { ScreenContext } from './screens/context'
 import { DashboardScreen } from './screens/dashboard'
 import { LoginScreen } from './screens/login'
+import { LoginVerifyScreen } from './screens/login-verify'
 import { PluginInstallScreen } from './screens/plugin-install'
 import { PluginsScreen } from './screens/plugins'
 import { RolesScreen } from './screens/roles'
@@ -89,6 +90,7 @@ const LOGIN_SCREENS: Readonly<
   Record<string, { title: string; Screen: typeof LoginScreen | typeof SetupScreen }>
 > = {
   '/admin/login': { title: 'Log In', Screen: LoginScreen },
+  [ADMIN_VERIFY_PATH]: { title: 'Verify it’s you', Screen: LoginVerifyScreen },
   '/admin/setup': { title: 'Set up your site', Screen: SetupScreen },
 }
 

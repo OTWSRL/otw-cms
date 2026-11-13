@@ -1,11 +1,15 @@
-import type { AccountResolution, ContentResolution } from '@otwdesign/core'
+import {
+  ACCOUNT_VERIFY_PATH,
+  type AccountResolution,
+  type ContentResolution,
+} from '@otwdesign/core'
 import { ForbiddenError, PageRedirect, type SearchParams } from '@otwdesign/sdk'
 import type { Metadata } from 'next'
 import { forbidden, notFound, redirect } from 'next/navigation'
 import { cache } from 'react'
 import { siteTemplates } from '../site-registry'
 import { getKernel } from '../runtime/kernel'
-import { getCurrentUser } from '../runtime/session'
+import { getCurrentUser, signInCookies } from '../runtime/session'
 import { AccountTemplate } from './account'
 import { ArchiveTemplate, EntryTemplate } from './templates'
 import {
@@ -50,7 +54,9 @@ const loadContent = cache(async (pathname: string, query: string) => {
 // The account pages are the viewer's: signed in, the details; signed out, the sign-in form.
 const loadAccount = cache(async (pathname: string, query: string) => {
   const [kernel, user] = await Promise.all([getKernel(), getCurrentUser()])
-  return kernel.resolveAccount(pathname, parseSearchParams(query), user)
+  // Only the page that asks for a sign-in's code reads that sign-in's cookies.
+  const cookies = pathname === ACCOUNT_VERIFY_PATH ? await signInCookies() : undefined
+  return kernel.resolveAccount(pathname, parseSearchParams(query), user, cookies)
 })
 
 /**

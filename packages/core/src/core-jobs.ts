@@ -1,7 +1,7 @@
 import type { Logger } from '@otwdesign/sdk'
 import { and, asc, eq, lt, sql } from 'drizzle-orm'
 import { PUBLISH_JOB, SCHEDULE_AHEAD_MS, type ContentService } from './content'
-import { entries, loginFailures, sessions, userTokens } from './core-schema'
+import { entries, loginFailures, sessions, signIns, userTokens } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { CacheService } from './cache'
 import type { JobService, JobStore } from './jobs'
@@ -49,6 +49,7 @@ export function registerCoreJobs(deps: CoreJobDependencies): void {
       await db.root
         .delete(loginFailures)
         .where(lt(loginFailures.failedAt, sql`now() - interval '1 day'`))
+      await db.root.delete(signIns).where(lt(signIns.createdAt, sql`now() - interval '1 day'`))
       await jobs.prune(JOB_LOG_DAYS)
       await cache.sweep()
     },

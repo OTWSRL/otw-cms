@@ -2,6 +2,7 @@ import { FormButton, FormField, FormTable, SubmitButton } from '@otwdesign/admin
 import type { Kernel } from '@otwdesign/core'
 import type { SearchParams, User } from '@otwdesign/sdk'
 import Link from 'next/link'
+import { Slot } from '../../site/slot'
 import { AdminScreen } from '../screen'
 import { MetaFields } from './meta-fields'
 
@@ -116,6 +117,7 @@ export async function UserEditScreen({
           </FormButton>
         </FormField>
       </FormTable>
+      <Slot name="admin.user" props={{ user, target }} />
     </AdminScreen>
   )
 }

@@ -1,5 +1,6 @@
 import { Button, FormButton, FormField, FormTable, SubmitButton } from '@otwdesign/admin-ui'
 import { MIN_PASSWORD_LENGTH } from '@otwdesign/core'
+import { Slot } from '../../site/slot'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
 import { MetaFields } from './meta-fields'
@@ -126,6 +127,7 @@ export async function ProfileScreen({ kernel, user, searchParams }: ScreenContex
       <h2>Sessions</h2>
       <p>Signed in on another device, or left signed in somewhere public?</p>
       <FormButton action={actions('profile-sessions')}>Log Out Everywhere Else</FormButton>
+      <Slot name="admin.profile" props={{ user }} />
     </AdminScreen>
   )
 }

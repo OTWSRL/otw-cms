@@ -2,11 +2,13 @@ import type { AccountTemplateProps, AccountView, SearchParams, User } from '@otw
 import { safeRedirectPath } from './admin'
 import { ACCOUNT_PATH, type AccountService } from './accounts'
 import type { Flash } from './flash'
+import type { SignInService } from './sign-in'
 import type { UsersService } from './users'
 
 /** The account pages' paths, by view; `/account` is sign-in or the account, by who's asking. */
 const PAGES: Readonly<Record<string, AccountView>> = {
   [ACCOUNT_PATH]: 'account',
+  [`${ACCOUNT_PATH}/verify`]: 'verify',
   [`${ACCOUNT_PATH}/lost-password`]: 'lost-password',
   [`${ACCOUNT_PATH}/reset`]: 'reset',
   [`${ACCOUNT_PATH}/email`]: 'confirm-email',
@@ -14,6 +16,7 @@ const PAGES: Readonly<Record<string, AccountView>> = {
 
 const TITLES: Readonly<Record<AccountView, string>> = {
   'sign-in': 'Sign in',
+  verify: 'Verify it’s you',
   account: 'Your account',
   'lost-password': 'Lost password',
   reset: 'Set your password',
@@ -26,8 +29,17 @@ export interface AccountResolution {
   metadata: { title: string; noindex: true; referrer: 'same-origin' | null }
 }
 
+/** The cookies an account page reads besides the session's. */
+export interface AccountCookies {
+  /** A held sign-in's token, for the `verify` view. */
+  signIn: string | null
+  /** The id a sign-in step remembers this browser by. */
+  device: string | null
+}
+
 export interface AccountPagesOptions {
   accounts: AccountService
+  signIns: Pick<SignInService, 'held'>
   users: UsersService
   canUseAdmin(user: User): boolean
   actionUrl(name: string): string
@@ -43,6 +55,7 @@ export function createAccountPages(options: AccountPagesOptions) {
     pathname: string,
     searchParams: SearchParams,
     user: User | null,
+    cookies: AccountCookies = { signIn: null, device: null },
   ): Promise<AccountResolution | null> {
     const page = Object.hasOwn(PAGES, pathname) ? PAGES[pathname]! : null
     if (!page) return null
@@ -55,6 +68,9 @@ export function createAccountPages(options: AccountPagesOptions) {
         : view === 'confirm-email'
           ? await accounts.tokenInfo(token, 'email')
           : null
+    const held =
+      view === 'verify' ? await options.signIns.held(cookies.signIn, cookies.device) : null
+    const asked = first(searchParams.method)
     const flash = options.readFlash(searchParams.flash)
     const action = (name: string) => options.actionUrl(`account-${name}`)
     return {
@@ -74,8 +90,15 @@ export function createAccountPages(options: AccountPagesOptions) {
         newEmail: info?.newEmail ?? null,
         notice: flash ? { kind: flash.kind, message: flash.message } : null,
         next: safeRedirectPath(first(searchParams.next)),
+        signIn: held && {
+          method: held.methods.find((method) => method.id === asked) ?? held.methods[0]!,
+          methods: held.methods,
+          rememberDays: held.rememberDays,
+        },
         actions: {
           signIn: action('sign-in'),
+          verify: options.actionUrl('sign-in-verify'),
+          sendCode: options.actionUrl('sign-in-send'),
           register: action('register'),
           lostPassword: action('lost-password'),
           reset: action('reset'),
@@ -85,7 +108,11 @@ export function createAccountPages(options: AccountPagesOptions) {
           confirmEmail: action('confirm-email'),
           signOut: action('sign-out'),
         },
-        paths: { account: ACCOUNT_PATH, lostPassword: `${ACCOUNT_PATH}/lost-password` },
+        paths: {
+          account: ACCOUNT_PATH,
+          lostPassword: `${ACCOUNT_PATH}/lost-password`,
+          verify: `${ACCOUNT_PATH}/verify`,
+        },
       },
       // A token in the address mustn't reach another site in a Referer header. Not
       // `no-referrer`: with it, browsers post the page's forms with `Origin: null`, which the

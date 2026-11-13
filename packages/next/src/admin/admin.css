@@ -1711,6 +1711,39 @@ body:has(> .cms-login) {
   color: var(--wp-muted);
 }
 
+.cms-login .login-prompt {
+  margin: 0 0 16px;
+}
+
+.cms-login .login-remember {
+  margin: 0 0 16px;
+}
+
+/* A button among the links under the box: not a second box. */
+.cms-login form.login-plain {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.cms-login .login-links .button-link {
+  color: #50575e;
+}
+
+.cms-login .login-ways {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-login .login-ways li {
+  margin: 0 0 4px;
+}
+
 .cms-login .login-submit {
   display: flex;
   justify-content: flex-end;

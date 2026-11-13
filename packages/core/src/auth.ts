@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { User } from '@otwdesign/sdk'
 import { and, asc, count, eq, gt, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 import { ADMINISTRATOR } from './capabilities'
-import { loginFailures, sessions, users } from './core-schema'
+import { loginFailures, sessions, signIns, users } from './core-schema'
 import type { DatabaseContext } from './database'
 import { hashPassword, verifyPassword, type HashCost } from './passwords'
 
@@ -68,14 +68,19 @@ export interface AuthService {
   setRole(userId: string, role: string): Promise<User>
   /** All or none, like WordPress's "Change role to…"; refuses to leave no administrator. */
   setRoles(userIds: readonly string[], role: string): Promise<User[]>
-  /** Throttled per email address; returns a new session token. */
+  /**
+   * The user whose email and password these are, throttled per email address, without signing
+   * them in: a sign-in step may still stand between them and a session.
+   */
+  identify(email: string, password: string): Promise<User>
+  /** `identify()`, and a new session's token, whatever sign-in step a plugin has added. */
   signIn(email: string, password: string): Promise<{ user: User; token: string }>
   /**
    * Whether `password` is the user's, as a form that changes their email or password asks:
    * counted against the same failed attempts as signing in. Throws `throttled` past them.
    */
   checkPassword(email: string, password: string): Promise<boolean>
-  /** Ends every session of the user's but `except`, the one they're using. */
+  /** Ends every session of the user's but `except`, the one they're using, and held sign-ins. */
   signOutEverywhere(userId: string, except?: string | null): Promise<void>
   createSession(userId: string): Promise<string>
   userForSession(token: string | null | undefined): Promise<User | null>
@@ -315,11 +320,16 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
       })
     },
 
-    async signIn(rawEmail, password) {
+    async identify(rawEmail, password) {
       const row = await verified(rawEmail, password)
       if (!row) throw new AuthError('invalid_credentials', 'Incorrect email or password.')
       const { id, email, name, role } = row
-      return { user: { id, email, name, role }, token: await createSession(id) }
+      return { id, email, name, role }
+    },
+
+    async signIn(email, password) {
+      const user = await service.identify(email, password)
+      return { user, token: await createSession(user.id) }
     },
 
     async checkPassword(email, password) {
@@ -337,6 +347,8 @@ export function createAuthService(db: DatabaseContext, options: AuthServiceOptio
             keep ? sql`${sessions.tokenHash} <> ${keep}` : undefined,
           ),
         )
+      // A sign-in waiting for its code was begun with what has just changed.
+      await db.current.delete(signIns).where(eq(signIns.userId, userId))
     },
 
     createSession,

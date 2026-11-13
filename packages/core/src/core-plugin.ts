@@ -20,7 +20,9 @@ import { WebhookError, type WebhookService } from './webhooks'
 import type { WebhookStatus } from './core-schema'
 import type { SettingsLayoutStore } from './settings-pages'
 import { isPackageName, type AutoUpdateMode, type UpdateService } from './updates'
-import { clearedSessionCookies, sessionCookie } from './session-cookie'
+import { clearedSessionCookies, DEVICE_COOKIE_NAMES, sessionCookie } from './session-cookie'
+import type { SignInService } from './sign-in'
+import { startedSignIn } from './sign-in-actions'
 import { isMailbox } from './mail'
 import { CORE_VERSION } from './version'
 
@@ -336,6 +338,8 @@ export interface CoreActionDependencies {
   jobs: Pick<JobService, 'runNow' | 'cancelOne'>
   /** Settings › Webhooks. */
   webhooks: Pick<WebhookService, 'create' | 'update' | 'delete' | 'test'>
+  /** What stands between a correct password and a session: a plugin's sign-in step, or nothing. */
+  signIns: SignInService
 }
 
 function field(form: FormData, name: string): string {
@@ -379,18 +383,19 @@ export function coreActions(deps: CoreActionDependencies): InternalAction[] {
     {
       name: 'login',
       capability: null,
-      async handler({ form, secure }) {
-        const { user, token } = await asActionError(() =>
-          auth.signIn(field(form, 'email'), field(form, 'password')),
+      async handler({ form, secure, cookie }) {
+        const user = await asActionError(() =>
+          auth.identify(field(form, 'email'), field(form, 'password')),
         )
-        const next = safeRedirectPath(field(form, 'next')) ?? ADMIN_PREFIX
-        const admin = next === ADMIN_PREFIX || next.startsWith(`${ADMIN_PREFIX}/`)
-        return {
-          // A customer at the admin's sign-in goes to their account, as WordPress sends a
-          // subscriber to their profile, rather than to a screen they may not open.
-          redirect: admin && !deps.canUseAdmin(user) ? ACCOUNT_PATH : next,
-          cookies: [sessionCookie(token, secure)],
-        }
+        const asked = safeRedirectPath(field(form, 'next')) ?? ADMIN_PREFIX
+        const admin = asked === ADMIN_PREFIX || asked.startsWith(`${ADMIN_PREFIX}/`)
+        // A customer at the admin's sign-in goes to their account, as WordPress sends a
+        // subscriber to their profile, rather than to a screen they may not open.
+        const next = admin && !deps.canUseAdmin(user) ? ACCOUNT_PATH : asked
+        const start = await asActionError(() =>
+          deps.signIns.begin(user, { via: 'password', next, device: cookie(DEVICE_COOKIE_NAMES) }),
+        )
+        return startedSignIn(start, { secure, next, screen: 'admin' })
       },
     },
     {

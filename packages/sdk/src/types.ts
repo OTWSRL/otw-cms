@@ -239,6 +239,66 @@ export type CapabilityExtension<K extends MetaCapabilityName> = (
  * `cms.auth`: roles, capabilities and checks, as in WordPress. Add and change roles and
  * capabilities in `setup()`, so every part of the site agrees on them; checks work anywhere.
  */
+/** One way to pass a sign-in step: an app's code, or one sent by email or text message. */
+export interface SignInMethod {
+  /** Such as `app`, `email` or `sms`: what the step's `send()` and `verify()` are given. */
+  id: string
+  /** What the screen's "Try another way" calls it, such as "Authenticator app". */
+  label: string
+  /** What the screen asks for, such as "Enter the 6-digit code from your authenticator app." */
+  prompt: string
+  /** Whether choosing it sends a code, so the screen offers to send another. */
+  sends?: boolean
+  /** Whether its codes are digits only, so a phone shows its number keys. */
+  numeric?: boolean
+}
+
+/** What a sign-in step is told about the sign-in under way. */
+export interface SignInContext {
+  /** How they proved who they are: their `password`, or an emailed `link` to set a new one. */
+  via: 'password' | 'link'
+  /**
+   * This browser's id, from the cookie it got when a step last remembered it; `null` for one
+   * that was never remembered. Keep only a hash of it.
+   */
+  device: string | null
+}
+
+/**
+ * A step between proving who you are and being signed in, as a two-factor plugin adds. Core
+ * shows the screen, holds the sign-in for ten minutes and counts wrong codes: five in fifteen
+ * minutes end it. The step says which ways a person has, sends codes and checks them.
+ */
+export interface SignInStep {
+  /**
+   * The ways this person can pass, their default first. None signs them in at once, as without
+   * a step: for someone who hasn't set one up, or a browser the step remembers.
+   */
+  methods(user: User, context: SignInContext): SignInMethod[] | Promise<SignInMethod[]>
+  /**
+   * Sends the method's code: when the person arrives at the screen with a method that `sends`,
+   * and when they ask for another. Throw an `ActionError` to tell them why it couldn't.
+   */
+  send?(user: User, method: string, context: SignInContext): void | Promise<void>
+  /** Whether `code`, as typed with its spaces removed, passes for the method. */
+  verify(
+    user: User,
+    method: string,
+    code: string,
+    context: SignInContext,
+  ): boolean | Promise<boolean>
+  /**
+   * For how many days the screen offers "Don’t ask again on this device"; 0, or leaving it out,
+   * doesn't offer it.
+   */
+  rememberDays?(user: User): number
+  /**
+   * The person passed and asked to be remembered: `device` is a new id that only their browser
+   * holds, which `methods()` is given as `context.device` from then on.
+   */
+  remember?(user: User, device: string, days: number): void | Promise<void>
+}
+
 export interface AuthApi {
   /** Adds a role, like WordPress's `add_role()`. */
   role(id: string, definition: RoleDefinition): void
@@ -267,6 +327,17 @@ export interface AuthApi {
     capability: C,
     ...args: CapabilityArgs<C>
   ): boolean
+  /**
+   * Adds a step between a correct password and being signed in: two-factor's codes. In
+   * `setup()` only, by one plugin at most.
+   */
+  signInStep(step: SignInStep): void
+  /**
+   * Whether `password` is the user's, like `wp_check_password()`: for a form that asks for it
+   * again before a change that matters. Wrong ones count as failed sign-ins do, and past five
+   * in fifteen minutes it throws an `ActionError` saying so.
+   */
+  checkPassword(user: User, password: string): Promise<boolean>
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────
@@ -1062,10 +1133,22 @@ export interface ArchiveTemplateProps {
 }
 
 /**
- * Which account page: signing in (and up), the signed-in person's account, asking for a reset
- * link, setting a password from one, and confirming a new email address.
+ * Which account page: signing in (and up), a sign-in step's code, the signed-in person's
+ * account, asking for a reset link, setting a password from one, and confirming a new email
+ * address.
  */
-export type AccountView = 'sign-in' | 'account' | 'lost-password' | 'reset' | 'confirm-email'
+export type AccountView =
+  'sign-in' | 'verify' | 'account' | 'lost-password' | 'reset' | 'confirm-email'
+
+/** What the `verify` view shows: the sign-in a step is holding until a code passes. */
+export interface AccountSignInStep {
+  /** The way being asked for: the person's default, or the one they switched to. */
+  method: SignInMethod
+  /** Every way they have, `method` included, for "Try another way". */
+  methods: SignInMethod[]
+  /** For how many days "Don’t ask again on this device" lasts; 0 doesn't offer it. */
+  rememberDays: number
+}
 
 /** What the account pages' template receives: WooCommerce's My Account, by view. */
 export interface AccountTemplateProps {
@@ -1090,9 +1173,18 @@ export interface AccountTemplateProps {
   notice: { kind: 'notice' | 'error'; message: string } | null
   /** Where to go after signing in, from the `next` query; a path on the site. */
   next: string | null
+  /**
+   * On `verify`: the sign-in waiting for a code. `null` once it has run out, after ten minutes
+   * or too many wrong codes: say so, and link back to `paths.account`.
+   */
+  signIn: AccountSignInStep | null
   /** Where each form posts. */
   actions: {
     signIn: string
+    /** The `verify` view's form: fields `method`, `code` and, ticked, `remember`. */
+    verify: string
+    /** Sends a code, or switches to another way: a field `method`. */
+    sendCode: string
     register: string
     lostPassword: string
     reset: string
@@ -1102,8 +1194,8 @@ export interface AccountTemplateProps {
     confirmEmail: string
     signOut: string
   }
-  /** The pages' addresses. */
-  paths: { account: string; lostPassword: string }
+  /** The pages' addresses. `verify` takes `?method=` to switch to another way. */
+  paths: { account: string; lostPassword: string; verify: string }
 }
 
 /** Which page a template shows: an entry, a type's archive, or a term's. */

@@ -214,6 +214,23 @@ a {
   color: var(--text);
 }
 
+/* The sign-in code's other ways: buttons that read as the links beside them. */
+.account-verify-ways {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-send-code button {
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: inherit;
+  text-decoration: underline;
+}
+
 .account-notice {
   padding: 0.5rem 0.75rem;
   border-left: 3px solid var(--accent);

@@ -35,7 +35,7 @@ export {
 export type { WebhookStatus } from './core-schema'
 export { ACCOUNT_PATH, signInUrl, type AccountService } from './accounts'
 export type { UsersService } from './users'
-export type { AccountResolution } from './account-pages'
+export type { AccountCookies, AccountResolution } from './account-pages'
 export { localStorage, UPLOADS_PATH } from './media-storage'
 export { isSafeKey } from './media-files'
 export { kindOf } from './media-types'
@@ -55,7 +55,21 @@ export {
 export { createKernelHolder, type KernelHolder, type KernelHolderOptions } from './kernel-holder'
 export { consoleLogger, createMemoryLogger, type LogEntry, type MemoryLogger } from './logger'
 export { resolvePlugins, validatePlugin, type Resolution, type SkippedPlugin } from './resolver'
-export { SESSION_COOKIE, SESSION_COOKIE_NAMES, SECURE_SESSION_COOKIE } from './session-cookie'
+export {
+  DEVICE_COOKIE_NAMES,
+  SESSION_COOKIE,
+  SESSION_COOKIE_NAMES,
+  SECURE_SESSION_COOKIE,
+  SIGN_IN_COOKIE_NAMES,
+} from './session-cookie'
+export {
+  CODE_FAILURE_WINDOW_MS,
+  MAX_CODE_FAILURES,
+  SIGN_IN_TTL_MS,
+  type HeldSignIn,
+  type SignInService,
+} from './sign-in'
+export { ACCOUNT_VERIFY_PATH, ADMIN_VERIFY_PATH } from './sign-in-actions'
 export type { Env, SettingSource, SettingValue } from './settings'
 export type { SettingField, SettingsPageView, SettingsSectionView } from './settings-pages'
 export { CORE_VERSION } from './version'

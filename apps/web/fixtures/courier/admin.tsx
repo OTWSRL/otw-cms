@@ -13,6 +13,26 @@ export default defineAdmin(courier, (cms) => {
     fields: ['courier.apiKey'],
   })
 
+  // What a plugin adds to people's own Profile, and to the screen that edits someone else.
+  cms.slots.fill('admin.profile', {
+    component: ({ user }) => (
+      <>
+        <h2>Deliveries</h2>
+        <p>Courier delivers to {user.email}.</p>
+      </>
+    ),
+  })
+  cms.slots.fill('admin.user', {
+    component: ({ user, target }) => (
+      <>
+        <h2>Deliveries</h2>
+        <p>
+          {user.email} can see that Courier delivers to {target.email}.
+        </p>
+      </>
+    ),
+  })
+
   if (cms.settings.get('courier.apiKey')) return
   cms.slots.fill('admin.notices', {
     component: ({ user }) =>

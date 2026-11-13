@@ -46,6 +46,29 @@ export const sessions = pgTable(
   (table) => [index('cms_sessions_user_id_idx').on(table.userId)],
 )
 
+/**
+ * Sign-ins a step is holding: the password was right, and a code is still to come. Rows stay
+ * past `expiresAt`, for counting an account's wrong codes, until the daily clean-up.
+ */
+export const signIns = pgTable(
+  'cms_sign_ins',
+  {
+    /** SHA-256 of the cookie token, as for sessions. */
+    tokenHash: text('token_hash').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Where the person goes once signed in: a path on the site. */
+    next: text('next').notNull(),
+    via: text('via').$type<'password' | 'link'>().notNull(),
+    /** Wrong codes typed against this sign-in. */
+    failures: integer('failures').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('cms_sign_ins_user_idx').on(table.userId, table.createdAt)],
+)
+
 export const loginFailures = pgTable(
   'cms_login_failures',
   {

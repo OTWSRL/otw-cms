@@ -84,6 +84,17 @@ function Field({
 
 const EXPIRED = 'This link has expired or has already been used.'
 
+/** A button that sends a sign-in code: a form, since a link mustn't send anything. */
+function SendCode({ action, method, label }: { action: string; method: string; label: string }) {
+  return (
+    <form method="post" action={action} className="account-send-code">
+      <input type="hidden" name="method" value={method} />
+      <input type="hidden" name="screen" value="account" />
+      <button type="submit">{label}</button>
+    </form>
+  )
+}
+
 /**
  * A field a plugin puts on the account page, named `meta.{key}` as the admin's are, and listed in
  * `userFields` so an unticked checkbox counts as false.
@@ -217,6 +228,84 @@ export function AccountTemplate(props: AccountTemplateProps) {
             </Form>
           </>
         )}
+      </section>
+    )
+  }
+  if (view === 'verify') {
+    const step = props.signIn
+    if (!step) {
+      return (
+        <section className="account account-verify">
+          <h1>That sign-in has run out</h1>
+          <Notice notice={notice} />
+          <p>
+            <a href={paths.account}>Sign in again</a> to get a new code.
+          </p>
+        </section>
+      )
+    }
+    const { method, rememberDays } = step
+    const others = step.methods.filter((other) => other.id !== method.id)
+    return (
+      <section className="account account-verify">
+        <h1>Verify it’s you</h1>
+        <Notice notice={notice} />
+        <Form action={actions.verify} label="Verify it’s you" submit="Verify">
+          <input type="hidden" name="method" value={method.id} />
+          <p className="account-field">
+            <label htmlFor="account-verify-code">Code</label>
+            <input
+              id="account-verify-code"
+              name="code"
+              inputMode={method.numeric ? 'numeric' : 'text'}
+              autoComplete="one-time-code"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={64}
+              aria-describedby="account-verify-code-hint"
+              required
+            />
+            <span className="account-hint" id="account-verify-code-hint">
+              {method.prompt}
+            </span>
+          </p>
+          {rememberDays > 0 && (
+            <p className="account-field account-field-boolean">
+              <label>
+                <input type="checkbox" name="remember" /> Don’t ask again on this device for{' '}
+                {rememberDays} {rememberDays === 1 ? 'day' : 'days'}
+              </label>
+            </p>
+          )}
+        </Form>
+        {(method.sends || others.length > 0) && (
+          <ul className="account-verify-ways">
+            {method.sends && (
+              <li>
+                <SendCode action={actions.sendCode} method={method.id} label="Send a new code" />
+              </li>
+            )}
+            {others.map((other) => (
+              <li key={other.id}>
+                {other.sends ? (
+                  <SendCode
+                    action={actions.sendCode}
+                    method={other.id}
+                    label={`Use another way: ${other.label}`}
+                  />
+                ) : (
+                  <a href={`${paths.verify}?method=${encodeURIComponent(other.id)}`}>
+                    Use another way: {other.label}
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p>
+          <a href={paths.account}>← Back to sign in</a>
+        </p>
       </section>
     )
   }
