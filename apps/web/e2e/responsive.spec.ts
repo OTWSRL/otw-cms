@@ -57,8 +57,12 @@ test.describe('phones', () => {
     await signInAsAdmin(page)
     const toggle = page.getByRole('button', { name: 'Menu' })
     await expect(mainMenu(page)).toBeHidden()
-    await toggle.click()
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    // The button answers once the page's script has loaded, and a tap before that does nothing:
+    // tap until the menu has opened, as a person would.
+    await expect(async () => {
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 })
+    }).toPass()
     await expect(mainMenu(page)).toBeVisible()
     expect(await menuWidth(page)).toBe(190)
 
