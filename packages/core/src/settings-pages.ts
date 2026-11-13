@@ -1,12 +1,16 @@
 import type {
   CapabilityName,
+  SettingCondition,
   SettingDefinition,
+  SettingShowWhen,
   SettingsFields,
   SettingsPage,
   SettingsSection,
 } from '@otwdesign/sdk'
 import { ActionError } from '@otwdesign/sdk'
 import {
+  conditionGroups,
+  DEFAULT_MAX_ROWS,
   isLocked,
   parseFormValue,
   type ResolvedSetting,
@@ -38,6 +42,18 @@ export interface PlacedSection {
   title: string
   description?: string
   fields: string[]
+  showWhen?: SettingShowWhen
+  link?: { label: string; url: string }
+}
+
+/**
+ * When something shows, as the admin's form needs it: at least one of `groups` must hold, each
+ * a list of conditions, on settings of the same page, that must all hold. No groups means it
+ * never shows on this page. `shown` says whether it does with the saved values.
+ */
+export interface SettingVisibility {
+  groups: SettingCondition[][]
+  shown: boolean
 }
 
 export interface ResolvedSettingsPage extends SettingsPageEntry {
@@ -52,6 +68,12 @@ export interface SettingField {
   options?: readonly { value: string; label: string }[]
   /** For `entry` fields: the content type whose entries it chooses from. */
   contentType?: string
+  /** For `text` fields: a box of several lines. */
+  multiline?: boolean
+  /** For `pairs` fields: the columns' headings, and the most rows. */
+  columns?: { name: string; value: string; maxRows: number }
+  /** When the field shows; always, when left out. */
+  visibility?: SettingVisibility
   /** Never set for secrets. */
   value?: SettingValue
   /** Secrets only: whether the environment variable is set. */
@@ -66,6 +88,9 @@ export interface SettingsSectionView {
   title: string
   description?: string
   fields: SettingField[]
+  /** When the section shows; always, when left out. */
+  visibility?: SettingVisibility
+  link?: { label: string; url: string }
 }
 
 export interface SettingsPageView {
@@ -146,6 +171,8 @@ export class SettingsLayoutStore {
       page: section.page,
       title: section.title,
       description: section.description,
+      showWhen: section.showWhen,
+      link: section.link,
       order: section.order ?? DEFAULT_ORDER,
       fields: [...section.fields],
       sequence: this.#sequence++,
@@ -262,7 +289,51 @@ export class SettingsLayoutStore {
   }
 }
 
-export function toField(setting: ResolvedSetting): SettingField {
+/** Whether a condition holds for a setting's current value. */
+function holds(condition: SettingCondition, value: unknown): boolean {
+  if (typeof condition.is === 'boolean') return (value === true) === condition.is
+  return (typeof condition.is === 'string' ? [condition.is] : condition.is).includes(
+    typeof value === 'string' ? value : '',
+  )
+}
+
+/**
+ * When a field or section shows on a page. Conditions on settings that are on the page are kept,
+ * for the form to follow as it's changed; those on settings elsewhere are settled now, from
+ * their saved values. Nothing left to follow means it always shows (`undefined`), or never does
+ * (no groups).
+ */
+function visibility(
+  showWhen: SettingShowWhen | undefined,
+  { settings, onPage }: FieldContext,
+): SettingVisibility | undefined {
+  const all = conditionGroups(showWhen)
+  if (all.length === 0) return undefined
+  const value = (condition: SettingCondition) => settings.get(condition.setting)?.value
+  const groups: SettingCondition[][] = []
+  for (const group of all) {
+    const elsewhere = group.filter((condition) => !onPage.has(condition.setting))
+    // A group that a setting elsewhere rules out can't hold, whatever the form says.
+    if (!elsewhere.every((condition) => holds(condition, value(condition)))) continue
+    const live = group.filter((condition) => onPage.has(condition.setting))
+    if (live.length === 0) return undefined
+    groups.push(live)
+  }
+  return {
+    groups,
+    shown: groups.some((group) => group.every((condition) => holds(condition, value(condition)))),
+  }
+}
+
+/** What the admin's form needs besides the settings: the site's roles, for `roles` fields. */
+export interface FieldContext {
+  settings: ReadonlyMap<string, ResolvedSetting>
+  roles: readonly { id: string; label: string }[]
+  /** The settings on the page being shown, which its form can follow as they change. */
+  onPage: ReadonlySet<string>
+}
+
+export function toField(setting: ResolvedSetting, context: FieldContext): SettingField {
   const { key, definition, value, source } = setting
   const base = {
     key,
@@ -272,25 +343,56 @@ export function toField(setting: ResolvedSetting): SettingField {
     source,
     locked: isLocked(setting),
     env: definition.env,
+    visibility: visibility(definition.showWhen, context),
   }
   if (definition.type === 'secret') return { ...base, configured: value !== undefined }
+  if (definition.type === 'roles') {
+    const chosen = Array.isArray(value) ? (value as readonly string[]) : []
+    // A role a plugin no longer adds stays listed while it's ticked, so it can be unticked.
+    const gone = chosen.filter((id) => !context.roles.some((role) => role.id === id))
+    return {
+      ...base,
+      value,
+      options: [
+        ...context.roles.map((role) => ({ value: role.id, label: role.label })),
+        ...gone.map((id) => ({ value: id, label: `${id} (no longer a role)` })),
+      ],
+    }
+  }
+  if (definition.type === 'pairs') {
+    return {
+      ...base,
+      value,
+      columns: {
+        name: definition.nameLabel ?? 'Name',
+        value: definition.valueLabel ?? 'Value',
+        maxRows: definition.maxRows ?? DEFAULT_MAX_ROWS,
+      },
+    }
+  }
   return {
     ...base,
     value,
     options: definition.type === 'select' ? definition.options : undefined,
     contentType: definition.type === 'entry' ? definition.contentType : undefined,
+    multiline: definition.type === 'text' ? definition.multiline : undefined,
   }
 }
 
 export function pageView(
   page: ResolvedSettingsPage,
-  settings: ReadonlyMap<string, ResolvedSetting>,
+  input: Omit<FieldContext, 'onPage'>,
 ): SettingsPageView {
+  const { settings } = input
+  const onPage = new Set(page.sections.flatMap((section) => section.fields))
+  const context: FieldContext = { ...input, onPage }
   const sections = page.sections.map((section) => ({
     key: section.key,
     title: section.title,
     description: section.description,
-    fields: section.fields.map((key) => toField(settings.get(key)!)),
+    fields: section.fields.map((key) => toField(settings.get(key)!, context)),
+    visibility: visibility(section.showWhen, context),
+    link: section.link,
   }))
   return {
     key: page.key,
@@ -318,7 +420,7 @@ export function pageUpdates(
   if (editable.length === 0) throw new ActionError('There is nothing to save on this page.')
   const updates = new Map<string, SettingValue | undefined>()
   for (const setting of editable) {
-    const parsed = parseFormValue(setting.definition, form.get(setting.key))
+    const parsed = parseFormValue(setting.definition, form, setting.key)
     if (!parsed.ok) throw new ActionError(`${setting.definition.label}: ${parsed.error}.`)
     updates.set(setting.key, parsed.value)
   }

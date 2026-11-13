@@ -1625,7 +1625,9 @@ function buildKernel(input: {
     if (!capabilities.can(user, 'core.access_admin') || !capabilities.can(user, page.capability)) {
       return { kind: 'forbidden' }
     }
-    return { kind: 'settings', key, title: page.title, view: pageView(page, input.settingsByKey) }
+    const roles = capabilities.roles().map(({ id, label }) => ({ id, label }))
+    const view = pageView(page, { settings: input.settingsByKey, roles })
+    return { kind: 'settings', key, title: page.title, view }
   }
 
   /**

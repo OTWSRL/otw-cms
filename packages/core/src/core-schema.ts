@@ -1,4 +1,11 @@
-import type { Block, EntryMetaValues, EntryStatus, JobStatus, UserMetaValues } from '@otwdesign/sdk'
+import type {
+  Block,
+  EntryMetaValues,
+  EntryStatus,
+  JobStatus,
+  SettingPair,
+  UserMetaValues,
+} from '@otwdesign/sdk'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -86,7 +93,9 @@ export const pluginStates = pgTable('cms_plugins', {
 
 export const storedSettings = pgTable('cms_settings', {
   key: text('key').primaryKey(),
-  value: jsonb('value').$type<string | boolean>().notNull(),
+  value: jsonb('value')
+    .$type<string | boolean | readonly string[] | readonly SettingPair[]>()
+    .notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

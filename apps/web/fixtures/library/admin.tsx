@@ -68,6 +68,21 @@ export default defineAdmin(library, (cms) => {
     title: 'Reading room',
     fields: ['library.open'],
   })
+  cms.admin.settingsSection({
+    name: 'notices',
+    page: 'library.settings',
+    title: 'Overdue notices',
+    order: 20,
+    fields: [
+      'library.notify_roles',
+      'library.notify_via',
+      'library.notify_url',
+      'library.notify_auth',
+      'library.notify_headers',
+      'library.notify_body',
+    ],
+    link: { label: 'See the books', url: cms.admin.url('/books') },
+  })
 
   cms.slots.fill('admin.dashboard', {
     component: ({ user }) =>

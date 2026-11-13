@@ -50,6 +50,20 @@ test('every admin screen fits the screen without scrolling sideways', async ({ p
   }
 })
 
+// On every device, since each browser engine follows the form's own controls here.
+test('a settings field shows only for the choice it belongs to', async ({ page }) => {
+  await signInAsAdmin(page)
+  await page.goto('/admin/library/settings')
+  const via = page.getByLabel('Send notices through')
+  const before = await via.inputValue()
+  await via.selectOption('none')
+  await expect(page.getByLabel('Webhook URL')).toBeHidden()
+  await via.selectOption('webhook')
+  await expect(page.getByLabel('Webhook URL')).toBeVisible()
+  // Left as it was found: nothing is saved here.
+  await via.selectOption(before)
+})
+
 test.describe('phones', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) > PHONE, 'up to 782px')
 

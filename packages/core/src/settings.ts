@@ -1,4 +1,11 @@
-import type { Database, SettingDefinition, SettingDefinitions } from '@otwdesign/sdk'
+import type {
+  Database,
+  SettingCondition,
+  SettingDefinition,
+  SettingDefinitions,
+  SettingPair,
+  SettingShowWhen,
+} from '@otwdesign/sdk'
 import { inArray, sql } from 'drizzle-orm'
 import { storedSettings } from './core-schema'
 
@@ -7,7 +14,7 @@ export type Env = Readonly<Record<string, string | undefined>>
 /** Where a value came from, highest precedence first. */
 export type SettingSource = 'override' | 'env' | 'database' | 'default' | 'unset'
 
-export type SettingValue = string | boolean
+export type SettingValue = string | boolean | readonly string[] | readonly SettingPair[]
 
 export interface DeclaredSetting {
   key: string
@@ -24,6 +31,13 @@ type Parsed = { ok: true; value: SettingValue | undefined } | { ok: false; error
 
 const ENTRY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DEFAULT_MAX_LENGTH = 500
+const ROLE_ID = /^[a-z0-9_-]{1,64}$/
+/** Roles one setting can name: more than any site has. */
+const MAX_ROLES = 100
+/** Rows a `pairs` setting takes unless it says. */
+export const DEFAULT_MAX_ROWS = 20
+const MAX_PAIR_NAME = 200
+const MAX_PAIR_VALUE = 2000
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/
 const TRUE = new Set(['1', 'true', 'yes', 'on'])
 const FALSE = new Set(['0', 'false', 'no', 'off'])
@@ -54,6 +68,9 @@ export function validateSettingDefinitions(
     if (field.type === 'entry' && typeof field.contentType !== 'string') {
       errors.push(`setting "${key}" needs the content type its entries are chosen from`)
     }
+    if (field.type === 'pairs' && field.env !== undefined) {
+      errors.push(`setting "${key}" is rows of pairs, which an environment variable can't hold`)
+    }
     if (field.type === 'select') {
       if (field.options.length === 0) errors.push(`setting "${key}" needs at least one option`)
       if (field.default !== undefined && !field.options.some((o) => o.value === field.default)) {
@@ -64,8 +81,51 @@ export function validateSettingDefinitions(
   return errors
 }
 
+/** Role ids from a list, or from text that separates them with commas or spaces. */
+function checkRoles(value: unknown): Parsed {
+  const list = typeof value === 'string' ? value.split(/[\s,]+/) : value
+  if (!Array.isArray(list) || !list.every((role) => typeof role === 'string')) {
+    return { ok: false, error: 'Choose from the roles' }
+  }
+  const roles = [...new Set(list.map((role: string) => role.trim().toLowerCase()).filter(Boolean))]
+  return roles.length <= MAX_ROLES && roles.every((role) => ROLE_ID.test(role))
+    ? { ok: true, value: roles }
+    : { ok: false, error: 'Choose from the roles' }
+}
+
+/** Rows of a name and a value, trimmed, without the rows left empty. */
+function checkPairs(
+  definition: Extract<SettingDefinition, { type: 'pairs' }>,
+  value: unknown,
+): Parsed {
+  if (!Array.isArray(value)) return { ok: false, error: 'Must be rows of a name and a value' }
+  const pairs: SettingPair[] = []
+  for (const row of value as unknown[]) {
+    const { name, value: text } = (row ?? {}) as Partial<SettingPair>
+    if (typeof name !== 'string' || typeof text !== 'string') {
+      return { ok: false, error: 'Must be rows of a name and a value' }
+    }
+    if (name.trim() === '' && text.trim() === '') continue
+    if (name.trim() === '') {
+      return { ok: false, error: `Give "${text.trim().slice(0, 40)}" a name, or remove its row` }
+    }
+    if (name.trim().length > MAX_PAIR_NAME || text.trim().length > MAX_PAIR_VALUE) {
+      return { ok: false, error: 'A row is too long' }
+    }
+    pairs.push({ name: name.trim(), value: text.trim() })
+  }
+  const max = definition.maxRows ?? DEFAULT_MAX_ROWS
+  if (pairs.length > max) return { ok: false, error: `Use at most ${max} rows` }
+  const error = definition.validate?.(pairs) ?? null
+  return error ? { ok: false, error } : { ok: true, value: pairs }
+}
+
 function check(definition: SettingDefinition, value: SettingValue): Parsed {
   switch (definition.type) {
+    case 'roles':
+      return checkRoles(value)
+    case 'pairs':
+      return checkPairs(definition, value)
     case 'boolean':
       return typeof value === 'boolean'
         ? { ok: true, value }
@@ -83,6 +143,9 @@ function check(definition: SettingDefinition, value: SettingValue): Parsed {
         : { ok: false, error: 'Choose one of the entries' }
     case 'text': {
       if (typeof value !== 'string') return { ok: false, error: 'Must be text' }
+      if (!definition.multiline && /[\r\n]/.test(value)) {
+        return { ok: false, error: 'Must be one line' }
+      }
       const max = definition.maxLength ?? DEFAULT_MAX_LENGTH
       if (value.length > max) return { ok: false, error: `Use at most ${max} characters` }
       const error = definition.validate?.(value) ?? null
@@ -103,15 +166,26 @@ export function parseEnvValue(definition: SettingDefinition, raw: string): Parse
   return { ok: false, error: 'Use true or false' }
 }
 
-/** A submitted admin form field. Unchecked checkboxes are absent, so `null` means off. */
-export function parseFormValue(
-  definition: SettingDefinition,
-  raw: FormDataEntryValue | null,
-): Parsed {
+/**
+ * A setting's value in a submitted admin form. Unchecked checkboxes are absent, so a boolean
+ * that isn't there is off, and roles with none ticked are none. A `pairs` field posts its
+ * columns as `{key}.name` and `{key}.value`, once per row.
+ */
+export function parseFormValue(definition: SettingDefinition, form: FormData, key: string): Parsed {
+  const raw = form.get(key)
   if (definition.type === 'boolean') return { ok: true, value: raw !== null && raw !== '' }
+  if (definition.type === 'roles') return checkRoles(form.getAll(key))
+  if (definition.type === 'pairs') {
+    const values = form.getAll(`${key}.value`)
+    return checkPairs(
+      definition,
+      form.getAll(`${key}.name`).map((name, row) => ({ name, value: values[row] ?? '' })),
+    )
+  }
   if (raw === null) return { ok: true, value: undefined }
   if (typeof raw !== 'string') return { ok: false, error: 'Must be text' }
-  const text = raw.trim()
+  // Browsers post a textarea's line breaks as CRLF.
+  const text = raw.replace(/\r\n?/g, '\n').trim()
   return text === '' ? { ok: true, value: undefined } : check(definition, text)
 }
 
@@ -157,7 +231,28 @@ export function resolveSettings(input: {
     return { ...declared, value: undefined, source: 'unset' }
   })
 
+  // A condition on a setting that isn't there, or isn't a choice, would hide its field for good.
+  const byKey = new Map(input.declared.map((declared) => [declared.key, declared.definition]))
+  for (const { key, definition } of input.declared) {
+    for (const condition of conditionGroups(definition.showWhen).flat()) {
+      const type = byKey.get(condition.setting)?.type
+      if (type !== 'select' && type !== 'boolean') {
+        warnings.push(
+          `Setting "${key}" shows when "${condition.setting}" has a value, but that isn't a select or a checkbox setting of an active plugin`,
+        )
+      }
+    }
+  }
+
   return { values, settings, warnings }
+}
+
+/** A `showWhen`, as groups of conditions: any group, every condition in it. */
+export function conditionGroups(showWhen: SettingShowWhen | undefined): SettingCondition[][] {
+  if (!showWhen) return []
+  const all = (entry: SettingCondition | readonly SettingCondition[]): SettingCondition[] =>
+    'setting' in entry ? [entry] : [...entry]
+  return 'any' in showWhen ? showWhen.any.map(all) : [all(showWhen)]
 }
 
 /** Set from code or the environment, or a secret: the admin shows these read-only. */

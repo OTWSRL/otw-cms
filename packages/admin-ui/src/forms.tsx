@@ -19,6 +19,7 @@ export function FormField({
   htmlFor,
   description,
   descriptionId,
+  row,
   children,
 }: {
   label: ReactNode
@@ -26,10 +27,12 @@ export function FormField({
   description?: ReactNode
   /** For the control's `aria-describedby`. */
   descriptionId?: string
+  /** Attributes for the row itself: `hidden`, or a `data-` name a style rule shows it by. */
+  row?: { hidden?: boolean; 'data-show'?: string }
   children: ReactNode
 }) {
   return (
-    <tr>
+    <tr {...row}>
       <th scope="row">{htmlFor ? <label htmlFor={htmlFor}>{label}</label> : label}</th>
       <td>
         {children}

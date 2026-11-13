@@ -124,6 +124,26 @@ export interface SettingsApi {
 
 // ── Settings fields ──────────────────────────────────────────────────────────
 
+/**
+ * What another setting must be for a field or a section to show: a select's option, or a
+ * checkbox ticked (`true`) or not (`false`). Several values mean any of them.
+ */
+export interface SettingCondition {
+  /** The setting it depends on: a `select` or a `boolean`, usually on the same page. */
+  setting: SettingName
+  is: string | boolean | readonly string[]
+}
+
+/**
+ * When a field or a section shows: while one condition holds, while every one of a list holds,
+ * or with `any`, while at least one of its entries does (each a condition, or a list that must
+ * all hold).
+ */
+export type SettingShowWhen =
+  | SettingCondition
+  | readonly SettingCondition[]
+  | { any: readonly (SettingCondition | readonly SettingCondition[])[] }
+
 interface SettingFieldBase {
   label: string
   description?: string
@@ -132,14 +152,21 @@ interface SettingFieldBase {
    * while it is set, as WordPress does for constants in wp-config.php.
    */
   env?: string
+  /**
+   * Shows the field only while this holds: a provider's own fields once that provider is
+   * chosen. It follows the form as it's changed, before saving. A hidden field keeps its value.
+   */
+  showWhen?: SettingShowWhen
 }
 
-/** A line of text, trimmed when saved. */
+/** A line of text, or with `multiline` several, trimmed when saved. */
 export interface TextSetting extends SettingFieldBase {
   type: 'text'
   default?: string
   /** Defaults to 500. */
   maxLength?: number
+  /** A box of several lines, for a template or a list. */
+  multiline?: boolean
   /** Return an error message to reject the (trimmed) value. */
   validate?: (value: string) => string | null
 }
@@ -173,16 +200,60 @@ export interface EntrySetting extends SettingFieldBase {
   default?: string
 }
 
+/**
+ * A checkbox for each of the site's roles, plugins' roles included: who a rule applies to. Its
+ * value is the ticked roles' ids. From the environment, ids separated by commas.
+ */
+export interface RolesSetting extends SettingFieldBase {
+  type: 'roles'
+  default?: readonly string[]
+}
+
+/** One row of a `pairs` setting. */
+export interface SettingPair {
+  name: string
+  value: string
+}
+
+/**
+ * Rows of a name and a value, added and removed in the admin, like a repeater field: a
+ * request's headers, a list of redirects. Rows left empty aren't kept.
+ */
+export interface PairsSetting extends SettingFieldBase {
+  type: 'pairs'
+  /** The columns' headings. "Name" and "Value" unless these say. */
+  nameLabel?: string
+  valueLabel?: string
+  default?: readonly SettingPair[]
+  /** The most rows it takes. Defaults to 20. */
+  maxRows?: number
+  /** Return an error message to reject the rows. */
+  validate?: (pairs: readonly SettingPair[]) => string | null
+}
+
 /** One field in a plugin's `settings`. */
 export type SettingDefinition =
-  TextSetting | BooleanSetting | SelectSetting | SecretSetting | EntrySetting
+  | TextSetting
+  | BooleanSetting
+  | SelectSetting
+  | SecretSetting
+  | EntrySetting
+  | RolesSetting
+  | PairsSetting
 
-/** The fields that can hold a value of type `V`: a checkbox for booleans, the rest for strings. */
+/**
+ * The fields that can hold a value of type `V`: a checkbox for booleans, role checkboxes for a
+ * list of strings, rows for a list of pairs, the rest for strings.
+ */
 export type SettingDefinitionFor<V> = [V] extends [boolean]
   ? BooleanSetting
   : [V] extends [string]
     ? TextSetting | SelectSetting | SecretSetting | EntrySetting
-    : never
+    : [V] extends [readonly string[]]
+      ? RolesSetting
+      : [V] extends [readonly SettingPair[]]
+        ? PairsSetting
+        : never
 
 /** Keys must start with the plugin's id, e.g. `commerce.currency`. */
 export type SettingDefinitions = {
@@ -450,6 +521,10 @@ export interface SettingsSection {
   order?: number
   /** This plugin's own settings, in display order. */
   fields: readonly SettingName[]
+  /** Shows the whole section only while this holds, as a field's `showWhen` does. */
+  showWhen?: SettingShowWhen
+  /** A link under the section's fields, to a screen that goes with them: a test, a log. */
+  link?: { label: string; url: string }
 }
 
 /** Adds this plugin's settings to another plugin's section (`add_settings_field`). */

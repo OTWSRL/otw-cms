@@ -1072,6 +1072,46 @@ body:has(> .cms-login) {
   max-width: 100%;
 }
 
+/* Settings: role checkboxes one to a line, and a pairs field's rows. */
+.cms-admin .setting-choice {
+  display: block;
+  margin: 0 0 6px;
+}
+
+.cms-admin fieldset:has(> .setting-choice) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cms-admin .setting-pairs-rows {
+  border-collapse: collapse;
+  margin: 0 0 8px;
+}
+
+.cms-admin .form-table .setting-pairs-rows :is(th, td) {
+  width: auto;
+  padding: 0 8px 6px 0;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.cms-admin .setting-pairs-rows th {
+  color: var(--wp-muted);
+  font-size: 12px;
+}
+
+.cms-admin .setting-pairs-rows input {
+  width: 16em;
+  max-width: 100%;
+}
+
+.cms-admin textarea.code {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+}
+
 :is(.cms-admin, .cms-login) .large-text {
   width: 99%;
 }

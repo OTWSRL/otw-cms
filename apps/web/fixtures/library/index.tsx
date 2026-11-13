@@ -1,4 +1,4 @@
-import { definePlugin, HttpError } from '@otwdesign/sdk'
+import { definePlugin, HttpError, type SettingPair } from '@otwdesign/sdk'
 
 // The e2e tests' plugin: what a plugin can add to the site and the admin, without a business of
 // its own. Fixed data, so it needs no tables. Courier (../courier) depends on it.
@@ -20,6 +20,15 @@ declare module '@otwdesign/sdk' {
   interface Settings {
     /** Closed, the library page says so. */
     'library.open': boolean
+    /** The roles told when a book is overdue. */
+    'library.notify_roles': readonly string[]
+    /** How overdue notices leave the site: `none` or `webhook`. */
+    'library.notify_via': string
+    'library.notify_url': string
+    /** How the webhook is signed in to: `token` or `headers`. */
+    'library.notify_auth': string
+    'library.notify_headers': readonly SettingPair[]
+    'library.notify_body': string
   }
   interface Capabilities {
     'library.manage_loans': true
@@ -62,6 +71,54 @@ const library = definePlugin({
       label: 'Open the reading room',
       description: 'Closed, the library page says so.',
       default: true,
+    },
+    // Every kind of field the admin's settings pages have, for the e2e tests.
+    'library.notify_roles': {
+      type: 'roles',
+      label: 'Tell these roles',
+      description: 'Who hears about an overdue book.',
+      default: [],
+    },
+    'library.notify_via': {
+      type: 'select',
+      label: 'Send notices through',
+      default: 'none',
+      options: [
+        { value: 'none', label: 'Nothing' },
+        { value: 'webhook', label: 'A webhook' },
+      ],
+    },
+    'library.notify_url': {
+      type: 'text',
+      label: 'Webhook URL',
+      showWhen: { setting: 'library.notify_via', is: 'webhook' },
+    },
+    'library.notify_auth': {
+      type: 'select',
+      label: 'Authorization',
+      default: 'token',
+      options: [
+        { value: 'token', label: 'A token' },
+        { value: 'headers', label: 'Custom headers' },
+      ],
+      showWhen: { setting: 'library.notify_via', is: 'webhook' },
+    },
+    'library.notify_headers': {
+      type: 'pairs',
+      label: 'Headers',
+      nameLabel: 'Header',
+      maxRows: 4,
+      showWhen: [
+        { setting: 'library.notify_via', is: 'webhook' },
+        { setting: 'library.notify_auth', is: 'headers' },
+      ],
+    },
+    'library.notify_body': {
+      type: 'text',
+      label: 'Notice',
+      multiline: true,
+      maxLength: 1000,
+      showWhen: { setting: 'library.notify_via', is: 'webhook' },
     },
   },
 
