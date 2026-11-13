@@ -5,8 +5,13 @@ import type { SettingCondition } from '@otwdesign/sdk'
 // not by script: `:has()` reads the form's own controls, so the field follows the form as it's
 // changed, before any JavaScript has loaded and with none at all.
 
-/** A value as a CSS string. */
-const quote = (value: string) => `"${value.replace(/["\\]/g, '\\$&')}"`
+/**
+ * A value as a CSS string. Quotes and backslashes are escaped, and so are `<` and line breaks,
+ * as code points: nothing a setting's key or an option's value holds can end the string, the
+ * rule, or the style element it's written in.
+ */
+const quote = (value: string) =>
+  `"${value.replace(/["\\]/g, '\\$&').replace(/[<>\n\r\f]/g, (char) => `\\${char.codePointAt(0)!.toString(16)} `)}"`
 
 /** What matches inside the form while one condition holds: the control, in the state it asks for. */
 export function conditionSelector(condition: SettingCondition): string {

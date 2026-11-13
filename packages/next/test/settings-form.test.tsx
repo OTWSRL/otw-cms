@@ -47,6 +47,15 @@ describe('the rule that hides a field', () => {
     expect(hiddenRule('f', 'x', { groups: [], shown: false })).toBeNull()
   })
 
+  it('writes nothing that could end the style element it sits in', () => {
+    const rule = conditionSelector({ setting: 'a.b', is: '</style><script>x\n' } as never)
+    expect(rule).not.toContain('<')
+    expect(rule).not.toContain('\n')
+    expect(rule).toBe(
+      '[name="a.b"] option:is([value="\\3c /style\\3e \\3c script\\3e x\\a "]):checked',
+    )
+  })
+
   it('quotes a value that could break out of the rule', () => {
     expect(conditionSelector({ setting: 'a.b', is: 'x"] { } [y="' } as never)).toBe(
       '[name="a.b"] option:is([value="x\\"] { } [y=\\""]):checked',
