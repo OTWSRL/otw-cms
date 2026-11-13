@@ -271,8 +271,8 @@ describe('generate', () => {
       [
         MARKER,
         "import { createProxy } from '@otwdesign/next/proxy'",
-        'import proxy0 from "@acme/page-cache/proxy"',
-        'import proxy1 from "@acme/geo/proxy"',
+        "import proxy0 from '@acme/page-cache/proxy'",
+        "import proxy1 from '@acme/geo/proxy'",
         '',
         'export const proxy = createProxy([proxy0, proxy1])',
         '',

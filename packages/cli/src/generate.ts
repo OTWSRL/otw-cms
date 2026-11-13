@@ -264,7 +264,9 @@ export function managedFiles(
             at(PROXY_FILE),
             [
               "import { createProxy } from '@otwdesign/next/proxy'",
-              ...proxy.map((name, i) => `import proxy${i} from ${JSON.stringify(`${name}/proxy`)}`),
+              // Quoted as the lines around it and as Prettier would: this file is the site's own
+              // to format, unlike the `.generated.ts` ones a site's Prettier ignores.
+              ...proxy.map((name, i) => `import proxy${i} from '${name}/proxy'`),
               '',
               `export const proxy = createProxy([${proxy.map((_, i) => `proxy${i}`).join(', ')}])`,
               '',
