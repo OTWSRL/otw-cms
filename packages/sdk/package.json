@@ -1,6 +1,6 @@
 {
   "name": "@otwdesign/sdk",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "The plugin API of OTW CMS: definePlugin(), hooks, content types, settings, capabilities and the types plugins build on.",
   "license": "Apache-2.0",
   "author": "OTW SRL",
