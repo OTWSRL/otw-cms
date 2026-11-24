@@ -1,5 +1,5 @@
 import type { MediaStorage } from '@otwdesign/sdk'
-import { isSafeKey } from './media-files'
+import { isSafeKey, isTempKey } from './media-files'
 import { ALLOWED_MIMES, mimeForExtension } from './media-types'
 
 /**
@@ -55,7 +55,8 @@ export async function serveUpload(
   key: string,
   request: Request,
 ): Promise<Response> {
-  if (!isSafeKey(key)) return notFound()
+  // A file waiting to be checked isn't an upload yet: nothing serves it.
+  if (!isSafeKey(key) || isTempKey(key)) return notFound()
   const info = await storage.stat(key)
   if (!info) return notFound()
 

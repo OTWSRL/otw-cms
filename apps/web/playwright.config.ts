@@ -54,6 +54,8 @@ export default defineConfig({
         CMS_UPLOADS_DIR: '.data/e2e-uploads',
         MAIL_FILE_DIR: '.data/e2e-mail',
         DATABASE_URL: '',
+        // Where the Library fixture's test bucket signs its upload addresses to.
+        LIBRARY_ORIGIN: `http://localhost:${PORT}`,
         // Courier's key stays unset, so its notice shows.
         COURIER_API_KEY: '',
         CMS_SUPERVISOR_URL: `http://127.0.0.1:${SUPERVISOR_PORT}`,

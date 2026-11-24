@@ -5,6 +5,7 @@ import { entries, loginFailures, sessions, signIns, userTokens } from './core-sc
 import type { DatabaseContext } from './database'
 import type { CacheService } from './cache'
 import type { JobService, JobStore } from './jobs'
+import { SWEEP_JOB, type MediaUploadService } from './media-uploads'
 import { DELIVER_JOB, DELIVERY_ATTEMPTS, type WebhookService } from './webhooks'
 
 const CORE = 'core'
@@ -24,11 +25,12 @@ export interface CoreJobDependencies {
   jobs: Pick<JobService, 'enqueue' | 'prune'>
   webhooks: Pick<WebhookService, 'deliver'>
   cache: Pick<CacheService, 'sweep'>
+  uploads: Pick<MediaUploadService, 'sweep'>
 }
 
 /** The site's own housekeeping, which WordPress does with WP-Cron. */
 export function registerCoreJobs(deps: CoreJobDependencies): void {
-  const { store, db, logger, content, jobs, webhooks, cache } = deps
+  const { store, db, logger, content, jobs, webhooks, cache, uploads } = deps
 
   // One event to one webhook. A try that fails waits 1, 4, 16, then 64 minutes for the next.
   store.define(CORE, DELIVER_JOB, {
@@ -52,6 +54,15 @@ export function registerCoreJobs(deps: CoreJobDependencies): void {
       await db.root.delete(signIns).where(lt(signIns.createdAt, sql`now() - interval '1 day'`))
       await jobs.prune(JOB_LOG_DAYS)
       await cache.sweep()
+    },
+  })
+
+  // Files sent straight to storage and never finished. Queued when such an upload begins, for
+  // when it runs out: a site whose uploads go through it never runs this.
+  store.define(CORE, SWEEP_JOB, {
+    label: 'Clear out uploads that were never finished',
+    handler: async () => {
+      await uploads.sweep()
     },
   })
 

@@ -218,6 +218,38 @@ export const media = pgTable(
   ],
 )
 
+/**
+ * A file a browser is sending straight to storage, from the signed address it was given until
+ * the site has read it back and stored it as an upload.
+ */
+export const mediaUploads = pgTable(
+  'cms_media_uploads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Where the bytes wait in storage: `_uploads/{id}`. */
+    key: text('key').notNull(),
+    /** The file's name as the browser has it. */
+    filename: text('filename').notNull(),
+    /** The size announced; what arrives must match. */
+    size: bigint('size', { mode: 'number' }).notNull(),
+    /** The entry it's uploaded to, checked when it's stored. */
+    entryId: uuid('entry_id'),
+    /** The item it became: set with it, so finishing twice answers the same one. */
+    mediaId: uuid('media_id').references(() => media.id, { onDelete: 'set null' }),
+    /** When a request began storing it, so two don't. */
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('cms_media_uploads_user_idx').on(table.userId),
+    index('cms_media_uploads_expires_idx').on(table.expiresAt),
+  ],
+)
+
 /** What a token in an emailed link is for: setting a password, or confirming a new address. */
 export type UserTokenPurpose = 'password' | 'email'
 

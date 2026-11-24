@@ -1,5 +1,5 @@
 import { Button, ListTable, TableNav, type Column } from '@otwdesign/admin-ui'
-import type { Kernel } from '@otwdesign/core'
+import { UPLOADS_PATH, type Kernel } from '@otwdesign/core'
 import type {
   ContentTypeName,
   Entry,
@@ -236,7 +236,13 @@ export async function MediaLibraryScreen({
       <a key="view" href={item.url} rel="bookmark" aria-label={`View “${title}”`}>
         View
       </a>,
-      <a key="download" href={item.url} download={item.filename} aria-label={`Download “${title}”`}>
+      // From this site, wherever the file is kept: browsers honour `download` only same-origin.
+      <a
+        key="download"
+        href={`${UPLOADS_PATH}/${item.file}`}
+        download={item.filename}
+        aria-label={`Download “${title}”`}
+      >
         Download file
       </a>,
     )

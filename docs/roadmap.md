@@ -917,6 +917,26 @@ its own (`../otw-plugin-otp`). WordPress's Two-Factor and WP 2FA.
 Not built: passkeys (WebAuthn), asking for a code again before a sensitive action while signed
 in, and limits by IP address, which belong in front of the site.
 
+## 13. Storage plugin
+
+The media library on hosts without a disk, such as Vercel: `@otwdesign/plugin-storage`, in a
+repository of its own (`../otw-plugin-storage`). WordPress's WP Offload Media.
+
+- **In core, for it (1.9): direct uploads (done).** A host that caps a request's size (Vercel:
+  4.5 MB) refuses a larger upload before the site sees it, whatever the storage. A
+  `MediaStorage` may now have `directUploads`: files of `minBytes` or more go from the browser
+  straight to it. `POST /api/p/core/media/uploads` signs an address for a temporary key
+  (`_uploads/{id}`, never served), the browser sends the bytes there, and
+  `…/uploads/{id}/complete` reads the file back and stores it through `media.upload()`
+  unchanged: its type from its bytes, its sizes made, its name claimed. One request stores it
+  however many ask; asked again, it answers the same item. Uploads never finished are swept
+  with their files when they run out (`cms_media_uploads`, twenty under way per account). Also
+  `cms.media.disk`, the disk's files to read, for copying them elsewhere. A site on the disk
+  makes the requests it always made, and loads no code for this.
+- **The plugin**: S3-compatible storage (AWS S3, Cloudflare R2, Supabase Storage, a server of
+  one's own running MinIO or Garage) and Vercel Blob, a registry for other drivers
+  (`storage.drivers`), a connection test, and a tool that copies the disk's uploads across.
+
 ## Later
 
 A community plugin (BuddyPress-style profiles, groups, activity) as the third proof, themes and

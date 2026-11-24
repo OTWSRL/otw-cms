@@ -69,6 +69,13 @@ export default defineAdmin(library, (cms) => {
     fields: ['library.open'],
   })
   cms.admin.settingsSection({
+    name: 'storage',
+    page: 'library.settings',
+    title: 'Storage',
+    order: 30,
+    fields: ['library.test_bucket'],
+  })
+  cms.admin.settingsSection({
     name: 'notices',
     page: 'library.settings',
     title: 'Overdue notices',

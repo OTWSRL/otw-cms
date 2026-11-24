@@ -44,8 +44,20 @@ import {
   mimesOfKind,
 } from './media-types'
 
-/** What the kernel serves: everything plugins call but the registrations. */
-export type MediaService = Omit<MediaApi, 'imageSize' | 'storage'>
+/** What the kernel serves: everything plugins call but the registrations and the disk. */
+export type MediaService = Omit<MediaApi, 'imageSize' | 'storage' | 'disk'>
+
+/** What core's own direct uploads use besides. */
+export interface InternalMediaService extends MediaService {
+  /** Throws `MediaError` when a file of this name could never be uploaded: its type isn't allowed. */
+  accepts(name: string, by: string | null): Promise<void>
+  /** `upload()`, with `inserted` run in the transaction that adds the item. */
+  uploadThen(
+    file: MediaUpload,
+    options: MediaUploadOptions,
+    inserted: (item: MediaItem) => Promise<void>,
+  ): Promise<MediaItem>
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DEFAULT_LIMIT = 20
@@ -160,7 +172,7 @@ export interface MediaServiceOptions {
 
 type MediaRow = typeof media.$inferSelect
 
-export function createMediaService(options: MediaServiceOptions): MediaService {
+export function createMediaService(options: MediaServiceOptions): InternalMediaService {
   const { db, hooks, logger, maxBytes } = options
 
   const present = (row: MediaRow): MediaItem => {
@@ -350,76 +362,92 @@ export function createMediaService(options: MediaServiceOptions): MediaService {
     return and(gte(media.createdAt, start), lt(media.createdAt, end))!
   }
 
-  const service: MediaService = {
+  const store = async (
+    file: MediaUpload,
+    uploadOptions: MediaUploadOptions,
+    inserted?: (item: MediaItem) => Promise<void>,
+  ): Promise<MediaItem> => {
+    if (!file || typeof file.name !== 'string' || !(file.data instanceof Uint8Array)) {
+      invalid('Upload a file: its name and its bytes')
+    }
+    const { data } = file
+    if (data.byteLength === 0) invalid('The file is empty.')
+    if (data.byteLength > maxBytes) {
+      throw new MediaError(
+        'too_large',
+        `The file is larger than the ${formatBytes(maxBytes)} limit.`,
+      )
+    }
+    const by = userId(uploadOptions.by)
+    const sanitized = sanitizeFileName(file.name)
+    const { extension, mimeType, image } = await checkType(sanitized, data, by)
+    const name = { base: sanitized.base, extension }
+    const fields = {
+      title: text('title', uploadOptions.title ?? (titleFromFileName(file.name) || name.base)),
+      alt: text('alt', uploadOptions.alt ?? ''),
+      caption: text('caption', uploadOptions.caption ?? ''),
+      description: text('description', uploadOptions.description ?? ''),
+    }
+    const entryId =
+      uploadOptions.entryId === undefined ? null : await entryRef(uploadOptions.entryId)
+
+    const processed = image ? await processImage(data, image, options.imageSizes()) : null
+    const createdAt = new Date()
+    const folder = uploadFolder(createdAt, options.byMonth())
+    const { keys, written } = await writeFiles(folder, name, data, mimeType, processed)
+    const sizes: Record<string, StoredMediaSize> = {}
+    for (const size of processed?.sizes ?? []) {
+      const stored = {
+        file: keys.sizes.get(`${size.width}x${size.height}`)!,
+        width: size.width,
+        height: size.height,
+        mimeType,
+        size: size.data.byteLength,
+      }
+      for (const sizeName of size.names) sizes[sizeName] = stored
+    }
+    try {
+      return await db.transaction(async () => {
+        const [row] = await db.current
+          .insert(media)
+          .values({
+            authorId: by,
+            entryId,
+            file: keys.main,
+            originalFile: processed?.scaled ? keys.original : null,
+            filename: (file.name.split(/[\\/]/).pop() ?? '').slice(0, 255) || keys.original,
+            mimeType,
+            size: processed?.scaled ? processed.scaled.data.byteLength : data.byteLength,
+            width: processed?.width ?? null,
+            height: processed?.height ?? null,
+            sizes,
+            ...fields,
+            createdAt,
+            updatedAt: createdAt,
+          })
+          .returning()
+        const item = present(row!)
+        await inserted?.(item)
+        await hooks.doAction('media.uploaded', { item })
+        return item
+      })
+    } catch (error) {
+      await removeFiles(written)
+      throw error
+    }
+  }
+
+  const service: InternalMediaService = {
     imageSizes: () => options.imageSizes(),
 
-    async upload(file: MediaUpload, uploadOptions: MediaUploadOptions = {}) {
-      if (!file || typeof file.name !== 'string' || !(file.data instanceof Uint8Array)) {
-        invalid('Upload a file: its name and its bytes')
-      }
-      const { data } = file
-      if (data.byteLength === 0) invalid('The file is empty.')
-      if (data.byteLength > maxBytes) {
-        throw new MediaError(
-          'too_large',
-          `The file is larger than the ${formatBytes(maxBytes)} limit.`,
-        )
-      }
-      const by = userId(uploadOptions.by)
-      const sanitized = sanitizeFileName(file.name)
-      const { extension, mimeType, image } = await checkType(sanitized, data, by)
-      const name = { base: sanitized.base, extension }
-      const fields = {
-        title: text('title', uploadOptions.title ?? (titleFromFileName(file.name) || name.base)),
-        alt: text('alt', uploadOptions.alt ?? ''),
-        caption: text('caption', uploadOptions.caption ?? ''),
-        description: text('description', uploadOptions.description ?? ''),
-      }
-      const entryId =
-        uploadOptions.entryId === undefined ? null : await entryRef(uploadOptions.entryId)
+    upload: (file, uploadOptions = {}) => store(file, uploadOptions),
+    uploadThen: (file, uploadOptions, inserted) => store(file, uploadOptions, inserted),
 
-      const processed = image ? await processImage(data, image, options.imageSizes()) : null
-      const createdAt = new Date()
-      const folder = uploadFolder(createdAt, options.byMonth())
-      const { keys, written } = await writeFiles(folder, name, data, mimeType, processed)
-      const sizes: Record<string, StoredMediaSize> = {}
-      for (const size of processed?.sizes ?? []) {
-        const stored = {
-          file: keys.sizes.get(`${size.width}x${size.height}`)!,
-          width: size.width,
-          height: size.height,
-          mimeType,
-          size: size.data.byteLength,
-        }
-        for (const sizeName of size.names) sizes[sizeName] = stored
-      }
-      try {
-        return await db.transaction(async () => {
-          const [row] = await db.current
-            .insert(media)
-            .values({
-              authorId: by,
-              entryId,
-              file: keys.main,
-              originalFile: processed?.scaled ? keys.original : null,
-              filename: (file.name.split(/[\\/]/).pop() ?? '').slice(0, 255) || keys.original,
-              mimeType,
-              size: processed?.scaled ? processed.scaled.data.byteLength : data.byteLength,
-              width: processed?.width ?? null,
-              height: processed?.height ?? null,
-              sizes,
-              ...fields,
-              createdAt,
-              updatedAt: createdAt,
-            })
-            .returning()
-          const item = present(row!)
-          await hooks.doAction('media.uploaded', { item })
-          return item
-        })
-      } catch (error) {
-        await removeFiles(written)
-        throw error
+    async accepts(name, by) {
+      const { extension } = sanitizeFileName(name)
+      const mimes = await hooks.applyFilters('media.mimes', { ...ALLOWED_MIMES }, { by })
+      if (!extension || !mimeForExtension(mimes, extension)) {
+        throw new MediaError('file_type', "This file type isn't allowed.")
       }
     },
 

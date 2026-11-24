@@ -1639,9 +1639,34 @@ export interface StoredFile {
   modifiedAt: Date
 }
 
+/** Where a browser sends one file's bytes, straight to the storage. */
+export interface UploadTarget {
+  /** A signed address for this one key, which stops working when the target runs out. */
+  url: string
+  method: 'PUT'
+  /** The headers the browser must send with the bytes, exactly as given. */
+  headers: Record<string, string>
+}
+
+/**
+ * Storage a browser can upload to itself, so a file never passes through the site: for hosts
+ * that cap a request's size, such as Vercel's 4.5 MB.
+ */
+export interface DirectUploads {
+  /** Files of this many bytes or more go straight to the storage; smaller ones through the site. */
+  minBytes: number
+  /**
+   * Signs an upload of exactly `size` bytes to `key`, kept as `application/octet-stream` and
+   * refused after `expiresAt`. The key is a temporary one under `_uploads/`: the site reads the
+   * file from it, checks it, stores it under its own name and deletes it.
+   */
+  target(key: string, options: { size: number; expiresAt: Date }): Promise<UploadTarget>
+}
+
 /**
  * Where uploads are kept: the site's disk unless a plugin provides another, such as S3. Keys are
- * paths such as `2026/11/photo.jpg`. Files are never overwritten, so they can be cached for good.
+ * paths such as `2026/11/photo.jpg`. A file is never overwritten, but a deleted file's key can be
+ * used again by a later upload, so cache them for a day, not for good.
  */
 export interface MediaStorage {
   /** Writes a new file. Returns `false`, writing nothing, when the key is taken. */
@@ -1653,6 +1678,11 @@ export interface MediaStorage {
   delete(key: string): Promise<void>
   /** Where it's served: a path on this site, or another address, such as a CDN's. */
   url(key: string): string
+  /**
+   * Left out when browsers can't upload to it: every upload then goes through the site, as with
+   * the disk. Read once, when the storage is provided.
+   */
+  directUploads?: DirectUploads
 }
 
 /** `cms.media`: the media library, like WordPress's attachments. */
@@ -1664,6 +1694,11 @@ export interface MediaApi {
   imageSize(name: string, size: ImageSizeDefinition): void
   /** Keeps uploads somewhere other than the disk. In `setup()` only, by one plugin at most. */
   storage(storage: MediaStorage): void
+  /**
+   * The files on the site's own disk, whichever storage is in use: for a storage plugin to copy
+   * what was uploaded before it.
+   */
+  readonly disk: Pick<MediaStorage, 'read' | 'stat'>
   /** The sizes images get: core's, as Settings › Media has them, then plugins'. */
   imageSizes(): ImageSize[]
   /**

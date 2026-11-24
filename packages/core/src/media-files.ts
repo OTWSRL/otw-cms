@@ -74,6 +74,22 @@ export function fileKeys(
   }
 }
 
+/**
+ * Where a file sent straight to storage waits to be checked. No upload's own key starts with it:
+ * a file's name never begins with `_`, and its folder is a year.
+ */
+export const TEMP_PREFIX = '_uploads/'
+
+/** The key a direct upload's bytes wait under: its row's id. */
+export function tempKey(id: string): string {
+  return `${TEMP_PREFIX}${id}`
+}
+
+/** Whether `key` is a waiting direct upload's, which is never served. */
+export function isTempKey(key: string): boolean {
+  return key.startsWith(TEMP_PREFIX)
+}
+
 const SEGMENT = /^[a-z0-9_-][a-z0-9._-]*$/i
 const MAX_KEY = 512
 

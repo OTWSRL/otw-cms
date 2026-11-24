@@ -343,6 +343,7 @@ export async function ContentEditScreen({
             firstSaveKey={newKey}
             label={`${singular} content`}
             entryId={entry?.id}
+            direct={kernel.directUploads}
           />
           <noscript>
             <p className="description">
@@ -394,7 +395,7 @@ export async function ContentEditScreen({
       {publishBox}
       {supports('thumbnail') && (
         <Postbox id="postimagediv" title="Featured image">
-          <FeaturedImage initial={thumbnail} entryId={entry?.id} />
+          <FeaturedImage initial={thumbnail} entryId={entry?.id} direct={kernel.directUploads} />
           <noscript>
             <p className="description">Choosing a featured image needs JavaScript.</p>
           </noscript>

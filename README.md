@@ -489,7 +489,11 @@ post types in LearnDash, LifterLMS and Tutor.
   `imageSize()` from plugins), above 2560 a `-scaled` copy with the original kept; sizes are
   oriented and stripped of metadata. Files live in `MediaStorage` (the disk, `CMS_UPLOADS_DIR`,
   unless a plugin provides one) and are served by a generated `/uploads/[...path]` route with
-  ETags, ranges, `nosniff` and a sandbox CSP. `core.upload_files` (Authors and up) and the meta
+  ETags, ranges, `nosniff` and a sandbox CSP. A storage that browsers can upload to
+  (`directUploads`) takes large files straight from them, past the site and its host's limit on
+  a request's size: the site signs an address for a temporary key, then reads the file back and
+  stores it as any upload, type checked by its bytes. The disk has none, and works as before.
+  `core.upload_files` (Authors and up) and the meta
   capabilities `core.edit_media` and `core.delete_media`, mapped onto posts' as WordPress maps
   attachments; files are deleted after the delete commits.
 - **Images in entries.** The editor's Image button and the edit screen's Featured image box

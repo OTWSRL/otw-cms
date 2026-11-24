@@ -140,6 +140,8 @@ export interface Jobs {
   'core.cleanup': Record<string, never>
   /** Daily, like `wp_scheduled_delete`: deletes what has been in the Trash for 30 days. */
   'core.empty_trash': Record<string, never>
+  /** Deletes uploads sent straight to storage that were never finished, once they run out. */
+  'core.media_uploads_sweep': Record<string, never>
   /** Sends one event to one webhook: the delivery, with its retries. */
   'core.deliver_webhook': {
     /** The webhook's id. */

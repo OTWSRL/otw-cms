@@ -461,4 +461,28 @@ export const coreMigrations: Migration[] = [
       )
     },
   },
+  {
+    // Files a browser sends straight to storage, until the site has stored them as uploads.
+    id: '0017_media_uploads',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_media_uploads (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid NOT NULL REFERENCES cms_users(id) ON DELETE CASCADE,
+          key text NOT NULL,
+          filename text NOT NULL,
+          size bigint NOT NULL,
+          entry_id uuid,
+          media_id uuid REFERENCES cms_media(id) ON DELETE SET NULL,
+          claimed_at timestamptz,
+          expires_at timestamptz NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `)
+      await db.execute(sql`CREATE INDEX cms_media_uploads_user_idx ON cms_media_uploads (user_id)`)
+      await db.execute(
+        sql`CREATE INDEX cms_media_uploads_expires_idx ON cms_media_uploads (expires_at)`,
+      )
+    },
+  },
 ]

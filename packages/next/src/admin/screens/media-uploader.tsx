@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import type { DirectUploads, Sent } from '../direct-upload'
 
 const noSubscription = () => () => {}
 
@@ -15,14 +16,10 @@ type Upload =
       item: { id: string; title: string; kind: string; sizes: { thumbnail?: { url: string } } }
     }
 
+type Item = Extract<Upload, { state: 'done' }>['item']
+
 /** Sends one file to the upload API, reporting its progress; resolves with the item or an error. */
-function send(
-  api: string,
-  file: File,
-  onProgress: (percent: number) => void,
-): Promise<
-  { ok: true; item: Extract<Upload, { state: 'done' }>['item'] } | { ok: false; error: string }
-> {
+function send(api: string, file: File, onProgress: (percent: number) => void): Promise<Sent<Item>> {
   return new Promise((resolve) => {
     const form = new FormData()
     form.append('file', file)
@@ -36,7 +33,7 @@ function send(
     request.onload = () => {
       const body = request.response as { error?: string; id?: string } | null
       if (request.status === 201 && body?.id) {
-        resolve({ ok: true, item: body as Extract<Upload, { state: 'done' }>['item'] })
+        resolve({ ok: true, item: body as Item })
       } else {
         resolve({ ok: false, error: body?.error ?? `The upload failed (${request.status}).` })
       }
@@ -57,6 +54,7 @@ export function MediaUploader({
   api,
   maxBytes,
   limit,
+  direct = null,
 }: {
   /** The form's admin action, for uploads without JavaScript. */
   action: string
@@ -65,6 +63,8 @@ export function MediaUploader({
   maxBytes: number
   /** The limit as people read it: "64 MB". */
   limit: string
+  /** Set when the storage takes large files straight from the browser, past the site. */
+  direct?: DirectUploads | null
 }) {
   const [uploads, setUploads] = useState<Upload[]>([])
   const [dragging, setDragging] = useState(false)
@@ -100,9 +100,18 @@ export function MediaUploader({
         { key, name: file.name, state: 'uploading', percent: 0 },
       ])
       queue.current = queue.current.then(async () => {
-        const result = await send(api, file, (percent) =>
-          change(key, { key, name: file.name, state: 'uploading', percent }),
-        )
+        const progress = (percent: number) =>
+          change(key, { key, name: file.name, state: 'uploading', percent })
+        const result =
+          direct && file.size >= direct.minBytes
+            ? await import('../direct-upload').then(
+                ({ sendDirect }) => sendDirect<Item>(api, file, undefined, progress),
+                (): Sent<Item> => ({
+                  ok: false,
+                  error: 'The uploader couldn’t load. Reload the screen.',
+                }),
+              )
+            : await send(api, file, progress)
         change(
           key,
           result.ok
@@ -168,6 +177,11 @@ export function MediaUploader({
             <button type="submit" className="button button-primary">
               Upload
             </button>
+          )}
+          {!enhanced && direct && (
+            <p className="description">
+              Large files need JavaScript here: they go straight to the site’s storage.
+            </p>
           )}
         </div>
       </form>

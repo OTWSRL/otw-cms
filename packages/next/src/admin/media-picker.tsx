@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
+import type { DirectUploads } from './direct-upload'
 
 /** What the picker hands back: a file in the library, as the upload and list APIs send it. */
 export interface PickedMedia {
@@ -29,8 +30,19 @@ type Loaded = { items: PickedMedia[]; pages: number } | { error: string } | null
 function upload(
   file: File,
   entryId: string | undefined,
+  direct: DirectUploads | null,
   onProgress: (percent: number) => void,
 ): Promise<PickedMedia | string> {
+  if (direct && file.size >= direct.minBytes) {
+    // Straight to storage, past the site: its module is fetched only where that's on.
+    return import('./direct-upload').then(
+      async ({ sendDirect }) => {
+        const sent = await sendDirect<PickedMedia>(API, file, entryId, onProgress)
+        return sent.ok ? sent.item : sent.error
+      },
+      () => 'The uploader couldn’t load. Reload the screen.',
+    )
+  }
   return new Promise((resolve) => {
     const form = new FormData()
     form.append('file', file)
@@ -63,6 +75,7 @@ export function MediaPicker({
   title,
   action,
   entryId,
+  direct = null,
   onSelect,
   onClose,
 }: {
@@ -71,6 +84,8 @@ export function MediaPicker({
   action: string
   /** The entry uploads are attached to, when it's been saved. */
   entryId?: string
+  /** Set when the storage takes large files straight from the browser, past the site. */
+  direct?: DirectUploads | null
   onSelect(item: PickedMedia): void
   onClose(): void
 }) {
@@ -121,7 +136,7 @@ export function MediaPicker({
       if (!file) return
       setUploadError('')
       setUploading({ name: file.name, percent: 0 })
-      const result = await upload(file, entryId, (percent) =>
+      const result = await upload(file, entryId, direct, (percent) =>
         setUploading({ name: file.name, percent }),
       )
       setUploading(null)
@@ -137,7 +152,7 @@ export function MediaPicker({
       setSelected(result)
       setTab('library')
     },
-    [entryId],
+    [entryId, direct],
   )
 
   const items = [

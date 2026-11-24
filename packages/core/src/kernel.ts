@@ -64,7 +64,14 @@ import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
 import { createContentService, type ContentService } from './content'
 import { coreImageSizes, createMediaService, ImageSizeStore, type MediaService } from './media'
-import { MEDIA_PATH, mediaActions, mediaListRoute, mediaUploadRoute } from './media-actions'
+import {
+  MEDIA_PATH,
+  mediaActions,
+  mediaDirectUploadRoutes,
+  mediaListRoute,
+  mediaUploadRoute,
+} from './media-actions'
+import { createMediaUploadService } from './media-uploads'
 import { serveUpload } from './media-serve'
 import { createCacheService, createMemoryCache, type MemoryCache } from './cache'
 import { registerCoreEvents } from './core-events'
@@ -309,6 +316,11 @@ export interface Kernel {
   ): Promise<AccountResolution | null>
   /** The largest file one upload may be, in bytes. */
   readonly maxUploadBytes: number
+  /**
+   * Set when the storage takes files straight from the browser: those of `minBytes` or more go
+   * there. `null` with the disk, where every upload goes through the site.
+   */
+  readonly directUploads: { minBytes: number } | null
   /** Answers a request for an upload, `/uploads/{key}`, from the storage. */
   serveUpload(request: Request, key: string): Promise<Response>
   can<C extends CapabilityName | MetaCapabilityName>(
@@ -594,6 +606,11 @@ async function boot(
   const diskStorage = localStorage(options.uploads?.dir ?? resolvePath(DEFAULT_UPLOADS_DIR))
   let pluginStorage: { pluginId: string; storage: MediaStorage } | null = null
   const mediaStorage = () => pluginStorage?.storage ?? diskStorage
+  /** What plugins may do with the disk: read what's there, for copying it elsewhere. */
+  const diskFiles = {
+    read: diskStorage.read.bind(diskStorage),
+    stat: diskStorage.stat.bind(diskStorage),
+  }
   const media = createMediaService({
     db,
     hooks: stores.hooks,
@@ -666,6 +683,18 @@ async function boot(
     const methods = ['create', 'read', 'stat', 'delete', 'url'] as const
     if (!storage || methods.some((method) => typeof storage[method] !== 'function')) {
       throw new TypeError(`Media storage from "${pluginId}" needs ${methods.join(', ')}`)
+    }
+    const direct = storage.directUploads
+    if (
+      direct !== undefined &&
+      (direct === null ||
+        typeof direct.target !== 'function' ||
+        !Number.isSafeInteger(direct.minBytes) ||
+        direct.minBytes < 0)
+    ) {
+      throw new TypeError(
+        `Media storage from "${pluginId}": directUploads needs target() and minBytes, 0 or more`,
+      )
     }
     pluginStorage = { pluginId, storage }
   }
@@ -887,7 +916,24 @@ async function boot(
     webhooks,
     permalinks: (list) => content.permalinks(list),
   })
-  registerCoreJobs({ store: jobStore, db, logger, content, jobs, webhooks, cache })
+  const mediaUploads = createMediaUploadService({
+    db,
+    logger,
+    storage: mediaStorage,
+    media,
+    jobs,
+    maxBytes: maxUploadBytes,
+  })
+  registerCoreJobs({
+    store: jobStore,
+    db,
+    logger,
+    content,
+    jobs,
+    webhooks,
+    cache,
+    uploads: mediaUploads,
+  })
   const actions = coreActions({
     auth,
     signIns,
@@ -1002,6 +1048,7 @@ async function boot(
       stores.capabilities.can(user, capability, ...args),
     transaction: <T>(fn: () => Promise<T>) => db.transaction(() => fn()),
     maxBytes: maxUploadBytes,
+    uploads: mediaUploads,
   }
   for (const action of mediaActions(mediaDependencies)) registerAction(CORE, action)
   const accounts = createAccountService({
@@ -1037,6 +1084,7 @@ async function boot(
     readFlash: (value) => prepared.flash.decode(value),
   })
   registerApi(CORE, mediaUploadRoute(mediaDependencies))
+  for (const route of mediaDirectUploadRoutes(mediaDependencies)) registerApi(CORE, route)
   registerApi(CORE, mediaListRoute(mediaDependencies))
 
   /** These plugins and, transitively, the active plugins they require or optionally use. */
@@ -1257,6 +1305,7 @@ async function boot(
           }
           provideStorage(plugin.id, storage)
         },
+        disk: diskFiles,
       },
       users: {
         ...users,
@@ -1541,6 +1590,7 @@ async function boot(
     media,
     mediaStorage,
     maxUploadBytes,
+    directUploads: () => mediaUploads.direct(),
     mail,
     jobs,
     webhooks,
@@ -1604,6 +1654,7 @@ function buildKernel(input: {
   media: MediaService
   mediaStorage: () => MediaStorage
   maxUploadBytes: number
+  directUploads: () => { minBytes: number } | null
   mail: MailService
   jobs: JobService
   webhooks: WebhookService
@@ -1776,6 +1827,9 @@ function buildKernel(input: {
     resolveAccount: (pathname, searchParams, user, cookies) =>
       input.resolveAccount(pathname, searchParams, user, cookies),
     maxUploadBytes: input.maxUploadBytes,
+    get directUploads() {
+      return input.directUploads()
+    },
     serveUpload: (request, key) => serveUpload(input.mediaStorage(), key, request),
     can: (user, capability, ...args) => capabilities.can(user, capability, ...args),
     roles: () => capabilities.roles(),

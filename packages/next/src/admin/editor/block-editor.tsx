@@ -11,6 +11,7 @@ import {
 } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { DirectUploads } from '../direct-upload'
 import { MediaPicker, type PickedMedia } from '../media-picker'
 
 export interface BlockEditorProps {
@@ -24,6 +25,8 @@ export interface BlockEditorProps {
   label: string
   /** The saved entry, which images uploaded from the editor are attached to. */
   entryId?: string
+  /** Set when the storage takes large files straight from the browser. */
+  direct?: DirectUploads | null
 }
 
 /** What's backed up: the fields an author writes in, as WordPress's `wp.autosave.local` keeps. */
@@ -157,6 +160,7 @@ export function BlockEditor({
   firstSaveKey,
   label,
   entryId,
+  direct,
 }: BlockEditorProps) {
   const [offer, setOffer] = useState<Backup | null>(null)
   const dirty = useRef(false)
@@ -274,7 +278,7 @@ export function BlockEditor({
           </p>
         </div>
       )}
-      {editor && <Toolbar editor={editor} entryId={entryId} />}
+      {editor && <Toolbar editor={editor} entryId={entryId} direct={direct} />}
       <EditorContent editor={editor} />
     </div>
   )
@@ -286,7 +290,15 @@ const BLOCK_TYPES = [
   { value: 'code', label: 'Code' },
 ] as const
 
-function Toolbar({ editor, entryId }: { editor: Editor; entryId?: string }) {
+function Toolbar({
+  editor,
+  entryId,
+  direct,
+}: {
+  editor: Editor
+  entryId?: string
+  direct?: DirectUploads | null
+}) {
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -405,6 +417,7 @@ function Toolbar({ editor, entryId }: { editor: Editor; entryId?: string }) {
           title="Add image"
           action="Insert image"
           entryId={entryId}
+          direct={direct}
           onClose={() => setPicking(false)}
           onSelect={(item) => {
             setPicking(false)

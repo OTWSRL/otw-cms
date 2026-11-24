@@ -19,6 +19,7 @@ export function MediaNewScreen({
         api="/api/p/core/media"
         maxBytes={kernel.maxUploadBytes}
         limit={limit}
+        direct={kernel.directUploads}
       />
       <p className="max-upload-size">Maximum upload file size: {limit}.</p>
     </AdminScreen>

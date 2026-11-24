@@ -1,4 +1,5 @@
 import { definePlugin, HttpError, type SettingPair } from '@otwdesign/sdk'
+import { testBucket } from './bucket'
 
 // The e2e tests' plugin: what a plugin can add to the site and the admin, without a business of
 // its own. Fixed data, so it needs no tables. Courier (../courier) depends on it.
@@ -29,6 +30,8 @@ declare module '@otwdesign/sdk' {
     'library.notify_auth': string
     'library.notify_headers': readonly SettingPair[]
     'library.notify_body': string
+    /** Keeps uploads in the tests' own storage, which takes large files from the browser. */
+    'library.test_bucket': boolean
   }
   interface Capabilities {
     'library.manage_loans': true
@@ -120,9 +123,24 @@ const library = definePlugin({
       maxLength: 1000,
       showWhen: { setting: 'library.notify_via', is: 'webhook' },
     },
+    'library.test_bucket': {
+      type: 'boolean',
+      label: 'Keep uploads in the test bucket',
+      description: 'A storage plugin’s part, for the tests: large files go straight to it.',
+      default: false,
+    },
   },
 
   setup(cms) {
+    // A storage plugin's part, when the tests switch it on. Off, uploads stay on the disk, and
+    // nothing here is registered: the site is as any without a storage plugin.
+    if (cms.settings.get('library.test_bucket')) {
+      const origin = process.env.LIBRARY_ORIGIN ?? 'http://localhost:3100'
+      const bucket = testBucket(origin, cms.routes.apiUrl('/bucket'))
+      cms.media.storage(bucket.storage)
+      cms.routes.api(bucket.put)
+    }
+
     cms.auth.role('librarian', { label: 'Librarian', capabilities: ['core.access_admin'] })
     cms.auth.capability('library.manage_loans', { label: 'Manage loans', roles: ['librarian'] })
     cms.auth.capability('library.manage_settings', {

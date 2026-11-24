@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { DirectUploads } from './direct-upload'
 import { MediaPicker, previewOf, type PickedMedia } from './media-picker'
 
 /**
@@ -11,9 +12,12 @@ import { MediaPicker, previewOf, type PickedMedia } from './media-picker'
 export function FeaturedImage({
   initial,
   entryId,
+  direct,
 }: {
   initial: PickedMedia | null
   entryId?: string
+  /** Set when the storage takes large files straight from the browser. */
+  direct?: DirectUploads | null
 }) {
   const [image, setImage] = useState(initial)
   const [picking, setPicking] = useState(false)
@@ -51,6 +55,7 @@ export function FeaturedImage({
           title="Featured image"
           action="Set featured image"
           entryId={entryId}
+          direct={direct}
           onClose={() => setPicking(false)}
           onSelect={(item) => {
             setImage(item)

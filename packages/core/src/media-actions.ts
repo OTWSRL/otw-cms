@@ -1,7 +1,15 @@
-import type { ApiRoute, CapabilityName, MediaKind, MetaCapabilityName, User } from '@otwdesign/sdk'
+import type {
+  ApiContext,
+  ApiRoute,
+  CapabilityName,
+  MediaKind,
+  MetaCapabilityName,
+  User,
+} from '@otwdesign/sdk'
 import { ActionError, ForbiddenError, HttpError, MediaError } from '@otwdesign/sdk'
 import type { InternalAction } from './admin'
 import { formatBytes, type MediaService } from './media'
+import { MediaUploadError, type MediaUploadService } from './media-uploads'
 
 export interface MediaActionDependencies {
   media: MediaService
@@ -9,6 +17,9 @@ export interface MediaActionDependencies {
   transaction<T>(fn: () => Promise<T>): Promise<T>
   maxBytes: number
 }
+
+/** Room for a direct upload's name, size and entry, as JSON. */
+const MAX_BEGIN_BODY = 4 * 1024
 
 /** Room in a form for its other fields and the multipart boundaries, beside the files. */
 const FORM_OVERHEAD = 64 * 1024
@@ -140,6 +151,96 @@ export function mediaActions(deps: MediaActionDependencies): InternalAction[] {
   ]
 }
 
+/** The signed-in user, who may upload; otherwise the request ends here. */
+async function uploader(deps: MediaActionDependencies, context: ApiContext): Promise<User> {
+  const user = await context.user()
+  if (!user) throw new HttpError(401, 'Sign in to upload files.')
+  if (!deps.can(user, 'core.access_admin') || !deps.can(user, 'core.upload_files')) {
+    throw new ForbiddenError('You are not allowed to upload files.')
+  }
+  return user
+}
+
+/** The status each way a direct upload can't go on gets. */
+const UPLOAD_STATUS: Readonly<Record<MediaUploadError['code'], number>> = {
+  unavailable: 404,
+  not_found: 404,
+  busy: 409,
+  not_sent: 409,
+  expired: 410,
+  too_many: 429,
+}
+
+async function asHttpError<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (error) {
+    if (error instanceof MediaError) throw new HttpError(STATUS[error.code], error.message)
+    if (error instanceof MediaUploadError) {
+      throw new HttpError(UPLOAD_STATUS[error.code], error.message)
+    }
+    throw error
+  }
+}
+
+/**
+ * Uploads sent straight to storage, for hosts that cap a request's size:
+ * `POST /api/p/core/media/uploads` signs an address for one file, the browser sends the bytes
+ * there, and `POST …/uploads/:id/complete` stores it and answers with the item, as
+ * `POST /api/p/core/media` does. `DELETE …/uploads/:id` gives one up.
+ */
+export function mediaDirectUploadRoutes(
+  deps: MediaActionDependencies & { uploads: MediaUploadService },
+): ApiRoute[] {
+  const { uploads } = deps
+  return [
+    {
+      method: 'POST',
+      path: '/media/uploads',
+      async handler(request, context) {
+        const user = await uploader(deps, context)
+        if (!request.headers.get('content-type')?.startsWith('application/json')) {
+          throw new HttpError(415, 'Send the file’s name and size as JSON.')
+        }
+        const text = await request.text()
+        if (text.length > MAX_BEGIN_BODY) throw new HttpError(413, 'That request is too large.')
+        let body: unknown
+        try {
+          body = JSON.parse(text)
+        } catch {
+          body = null
+        }
+        if (typeof body !== 'object' || body === null) {
+          throw new HttpError(400, 'Send the file’s name and size as JSON.')
+        }
+        const { name, size, entry } = body as Record<string, unknown>
+        const begun = await asHttpError(() => uploads.begin(user, { name, size, entry }))
+        return Response.json(begun, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+      },
+    },
+    {
+      method: 'POST',
+      path: '/media/uploads/:id/complete',
+      async handler(_request, context) {
+        const user = await uploader(deps, context)
+        const { item, replay } = await asHttpError(() =>
+          uploads.complete(user, context.params.id ?? ''),
+        )
+        return Response.json(item, { status: replay ? 200 : 201 })
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/media/uploads/:id',
+      async handler(_request, context) {
+        const user = await uploader(deps, context)
+        await uploads.abort(user, context.params.id ?? '')
+        return new Response(null, { status: 204 })
+      },
+    },
+  ]
+}
+
 /**
  * `POST /api/p/core/media`: one file from the drag-and-drop uploader (or the editor), as
  * WordPress's `async-upload.php`. Answers with the item, or `{ error }` with a status.
@@ -149,11 +250,7 @@ export function mediaUploadRoute(deps: MediaActionDependencies): ApiRoute {
     method: 'POST',
     path: '/media',
     async handler(request, context) {
-      const user = await context.user()
-      if (!user) throw new HttpError(401, 'Sign in to upload files.')
-      if (!deps.can(user, 'core.access_admin') || !deps.can(user, 'core.upload_files')) {
-        throw new ForbiddenError('You are not allowed to upload files.')
-      }
+      const user = await uploader(deps, context)
       const length = Number(request.headers.get('content-length') ?? NaN)
       if (!Number.isSafeInteger(length)) throw new HttpError(411, 'Send the file with its length.')
       if (length > deps.maxBytes + FORM_OVERHEAD) {
