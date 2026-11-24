@@ -58,6 +58,7 @@ describe('cms migrate', () => {
         'core/0015_cache',
         'core/0016_sign_in_steps',
         'core/0017_media_uploads',
+        'core/0018_media_uploads_abandoned',
         'shop/0001_products',
       ],
       backup: null,

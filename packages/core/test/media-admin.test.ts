@@ -1,6 +1,16 @@
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import { bootKernel, formPost, multipartPost, ORIGIN, redirectOf, signIn, tempDir } from './helpers'
+import { localStorage } from '../src/media-storage'
+import {
+  bootKernel,
+  formPost,
+  multipartPost,
+  ORIGIN,
+  plugin,
+  redirectOf,
+  signIn,
+  tempDir,
+} from './helpers'
 
 const bytes = (value: string) => new TextEncoder().encode(value)
 const jpeg = async () =>
@@ -224,6 +234,75 @@ describe('Media › Add New, Edit Media and Delete Permanently', () => {
     const row = redirectOf(kernel, await remove(author.cookie, { id: third.id, ids: [item.id] }))
     expect(row.flash?.message).toBe('Media file permanently deleted.')
     expect((await kernel.media.list()).total).toBe(0)
+  })
+})
+
+describe('serving uploads from a storage that costs a request each time', () => {
+  /** A storage that counts what it's asked. */
+  async function counted() {
+    const disk = localStorage(tempDir())
+    const calls: string[] = []
+    const kernel = await bootKernel({
+      plugins: [
+        plugin('bucket', {
+          setup(cms) {
+            cms.media.storage({
+              ...disk,
+              stat(key) {
+                calls.push('stat')
+                return disk.stat(key)
+              },
+              read(key, range) {
+                calls.push(range ? 'read range' : 'read')
+                return disk.read(key, range)
+              },
+            })
+          },
+        }),
+      ],
+    })
+    const item = await kernel.media.upload({ name: 'notes.txt', data: bytes('0123456789') })
+    calls.length = 0
+    return { kernel, item, calls }
+  }
+
+  it('asks once for a plain request, and only for what it needs otherwise', async () => {
+    const { kernel, item, calls } = await counted()
+    const plain = await kernel.serveUpload(get(item.file), item.file)
+    expect(plain.status).toBe(200)
+    expect(await plain.text()).toBe('0123456789')
+    expect(plain.headers.get('content-length')).toBe('10')
+    expect(calls).toEqual(['read'])
+
+    calls.length = 0
+    const etag = plain.headers.get('etag')!
+    expect(
+      (await kernel.serveUpload(get(item.file, { 'if-none-match': etag }), item.file)).status,
+    ).toBe(304)
+    expect(calls).toEqual(['stat'])
+
+    calls.length = 0
+    expect((await kernel.serveUpload(get(item.file, {}, 'HEAD'), item.file)).status).toBe(200)
+    expect(calls).toEqual(['stat'])
+
+    calls.length = 0
+    const part = await kernel.serveUpload(get(item.file, { range: 'bytes=2-5' }), item.file)
+    expect(await part.text()).toBe('2345')
+    expect(calls).toEqual(['stat', 'read range'])
+
+    calls.length = 0
+    expect(
+      (await kernel.serveUpload(get('2026/11/missing.txt'), '2026/11/missing.txt')).status,
+    ).toBe(404)
+    expect(calls).toEqual(['read'])
+  })
+
+  it('never serves a waiting upload, at the top of the storage or inside a folder', async () => {
+    const { kernel, calls } = await counted()
+    for (const key of ['_uploads/abc', 'other-site/_uploads/abc', 'a/b/_uploads/abc']) {
+      expect((await kernel.serveUpload(get(key), key)).status).toBe(404)
+    }
+    expect(calls).toEqual([])
   })
 })
 

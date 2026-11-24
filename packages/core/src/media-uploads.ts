@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Logger, MediaItem, MediaStorage, UploadTarget, User } from '@otwdesign/sdk'
 import { MediaError } from '@otwdesign/sdk'
-import { and, asc, eq, gt, inArray, isNull, lt, lte, min, or, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, lte, min, or, sql } from 'drizzle-orm'
 import { mediaUploads } from './core-schema'
 import type { DatabaseContext } from './database'
 import type { JobService } from './jobs'
@@ -13,6 +13,13 @@ export const SWEEP_JOB = 'core.media_uploads_sweep'
 export const TARGET_TTL_MS = 15 * 60 * 1000
 /** Uploads one account may have under way: each can hold a file in storage until it runs out. */
 export const MAX_PENDING_UPLOADS = 20
+/**
+ * Uploads one account may have given up, or had refused, and not yet swept. Their signed
+ * addresses still take bytes, so they're counted too, apart from those under way.
+ */
+export const MAX_ABANDONED_UPLOADS = 100
+/** Tries at storing one upload before it's given up: a file that fails every time always will. */
+export const MAX_COMPLETE_ATTEMPTS = 5
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_NAME = 255
@@ -23,6 +30,8 @@ const MAX_WAIT_SECONDS = 24 * 60 * 60
 /** How long one `complete` may take before another may try: longer than any function runs. */
 const CLAIM = sql`interval '5 minutes'`
 const SWEEP_BATCH = 100
+/** The shortest wait before the sweep looks again at what it left. */
+const SWEEP_PAUSE_MS = 60_000
 const SWEEP_KEY = 'sweep'
 
 /** Why a direct upload couldn't go on; `MediaError` says what's wrong with the file itself. */
@@ -81,11 +90,14 @@ function checkedTarget(target: UploadTarget): UploadTarget {
     typeof headers === 'object' &&
     headers !== null &&
     Object.values(headers).every((value) => typeof value === 'string')
+  // A header's name is a token: anything else a browser refuses to set, and the upload stops.
+  const named =
+    plain && Object.keys(headers).every((name) => /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(name))
   if (
     typeof target?.url !== 'string' ||
     !/^https?:\/\//i.test(target.url) ||
     target.method !== 'PUT' ||
-    !plain
+    !named
   ) {
     throw new TypeError('The media storage answered an upload target that can’t be used')
   }
@@ -98,6 +110,19 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
     isNull(mediaUploads.claimedAt),
     lt(mediaUploads.claimedAt, sql`now() - ${CLAIM}`),
   )
+  const waiting = and(isNull(mediaUploads.mediaId), isNull(mediaUploads.abandonedAt))
+
+  /**
+   * Gives an upload up without forgetting it: its signed address goes on taking bytes until it
+   * runs out, so the row stays for the sweep to delete whatever arrives after this.
+   */
+  const abandon = async (id: string, key: string) => {
+    await db.current
+      .update(mediaUploads)
+      .set({ abandonedAt: sql`now()`, claimedAt: null })
+      .where(eq(mediaUploads.id, id))
+    await remove(key)
+  }
 
   /** Deletes a waiting file, logging rather than throwing: the sweep can't do better either. */
   const remove = async (key: string) => {
@@ -143,6 +168,7 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
     const [row] = await db.current
       .select({
         mediaId: mediaUploads.mediaId,
+        abandoned: sql<boolean>`${mediaUploads.abandonedAt} IS NOT NULL`,
         expired: sql<boolean>`${mediaUploads.expiresAt} <= now()`,
       })
       .from(mediaUploads)
@@ -150,7 +176,7 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
       .limit(1)
     const item = row?.mediaId ? await media.get(row.mediaId) : null
     if (item) return { item, replay: true }
-    if (!row || row.mediaId) {
+    if (!row || row.mediaId || row.abandoned) {
       throw new MediaUploadError('not_found', 'That upload no longer exists. Start it again.')
     }
     if (row.expired) {
@@ -173,7 +199,12 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
         throw new MediaUploadError('unavailable', 'This site takes uploads through its own form.')
       }
       const { name, size } = input
-      if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_NAME) {
+      if (
+        typeof name !== 'string' ||
+        name.trim() === '' ||
+        name.length > MAX_NAME ||
+        /\p{Cc}/u.test(name)
+      ) {
         invalid('Send the file’s name.')
       }
       if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1) {
@@ -191,37 +222,52 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
       }
       await media.accepts(name, user.id)
 
-      const [waiting] = await db.current
-        .select({ count: sql<number>`count(*)`.mapWith(Number) })
-        .from(mediaUploads)
-        .where(
-          and(
-            eq(mediaUploads.userId, user.id),
-            isNull(mediaUploads.mediaId),
-            gt(mediaUploads.expiresAt, sql`now()`),
-          ),
-        )
-      if ((waiting?.count ?? 0) >= MAX_PENDING_UPLOADS) {
-        throw new MediaUploadError(
-          'too_many',
-          'Too many uploads are under way. Wait for some to finish.',
-        )
-      }
-
       const id = randomUUID()
       const key = tempKey(id)
       const wait = Math.min(
         MAX_WAIT_SECONDS,
         Math.max(MIN_WAIT_SECONDS, Math.ceil(size / SLOW_BYTES_PER_SECOND)),
       )
-      await db.current.insert(mediaUploads).values({
-        id,
-        userId: user.id,
-        key,
-        filename: name,
-        size,
-        entryId: entry,
-        expiresAt: sql`now() + make_interval(secs => ${wait})`,
+      // Counted and added as one step for the account, so begins sent together can't all slip
+      // under the limit.
+      await db.transaction(async () => {
+        await db.current.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`media-uploads:${user.id}`}, 0))`,
+        )
+        const [counts] = await db.current
+          .select({
+            waiting:
+              sql<number>`count(*) FILTER (WHERE ${mediaUploads.abandonedAt} IS NULL AND ${mediaUploads.mediaId} IS NULL)`.mapWith(
+                Number,
+              ),
+            abandoned:
+              sql<number>`count(*) FILTER (WHERE ${mediaUploads.abandonedAt} IS NOT NULL)`.mapWith(
+                Number,
+              ),
+          })
+          .from(mediaUploads)
+          .where(and(eq(mediaUploads.userId, user.id), gt(mediaUploads.expiresAt, sql`now()`)))
+        if ((counts?.waiting ?? 0) >= MAX_PENDING_UPLOADS) {
+          throw new MediaUploadError(
+            'too_many',
+            'Too many uploads are under way. Wait for some to finish.',
+          )
+        }
+        if ((counts?.abandoned ?? 0) >= MAX_ABANDONED_UPLOADS) {
+          throw new MediaUploadError(
+            'too_many',
+            'Too many uploads were given up lately. Try again in an hour.',
+          )
+        }
+        await db.current.insert(mediaUploads).values({
+          id,
+          userId: user.id,
+          key,
+          filename: name,
+          size,
+          entryId: entry,
+          expiresAt: sql`now() + make_interval(secs => ${wait})`,
+        })
       })
       const expiresAt = new Date(Date.now() + TARGET_TTL_MS)
       let target: UploadTarget
@@ -242,18 +288,21 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
       // One request stores it, however many ask: the claim is one statement.
       const [row] = await db.current
         .update(mediaUploads)
-        .set({ claimedAt: sql`now()` })
+        .set({ claimedAt: sql`now()`, attempts: sql`${mediaUploads.attempts} + 1` })
         .where(
           and(
             eq(mediaUploads.id, id),
             eq(mediaUploads.userId, user.id),
-            isNull(mediaUploads.mediaId),
+            waiting,
             gt(mediaUploads.expiresAt, sql`now()`),
             unclaimed,
           ),
         )
         .returning()
       if (!row) return unclaimable(user, id)
+      // Only the request holding this claim may let go of it, or give the upload up. Each claim
+      // counts a try, so the count names the claim.
+      const mine = and(eq(mediaUploads.id, row.id), eq(mediaUploads.attempts, row.attempts))
 
       try {
         const data = await sent(row.key, row.size)
@@ -262,26 +311,34 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
           { by: user.id, ...(row.entryId ? { entryId: row.entryId } : {}) },
           // In the item's own transaction: an upload is finished exactly when its item exists.
           async (stored) => {
-            await db.current
+            const [finished] = await db.current
               .update(mediaUploads)
               .set({ mediaId: stored.id })
-              .where(eq(mediaUploads.id, row.id))
+              .where(and(mine, waiting))
+              .returning({ id: mediaUploads.id })
+            // Another request took it over while this one was slow: its item stands, not this.
+            if (!finished) {
+              throw new MediaUploadError('busy', 'That upload is being stored already.')
+            }
           },
         )
         await remove(row.key)
         return { item, replay: false }
       } catch (error) {
         try {
-          if (error instanceof MediaError) {
-            // The file itself was refused: sending it again would change nothing.
-            await remove(row.key)
-            await db.current.delete(mediaUploads).where(eq(mediaUploads.id, row.id))
+          const [held] = await db.current
+            .select({ id: mediaUploads.id })
+            .from(mediaUploads)
+            .where(and(mine, waiting))
+            .limit(1)
+          if (!held) {
+            // No longer this request's to tidy: another has it, or it's finished.
+          } else if (error instanceof MediaError || row.attempts >= MAX_COMPLETE_ATTEMPTS) {
+            // The file itself was refused, or fails every time: asking again would change nothing.
+            await abandon(row.id, row.key)
           } else {
             // A passing problem: the browser may ask again.
-            await db.current
-              .update(mediaUploads)
-              .set({ claimedAt: null })
-              .where(eq(mediaUploads.id, row.id))
+            await db.current.update(mediaUploads).set({ claimedAt: null }).where(mine)
           }
         } catch (cleanup) {
           logger.error('Could not tidy up after a direct upload failed', { upload: id, cleanup })
@@ -293,24 +350,24 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
     async abort(user, id) {
       if (typeof id !== 'string' || !UUID.test(id)) return
       const [row] = await db.current
-        .delete(mediaUploads)
-        .where(
-          and(
-            eq(mediaUploads.id, id),
-            eq(mediaUploads.userId, user.id),
-            isNull(mediaUploads.mediaId),
-            unclaimed,
-          ),
-        )
-        .returning({ key: mediaUploads.key })
-      if (row) await remove(row.key)
+        .select({ id: mediaUploads.id, key: mediaUploads.key })
+        .from(mediaUploads)
+        .where(and(eq(mediaUploads.id, id), eq(mediaUploads.userId, user.id), waiting, unclaimed))
+        .limit(1)
+      if (row) await abandon(row.id, row.key)
     },
 
     async sweep() {
       const expired = await db.root
         .select({ id: mediaUploads.id, key: mediaUploads.key })
         .from(mediaUploads)
-        .where(lte(mediaUploads.expiresAt, sql`now()`))
+        // One being stored this moment is left for the next sweep: its file is being read.
+        .where(
+          and(
+            lte(mediaUploads.expiresAt, sql`now()`),
+            or(unclaimed, isNotNull(mediaUploads.mediaId), isNotNull(mediaUploads.abandonedAt)),
+          ),
+        )
         .orderBy(asc(mediaUploads.expiresAt))
         .limit(SWEEP_BATCH)
       for (const { key } of expired) await remove(key)
@@ -322,9 +379,13 @@ export function createMediaUploadService(options: MediaUploadServiceOptions): Me
           ),
         )
       }
-      // The next to run out, if any are left: a site with none stops sweeping.
+      // The next to run out, if any are left: a site with none stops sweeping. At once after a
+      // full batch; otherwise no sooner than a minute, so one left for later isn't spun on.
       const [next] = await db.root.select({ at: min(mediaUploads.expiresAt) }).from(mediaUploads)
-      if (next?.at) await queueSweep(new Date(Math.max(next.at.getTime(), Date.now())))
+      if (next?.at) {
+        const soonest = Date.now() + (expired.length === SWEEP_BATCH ? 0 : SWEEP_PAUSE_MS)
+        await queueSweep(new Date(Math.max(next.at.getTime(), soonest)))
+      }
       return expired.length
     },
   }

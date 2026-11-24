@@ -85,9 +85,14 @@ export function tempKey(id: string): string {
   return `${TEMP_PREFIX}${id}`
 }
 
-/** Whether `key` is a waiting direct upload's, which is never served. */
+const TEMP_FOLDER = TEMP_PREFIX.slice(0, -1)
+
+/**
+ * Whether `key` is a waiting direct upload's, which is never served: under `_uploads/`, at the
+ * top or inside any folder, so another site's waiting files in a shared bucket aren't either.
+ */
 export function isTempKey(key: string): boolean {
-  return key.startsWith(TEMP_PREFIX)
+  return key.split('/').slice(0, -1).includes(TEMP_FOLDER)
 }
 
 const SEGMENT = /^[a-z0-9_-][a-z0-9._-]*$/i

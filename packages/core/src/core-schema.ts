@@ -226,9 +226,8 @@ export const mediaUploads = pgTable(
   'cms_media_uploads',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Who began it. Kept, without them, when they're deleted: its file must still be swept. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     /** Where the bytes wait in storage: `_uploads/{id}`. */
     key: text('key').notNull(),
     /** The file's name as the browser has it. */
@@ -241,6 +240,13 @@ export const mediaUploads = pgTable(
     mediaId: uuid('media_id').references(() => media.id, { onDelete: 'set null' }),
     /** When a request began storing it, so two don't. */
     claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    /** How many times storing it has been tried: a file that keeps failing is given up. */
+    attempts: integer('attempts').notNull().default(0),
+    /**
+     * When it was given up or refused. The row stays until it runs out, because the signed
+     * address still takes bytes until then: the sweep deletes whatever arrives.
+     */
+    abandonedAt: timestamp('abandoned_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

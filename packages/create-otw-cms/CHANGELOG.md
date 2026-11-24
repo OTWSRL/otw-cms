@@ -1,5 +1,23 @@
 # create-otw-cms
 
+## 1.9.1
+
+### Patch Changes
+
+- Direct uploads, hardened after a security review, and files served with one storage call:
+
+  - An upload that's given up or refused keeps its record until its signed address has run out,
+    so bytes sent afterwards are swept, not left in storage; given-up uploads count against the
+    account, and a deleted account's uploads are still swept.
+  - Beginning an upload is refused by its length before its body is read; the limit of twenty
+    under way holds when requests come together; a name with control characters is refused.
+  - An image whose pixels don't decode is refused as not an image (it was a server error), and an
+    upload that fails five times is given up.
+  - Two requests can no longer both store one upload; the sweep leaves alone one being stored.
+  - A waiting upload is never served from inside a folder either, for buckets two sites share.
+  - `/uploads/…`: a plain request asks the storage once, not twice.
+  - The testing kit sends a body's length, as browsers do.
+
 ## 1.9.0
 
 ### Minor Changes

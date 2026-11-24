@@ -202,6 +202,10 @@ export function mediaDirectUploadRoutes(
         if (!request.headers.get('content-type')?.startsWith('application/json')) {
           throw new HttpError(415, 'Send the file’s name and size as JSON.')
         }
+        // Checked from its length before a byte is read, as the upload route does.
+        const length = Number(request.headers.get('content-length') ?? NaN)
+        if (!Number.isSafeInteger(length)) throw new HttpError(411, 'Send the request’s length.')
+        if (length > MAX_BEGIN_BODY) throw new HttpError(413, 'That request is too large.')
         const text = await request.text()
         if (text.length > MAX_BEGIN_BODY) throw new HttpError(413, 'That request is too large.')
         let body: unknown

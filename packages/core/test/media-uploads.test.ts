@@ -61,6 +61,8 @@ async function boot(store = directStorage(), maxBytes?: number) {
   return { kernel, store }
 }
 
+const encoded = (body: unknown) => (typeof body === 'string' ? body : JSON.stringify(body))
+
 const api = (
   kernel: Kernel,
   method: string,
@@ -75,12 +77,16 @@ const api = (
       headers: {
         origin: ORIGIN,
         ...(cookie ? { cookie } : {}),
-        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        // Sent with its length, as browsers send a body.
+        ...(body === undefined
+          ? {}
+          : {
+              'content-type': 'application/json',
+              'content-length': String(Buffer.byteLength(encoded(body))),
+            }),
         ...headers,
       },
-      ...(body === undefined
-        ? {}
-        : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: encoded(body) }),
     }),
   )
 
@@ -106,11 +112,31 @@ async function begin(kernel: Kernel, cookie: string, name: string, size: number,
 const rows = async <T>(kernel: Kernel, query: Parameters<Kernel['db']['execute']>[0]) =>
   ((await kernel.db.execute(query)) as unknown as { rows: T[] }).rows
 
+/** The uploads under way or finished: not those given up, which wait only to be swept. */
 const pendingRows = (kernel: Kernel) =>
   rows<{ id: string; key: string; media_id: string | null }>(
     kernel,
-    sql`SELECT id, key, media_id FROM cms_media_uploads ORDER BY created_at`,
+    sql`SELECT id, key, media_id FROM cms_media_uploads WHERE abandoned_at IS NULL ORDER BY created_at`,
   )
+
+const abandonedIds = async (kernel: Kernel) =>
+  (
+    await rows<{ id: string }>(
+      kernel,
+      sql`SELECT id FROM cms_media_uploads WHERE abandoned_at IS NOT NULL ORDER BY created_at`,
+    )
+  ).map((row) => row.id)
+
+/** Runs the sweep now, as if every upload's time had come. */
+async function sweepNow(kernel: Kernel) {
+  await kernel.db.execute(
+    sql`UPDATE cms_media_uploads SET expires_at = now() - interval '1 minute'`,
+  )
+  await kernel.db.execute(
+    sql`UPDATE cms_jobs SET run_at = now() WHERE name = 'core.media_uploads_sweep' AND status = 'pending'`,
+  )
+  return (await kernel.jobs.runDue()).ran
+}
 
 describe('a site whose uploads go through it', () => {
   it('offers no direct uploads, and lets a plugin read the disk’s files', async () => {
@@ -497,5 +523,193 @@ describe('uploads never finished', () => {
     // A gigabyte at 64 KiB a second.
     expect(await hours(large.id)).toBeCloseTo(4.55, 1)
     expect(await hours(huge.id)).toBeCloseTo(24, 1)
+  })
+})
+
+describe('what a signed address can still do after its upload is over', () => {
+  it('keeps a given-up upload until it runs out, so bytes that arrive late are swept', async () => {
+    const { kernel, store } = await boot()
+    const { cookie } = await signIn(kernel, 'author')
+    const begun = await begin(kernel, cookie, 'notes.txt', 4)
+    expect((await api(kernel, 'DELETE', `/${begun.id}`, cookie)).status).toBe(204)
+    expect(await abandonedIds(kernel)).toEqual([begun.id])
+    // The address is still good for a quarter of an hour: the bytes are sent after all.
+    await store.put(`_uploads/${begun.id}`, bytes('late'))
+    // It can't be finished any more: nothing unchecked becomes an upload this way.
+    expect((await api(kernel, 'POST', `/${begun.id}/complete`, cookie)).status).toBe(404)
+    expect(await sweepNow(kernel)).toBe(1)
+    expect(await store.has(`_uploads/${begun.id}`)).toBe(false)
+    expect(await abandonedIds(kernel)).toEqual([])
+  })
+
+  it('keeps a refused upload the same way, and a finished one until it runs out', async () => {
+    const { kernel, store } = await boot()
+    const { cookie } = await signIn(kernel, 'author')
+    const page = bytes('<script>alert(1)</script>')
+    const refused = await begin(kernel, cookie, 'photo.jpg', page.byteLength)
+    await store.put(`_uploads/${refused.id}`, page)
+    expect((await api(kernel, 'POST', `/${refused.id}/complete`, cookie)).status).toBe(415)
+    const kept = await begin(kernel, cookie, 'notes.txt', 4)
+    await store.put(`_uploads/${kept.id}`, bytes('kept'))
+    expect((await api(kernel, 'POST', `/${kept.id}/complete`, cookie)).status).toBe(201)
+    // Both addresses are used again.
+    await store.put(`_uploads/${refused.id}`, page)
+    await store.put(`_uploads/${kept.id}`, bytes('again'))
+    await sweepNow(kernel)
+    expect(await store.has(`_uploads/${refused.id}`)).toBe(false)
+    expect(await store.has(`_uploads/${kept.id}`)).toBe(false)
+    expect((await kernel.media.list()).total).toBe(1)
+  })
+
+  it('counts uploads given up against the account, so giving up isn’t a way round the limit', async () => {
+    const { kernel } = await boot()
+    const { cookie } = await signIn(kernel, 'author')
+    for (let count = 0; count < 100; count++) {
+      const begun = await begin(kernel, cookie, `file-${count}.txt`, 10)
+      await api(kernel, 'DELETE', `/${begun.id}`, cookie)
+    }
+    const response = await api(kernel, 'POST', '', cookie, { name: 'more.txt', size: 10 })
+    expect(response.status).toBe(429)
+    expect(await response.json()).toEqual({
+      error: 'Too many uploads were given up lately. Try again in an hour.',
+    })
+  })
+
+  it('keeps a deleted account’s uploads to be swept', async () => {
+    const { kernel, store } = await boot()
+    const { user, cookie } = await signIn(kernel, 'author')
+    const begun = await begin(kernel, cookie, 'notes.txt', 4)
+    await store.put(`_uploads/${begun.id}`, bytes('left'))
+    await kernel.db.execute(sql`DELETE FROM cms_users WHERE id = ${user.id}`)
+    expect(await pendingRows(kernel)).toHaveLength(1)
+    await sweepNow(kernel)
+    expect(await store.has(`_uploads/${begun.id}`)).toBe(false)
+  })
+})
+
+describe('limits that hold when requests come together', () => {
+  it('lets twenty in, however many begin at once', async () => {
+    const { kernel } = await boot()
+    const { cookie } = await signIn(kernel, 'author')
+    const statuses = (
+      await Promise.all(
+        Array.from({ length: 30 }, (_, count) =>
+          api(kernel, 'POST', '', cookie, { name: `file-${count}.txt`, size: 10 }),
+        ),
+      )
+    ).map((response) => response.status)
+    expect(statuses.filter((status) => status === 201)).toHaveLength(MAX_PENDING_UPLOADS)
+    expect(statuses.filter((status) => status === 429)).toHaveLength(10)
+    expect(await pendingRows(kernel)).toHaveLength(MAX_PENDING_UPLOADS)
+  })
+
+  it('refuses a begin without its length, or too long, before reading it', async () => {
+    const { kernel } = await boot()
+    const { cookie } = await signIn(kernel, 'author')
+    const send = (headers: Record<string, string>, body: string) =>
+      kernel.handleApi(
+        new Request(new URL('/api/p/core/media/uploads', ORIGIN), {
+          method: 'POST',
+          headers: { origin: ORIGIN, cookie, 'content-type': 'application/json', ...headers },
+          body,
+        }),
+      )
+    expect((await send({}, '{"name":"a.txt","size":3}')).status).toBe(411)
+    // Its length says it's too long: refused on that alone.
+    const long = await send({ 'content-length': '5000' }, '{"name":"a.txt","size":3}')
+    expect(long.status).toBe(413)
+    expect(await pendingRows(kernel)).toEqual([])
+  })
+
+  it('refuses a name with control characters, and a storage whose header names aren’t names', async () => {
+    const store = directStorage()
+    const { kernel } = await boot(store)
+    const { cookie } = await signIn(kernel, 'author')
+    const named = await api(kernel, 'POST', '', cookie, { name: 'a\u0000.txt', size: 3 })
+    expect(named.status).toBe(400)
+    store.storage.directUploads!.target = async () => ({
+      url: 'https://storage.test/x',
+      method: 'PUT',
+      headers: { 'bad header\r\nx': '1' },
+    })
+    expect((await api(kernel, 'POST', '', cookie, { name: 'a.txt', size: 3 })).status).toBe(500)
+    expect(await pendingRows(kernel)).toEqual([])
+  })
+})
+
+describe('a file that can never be stored', () => {
+  it('is refused as not an image when its pixels don’t decode, on either route', async () => {
+    const { kernel, store } = await boot()
+    const { cookie } = await signIn(kernel, 'author')
+    const whole = await jpeg(800, 600)
+    // Its header says a JPEG of 800 by 600; the rest is cut off.
+    const cut = whole.subarray(0, Math.floor(whole.byteLength / 3))
+    await expect(kernel.media.upload({ name: 'cut.jpg', data: cut })).rejects.toMatchObject({
+      code: 'file_type',
+      message: "The file isn't a valid JPG image.",
+    })
+    const begun = await begin(kernel, cookie, 'cut.jpg', cut.byteLength)
+    await store.put(`_uploads/${begun.id}`, cut)
+    expect((await api(kernel, 'POST', `/${begun.id}/complete`, cookie)).status).toBe(415)
+    expect((await api(kernel, 'POST', `/${begun.id}/complete`, cookie)).status).toBe(404)
+    expect(await store.has(`_uploads/${begun.id}`)).toBe(false)
+  })
+
+  it('is given up after five tries that fail, not read from storage for ever', async () => {
+    const store = directStorage()
+    const { kernel } = await boot(store)
+    const { cookie } = await signIn(kernel, 'author')
+    const data = bytes('never stored')
+    const begun = await begin(kernel, cookie, 'notes.txt', data.byteLength)
+    await store.put(`_uploads/${begun.id}`, data)
+    let creates = 0
+    store.storage.create = async () => {
+      creates++
+      throw new Error('The bucket is unreachable')
+    }
+    const statuses = []
+    for (let tries = 0; tries < 7; tries++) {
+      statuses.push((await api(kernel, 'POST', `/${begun.id}/complete`, cookie)).status)
+    }
+    expect(statuses).toEqual([500, 500, 500, 500, 500, 404, 404])
+    expect(creates).toBe(5)
+    expect(await abandonedIds(kernel)).toEqual([begun.id])
+  })
+})
+
+describe('two requests storing one upload', () => {
+  it('makes one item when a slow request’s claim is taken over', async () => {
+    const store = directStorage()
+    const { kernel } = await boot(store)
+    const { cookie } = await signIn(kernel, 'author')
+    const data = bytes('stored once')
+    const begun = await begin(kernel, cookie, 'notes.txt', data.byteLength)
+    await store.put(`_uploads/${begun.id}`, data)
+
+    // The first request stalls while writing the file, for longer than a claim lasts.
+    const create = store.storage.create.bind(store.storage)
+    let release!: () => void
+    const stalled = new Promise<void>((resolve) => (release = resolve))
+    let first = true
+    store.storage.create = async (key, bytesToStore, type) => {
+      if (first) {
+        first = false
+        await stalled
+      }
+      return create(key, bytesToStore, type)
+    }
+    const slow = api(kernel, 'POST', `/${begun.id}/complete`, cookie)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await kernel.db.execute(
+      sql`UPDATE cms_media_uploads SET claimed_at = now() - interval '6 minutes' WHERE id = ${begun.id}`,
+    )
+    const quick = await api(kernel, 'POST', `/${begun.id}/complete`, cookie)
+    expect(quick.status).toBe(201)
+    release()
+    expect((await slow).status).toBe(409)
+    expect((await kernel.media.list()).total).toBe(1)
+    // And the slow one's files are gone again: only the item's own remain.
+    const item = (await kernel.media.list()).items[0]!
+    expect(await store.has(item.file)).toBe(true)
   })
 })

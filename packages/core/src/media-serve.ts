@@ -57,7 +57,15 @@ export async function serveUpload(
 ): Promise<Response> {
   // A file waiting to be checked isn't an upload yet: nothing serves it.
   if (!isSafeKey(key) || isTempKey(key)) return notFound()
-  const info = await storage.stat(key)
+  // A plain request for the whole file asks the storage once: the bytes come with their size
+  // and date. Only a range, a revalidation or a HEAD needs those first.
+  const plain =
+    request.method !== 'HEAD' &&
+    !request.headers.has('range') &&
+    !request.headers.has('if-none-match') &&
+    !request.headers.has('if-modified-since')
+  const whole = plain ? await storage.read(key) : null
+  const info = plain ? whole : await storage.stat(key)
   if (!info) return notFound()
 
   const extension = key.slice(key.lastIndexOf('.') + 1)
@@ -96,7 +104,7 @@ export async function serveUpload(
   const status = range ? 206 : 200
   if (request.method === 'HEAD') return new Response(null, { status, headers })
 
-  const file = await storage.read(key, range ?? undefined)
+  const file = whole ?? (await storage.read(key, range ?? undefined))
   if (!file) return notFound()
   return new Response(file.body, { status, headers })
 }

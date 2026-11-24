@@ -35,8 +35,14 @@ function put(target: Begun, file: File, onProgress: (percent: number) => void) {
     // XMLHttpRequest, not fetch: only it reports how much of the upload has been sent.
     const request = new XMLHttpRequest()
     request.open('PUT', target.url)
-    for (const [name, value] of Object.entries(target.headers)) {
-      if (!BROWSER_SET.has(name.toLowerCase())) request.setRequestHeader(name, value)
+    try {
+      for (const [name, value] of Object.entries(target.headers)) {
+        if (!BROWSER_SET.has(name.toLowerCase())) request.setRequestHeader(name, value)
+      }
+    } catch {
+      // A header the browser won't set: said as a failure, so the files after this still go.
+      resolve('The storage asked for something this browser can’t send.')
+      return
     }
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100))

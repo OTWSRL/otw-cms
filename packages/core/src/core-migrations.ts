@@ -485,4 +485,23 @@ export const coreMigrations: Migration[] = [
       )
     },
   },
+  {
+    // An upload given up keeps its row until its signed address has run out, so the sweep
+    // deletes what arrives late; and a deleted user's uploads stay to be swept too.
+    id: '0018_media_uploads_abandoned',
+    up: async (db) => {
+      await db.execute(sql`ALTER TABLE cms_media_uploads ADD COLUMN abandoned_at timestamptz`)
+      await db.execute(
+        sql`ALTER TABLE cms_media_uploads ADD COLUMN attempts integer NOT NULL DEFAULT 0`,
+      )
+      await db.execute(sql`ALTER TABLE cms_media_uploads ALTER COLUMN user_id DROP NOT NULL`)
+      await db.execute(
+        sql`ALTER TABLE cms_media_uploads DROP CONSTRAINT cms_media_uploads_user_id_fkey`,
+      )
+      await db.execute(sql`
+        ALTER TABLE cms_media_uploads ADD CONSTRAINT cms_media_uploads_user_id_fkey
+          FOREIGN KEY (user_id) REFERENCES cms_users(id) ON DELETE SET NULL
+      `)
+    },
+  },
 ]

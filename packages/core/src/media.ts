@@ -391,7 +391,19 @@ export function createMediaService(options: MediaServiceOptions): InternalMediaS
     const entryId =
       uploadOptions.entryId === undefined ? null : await entryRef(uploadOptions.entryId)
 
-    const processed = image ? await processImage(data, image, options.imageSizes()) : null
+    let processed: ProcessedImage | null = null
+    if (image) {
+      try {
+        processed = await processImage(data, image, options.imageSizes())
+      } catch (error) {
+        // Its header read as an image's, but its pixels don't decode: cut short, or damaged.
+        logger.warn('An uploaded image could not be processed', { error })
+        throw new MediaError(
+          'file_type',
+          `The file isn't a valid ${name.extension.toUpperCase()} image.`,
+        )
+      }
+    }
     const createdAt = new Date()
     const folder = uploadFolder(createdAt, options.byMonth())
     const { keys, written } = await writeFiles(folder, name, data, mimeType, processed)

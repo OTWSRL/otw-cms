@@ -191,5 +191,9 @@ function buildRequest(method: string, path: string, init: TestRequestInit): Requ
     headers.set('content-type', 'application/x-www-form-urlencoded')
     body = new URLSearchParams(init.form).toString()
   }
+  // Sent with its length, as browsers send a body: routes that check it before reading see it.
+  if (body !== undefined && !headers.has('content-length')) {
+    headers.set('content-length', String(Buffer.byteLength(body)))
+  }
   return new Request(new URL(path, TEST_ORIGIN), { method, headers, body })
 }
