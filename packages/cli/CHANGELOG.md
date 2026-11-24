@@ -1,5 +1,21 @@
 # @otwdesign/cli
 
+## 1.9.0
+
+### Minor Changes
+
+- 8db9b47: Uploads straight to storage, for hosts that cap a request's size. A `MediaStorage` can take
+  large files from the browser (`directUploads`): the site signs an address, the browser sends the
+  bytes there, and the site reads the file back and stores it as any upload. `cms.media.disk`
+  reads the disk's files, for a storage plugin to copy them. Sites on the disk are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [8db9b47]
+  - @otwdesign/sdk@1.9.0
+  - @otwdesign/core@1.9.0
+  - @otwdesign/next@1.9.0
+
 ## 1.8.0
 
 ### Patch Changes
