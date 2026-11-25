@@ -1,12 +1,12 @@
 import { ACCOUNT_PATH, safeRedirectPath } from '@otwdesign/core'
 import type { SearchParams } from '@otwdesign/sdk'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getKernel } from '../../runtime/kernel'
 import { firstParam } from '../../runtime/search-params'
 import { getCurrentUser } from '../../runtime/session'
 import { BrandMark } from '../brand-mark'
 import { FlashNotice } from '../screen'
+import { AdminLink } from '../admin-link'
 
 /** wp-login.php. Signed-in users with admin access go straight to where they were headed. */
 export async function LoginScreen({ searchParams: params }: { searchParams: SearchParams }) {
@@ -24,10 +24,10 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
   return (
     <>
       <h1>
-        <Link href={logo.href} className="login-logo">
+        <AdminLink href={logo.href} className="login-logo">
           <BrandMark brand={brand} />
           <span className="screen-reader-text">{logo.label}</span>
-        </Link>
+        </AdminLink>
       </h1>
       <FlashNotice flash={kernel.readFlash(params.flash)} />
       <form method="post" action={kernel.actionUrl('core', 'login')}>
@@ -57,10 +57,10 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
         </p>
       </form>
       <p className="login-links">
-        <Link href={`${ACCOUNT_PATH}/lost-password`}>Lost your password?</Link>
+        <AdminLink href={`${ACCOUNT_PATH}/lost-password`}>Lost your password?</AdminLink>
       </p>
       <p className="login-links">
-        <Link href="/">← Go to {site}</Link>
+        <AdminLink href="/">← Go to {site}</AdminLink>
       </p>
     </>
   )

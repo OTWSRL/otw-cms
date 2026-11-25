@@ -1,11 +1,11 @@
 import { ButtonLink, FormButton, ListTable, Notice, TableNav, Views } from '@otwdesign/admin-ui'
 import type { Flash, Kernel, PluginStatus, PluginUpdate, UninstallPlan } from '@otwdesign/core'
-import Link from 'next/link'
 import { currentSite } from '../../site-registry'
 import { AdminScreen } from '../screen'
 import { updateOverview } from '../update-overview'
 import type { ScreenContext } from './context'
 import { firstParam } from '../../runtime/search-params'
+import { AdminLink } from '../admin-link'
 
 const FILTERS = ['active', 'inactive', 'failed'] as const
 type Filter = (typeof FILTERS)[number]
@@ -120,14 +120,14 @@ export async function PluginsScreen({ kernel, user, searchParams: params }: Scre
           // As WordPress offers Delete once a plugin is deactivated.
           ...(plugin.status === 'inactive' && !pinned
             ? [
-                <Link
+                <AdminLink
                   key="delete"
                   className="button-link-delete"
                   href={`/admin/plugins?delete=${plugin.id}`}
                   aria-label={`Delete ${plugin.name}’s data`}
                 >
                   {canRemove && packageOf(plugin.id) ? 'Delete' : 'Delete Data'}
-                </Link>,
+                </AdminLink>,
               ]
             : []),
         ]}
@@ -265,7 +265,7 @@ function DeleteData({
       )}
       {blocked && (
         <p>
-          <Link href="/admin/plugins">← Go to Plugins</Link>
+          <AdminLink href="/admin/plugins">← Go to Plugins</AdminLink>
         </p>
       )}
     </AdminScreen>

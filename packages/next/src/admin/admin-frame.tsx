@@ -2,7 +2,6 @@
 
 import { AdminIcon, cx } from '@otwdesign/admin-ui'
 import type { AdminMenuSection } from '@otwdesign/core'
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   createContext,
@@ -13,6 +12,7 @@ import {
   type ReactNode,
   type MouseEvent,
 } from 'react'
+import { AdminLink } from './admin-link'
 import { MENU_COOKIE, type MenuPreference } from './admin-menu-preference'
 import { cancelNavigationProgress, NavigationProgress } from './navigation-progress'
 
@@ -203,7 +203,7 @@ export function AdminMenu({
                     opened === section.id && 'opensub',
                   )}
                 >
-                  <Link
+                  <AdminLink
                     href={first.url}
                     className="menu-top"
                     aria-current={isCurrent && !hasSubmenu ? 'page' : undefined}
@@ -225,7 +225,7 @@ export function AdminMenu({
                       {section.label}
                       <Badge count={badges[section.id]} />
                     </span>
-                  </Link>
+                  </AdminLink>
                   <ul className="wp-submenu" aria-label={section.label}>
                     <li className="wp-submenu-head" aria-hidden="true">
                       {section.label}
@@ -233,14 +233,14 @@ export function AdminMenu({
                     {hasSubmenu &&
                       section.items.map((item) => (
                         <li key={item.key} className={item.url === current ? 'current' : undefined}>
-                          <Link
+                          <AdminLink
                             href={item.url}
                             aria-current={item.url === current ? 'page' : undefined}
                             onClick={navigate}
                           >
                             {item.label}
                             <Badge count={badges[item.key]} />
-                          </Link>
+                          </AdminLink>
                         </li>
                       ))}
                   </ul>

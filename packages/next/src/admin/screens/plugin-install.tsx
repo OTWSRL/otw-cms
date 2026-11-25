@@ -1,10 +1,10 @@
 import { Button, FormButton, ListTable, Notice, SubmitButton } from '@otwdesign/admin-ui'
-import Link from 'next/link'
 import { MAX_QUERY, searchPlugins, type FoundPlugin } from '../../runtime/plugin-search'
 import { firstParam } from '../../runtime/search-params'
 import { currentSite } from '../../site-registry'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
+import { AdminLink } from '../admin-link'
 
 const PATH = '/admin/plugins/new'
 /** How long a search's results are reused: npm's index doesn't change by the minute. */
@@ -129,7 +129,7 @@ export async function PluginInstallScreen({ kernel, searchParams: params }: Scre
       <p>
         For a plugin that isn’t listed, such as one from your own registry. Its newest version that
         works with this site’s CMS is added, inactive: activate it on{' '}
-        <Link href="/admin/plugins">Installed Plugins</Link>.
+        <AdminLink href="/admin/plugins">Installed Plugins</AdminLink>.
       </p>
       <form method="post" action={installUrl}>
         <p>

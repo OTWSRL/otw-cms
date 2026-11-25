@@ -641,6 +641,15 @@ pages; speed on the Performance plugin's site with 1,500 posts, 300 pages and 44
 - **The embedded database's lock** records its process's start time too, so a restarted
   container whose processes reuse ids takes it over. Before, a site in a container could stay
   down after `docker restart` until the lock file was deleted.
+- **Links ask nothing ahead** (1.9.2): Next.js fetches every link in view before it's clicked.
+  The admin's screens and the site's pages are made per request, so those answers held nothing a
+  click could use, and each was a request to the server: 14 to 24 on every admin screen, and
+  again after every save; two on a visitor's page view for the header's link home. The admin's
+  links (`AdminLink`) and the site template's header set `prefetch={false}`. A full load of an
+  admin screen went from 24 to 34 requests to 10; a click on the menu takes one request, not up
+  to nine, and is 3.5 ms sooner (64 paired clicks). Not done, measured: fetching the next screen
+  when the pointer is on its link. Next.js keeps that answer for five minutes, so a click 45 s
+  after a hover showed the screen as it was at the hover, without asking the server.
 - Not done, measured: counting archive pages over ids only (0.5 ms, lost to a second round trip
   on a PostgreSQL server). The categories filter on the Posts list still counts each term's
   entries (about 3 ms at 1,500 posts).

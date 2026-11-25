@@ -7,12 +7,12 @@ import {
   SubmitButton,
 } from '@otwdesign/admin-ui'
 import { MAX_FAILURES, type StoredWebhook, type WebhookStatus } from '@otwdesign/core'
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { firstParam } from '../../runtime/search-params'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
 import { formatDate } from './content-dates'
+import { AdminLink } from '../admin-link'
 
 const PATH = '/admin/settings/webhooks'
 const NEW = 'new'
@@ -101,9 +101,9 @@ export async function WebhooksScreen({ kernel, searchParams: params }: ScreenCon
             <p>
               Each event is sent as a POST with a JSON body, and tried up to five times. Every
               delivery, with why it failed, is in{' '}
-              <Link href="/admin/tools/scheduled-actions?s=core.deliver_webhook">
+              <AdminLink href="/admin/tools/scheduled-actions?s=core.deliver_webhook">
                 Tools › Scheduled Actions
-              </Link>
+              </AdminLink>
               .
             </p>
             <div className="para">

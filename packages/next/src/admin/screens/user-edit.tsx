@@ -1,10 +1,10 @@
 import { FormButton, FormField, FormTable, SubmitButton } from '@otwdesign/admin-ui'
 import type { Kernel } from '@otwdesign/core'
 import type { SearchParams, User } from '@otwdesign/sdk'
-import Link from 'next/link'
 import { Slot } from '../../site/slot'
 import { AdminScreen } from '../screen'
 import { MetaFields } from './meta-fields'
+import { AdminLink } from '../admin-link'
 
 /**
  * user-edit.php: someone else's name, address (changed at once, the old one told), role and
@@ -35,7 +35,7 @@ export async function UserEditScreen({
       flash={kernel.readFlash(searchParams.flash)}
     >
       <p>
-        <Link href="/admin/users">← Back to Users</Link>
+        <AdminLink href="/admin/users">← Back to Users</AdminLink>
       </p>
       <form method="post" action={kernel.actionUrl('core', 'user-save')}>
         <input type="hidden" name="user" value={target.id} />

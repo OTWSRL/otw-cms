@@ -119,6 +119,21 @@ test('Settings › Reading makes the homepage a page, with the posts on another'
   await notice(page, 'Settings saved.')
 })
 
+test('a page view asks the server for the page and nothing ahead of a click', async ({
+  browser,
+}) => {
+  // The header's links would each be fetched ahead, on every page view of every visitor.
+  const page = await visitor(browser)
+  const asked: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).searchParams.has('_rsc')) asked.push(request.url())
+  })
+  await page.goto('/library')
+  await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(asked).toEqual([])
+})
+
 test('the site’s pages and the admin, on one server, each keep their own part', async ({
   page,
 }) => {

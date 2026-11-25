@@ -1,8 +1,8 @@
 import { AdminIcon, Notice, Postbox } from '@otwdesign/admin-ui'
-import Link from 'next/link'
 import { AdminScreen } from '../screen'
 import type { ScreenContext } from './context'
 import { Slot } from '../../site/slot'
+import { AdminLink } from '../admin-link'
 
 export async function DashboardScreen({ kernel, user, searchParams: params }: ScreenContext) {
   const managesPlugins = kernel.can(user, 'core.manage_plugins')
@@ -20,7 +20,7 @@ export async function DashboardScreen({ kernel, user, searchParams: params }: Sc
             ))}
           </ul>
           <p>
-            <Link href="/admin/plugins">Review plugins</Link>
+            <AdminLink href="/admin/plugins">Review plugins</AdminLink>
           </p>
         </Notice>
       )}
@@ -38,7 +38,7 @@ export async function DashboardScreen({ kernel, user, searchParams: params }: Sc
           <ul className="at-a-glance">
             <li>
               <AdminIcon icon="plugins" />
-              {managesPlugins ? <Link href="/admin/plugins">{plugins}</Link> : plugins}
+              {managesPlugins ? <AdminLink href="/admin/plugins">{plugins}</AdminLink> : plugins}
             </li>
             <li>
               <AdminIcon icon="dashboard" />

@@ -385,7 +385,10 @@ export function AccountTemplate(props: AccountTemplateProps) {
         {props.canUseAdmin && (
           <>
             {' '}
-            <Link href="/admin">Go to the admin</Link>.
+            <Link href="/admin" prefetch={false}>
+              Go to the admin
+            </Link>
+            .
           </>
         )}
       </p>

@@ -1,20 +1,20 @@
 import { ADMIN_VERIFY_PATH, LOGIN_PATH } from '@otwdesign/core'
 import type { SearchParams, SignInMethod } from '@otwdesign/sdk'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getKernel } from '../../runtime/kernel'
 import { firstParam } from '../../runtime/search-params'
 import { getCurrentUser, signInCookies } from '../../runtime/session'
 import { BrandMark } from '../brand-mark'
 import { FlashNotice } from '../screen'
+import { AdminLink } from '../admin-link'
 
 /** Another way to get a code: one that sends is a button, since a link mustn't send anything. */
 function OtherWay({ method, sendUrl }: { method: SignInMethod; sendUrl: string }) {
   if (!method.sends) {
     return (
-      <Link href={`${ADMIN_VERIFY_PATH}?method=${encodeURIComponent(method.id)}`}>
+      <AdminLink href={`${ADMIN_VERIFY_PATH}?method=${encodeURIComponent(method.id)}`}>
         {method.label}
-      </Link>
+      </AdminLink>
     )
   }
   return (
@@ -47,7 +47,7 @@ export async function LoginVerifyScreen({ searchParams: params }: { searchParams
         <p className="login-intro">Log in again to get a new code.</p>
         <FlashNotice flash={flash} />
         <p className="login-links">
-          <Link href={LOGIN_PATH}>← Back to log in</Link>
+          <AdminLink href={LOGIN_PATH}>← Back to log in</AdminLink>
         </p>
       </>
     )
@@ -121,7 +121,7 @@ export async function LoginVerifyScreen({ searchParams: params }: { searchParams
         </nav>
       )}
       <p className="login-links">
-        <Link href={LOGIN_PATH}>← Back to log in</Link>
+        <AdminLink href={LOGIN_PATH}>← Back to log in</AdminLink>
       </p>
     </>
   )

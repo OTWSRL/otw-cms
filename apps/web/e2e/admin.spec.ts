@@ -187,6 +187,27 @@ test('the dashboard shows plugin widgets and notices', async ({ page }) => {
   await expect(page).toHaveURL('/admin/library/settings')
 })
 
+test('a screen asks the server for nothing more until a link is clicked', async ({ page }) => {
+  // Next.js would fetch every link in view ahead of a click, a request each: the menu alone has
+  // more than a dozen, on every screen and after every save.
+  const asked: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).searchParams.has('_rsc')) asked.push(request.url())
+  })
+  await signIn(page, ADMIN, '/admin/settings')
+  await expect(page.getByRole('heading', { name: 'General settings' })).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(asked).toEqual([])
+
+  // A click still shows the next screen without loading the whole page again: one request.
+  await openSection(page, 'Users')
+  await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible()
+  // The same document, so there's no load to wait for: a moment for the new screen's links to
+  // ask, if they were going to.
+  await page.waitForTimeout(750)
+  expect(asked.map((url) => new URL(url).pathname)).toEqual(['/admin/users'])
+})
+
 test('a plugin’s role reaches its own screens but not the site’s settings or plugins', async ({
   page,
   browser,

@@ -1,7 +1,7 @@
 import { AdminIcon } from '@otwdesign/admin-ui'
 import type { User } from '@otwdesign/sdk'
-import Link from 'next/link'
 import { AccountMenu, MenuToggle } from './admin-frame'
+import { AdminLink } from './admin-link'
 
 /** WordPress's default avatar is a grey silhouette; there are no uploaded avatars yet. */
 function Avatar({ size }: { size: 'small' | 'large' }) {
@@ -39,11 +39,11 @@ export function AdminBar({
             <MenuToggle />
           </li>
           <li id="wp-admin-bar-site-name">
-            <Link className="ab-item" href="/">
+            <AdminLink className="ab-item" href="/">
               <HomeIcon />
               <span className="ab-label">{site}</span>
               <span className="screen-reader-text"> (view site)</span>
-            </Link>
+            </AdminLink>
           </li>
         </ul>
         <ul className="ab-top-menu ab-top-secondary">
@@ -62,9 +62,9 @@ export function AdminBar({
                 <span className="username">{user.email}</span>
               </li>
               <li id="wp-admin-bar-edit-profile">
-                <Link className="ab-item" href="/admin/profile">
+                <AdminLink className="ab-item" href="/admin/profile">
                   Edit Profile
-                </Link>
+                </AdminLink>
               </li>
               <li id="wp-admin-bar-logout">
                 <form method="post" action={logoutUrl}>
