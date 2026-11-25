@@ -946,6 +946,22 @@ repository of its own (`../otw-plugin-storage`). WordPress's WP Offload Media.
   one's own running MinIO or Garage) and Vercel Blob, a registry for other drivers
   (`storage.drivers`), a connection test, and a tool that copies the disk's uploads across.
 
+## 14. Google plugin
+
+Sign in with Google, and each person's own YouTube, Drive and Gmail in the admin:
+`@otwdesign/plugin-google`, in a repository of its own (`../otw-plugin-google`).
+
+- **In core, for it (1.10): sign-in providers (done).** `cms.auth.signInProvider()`: core shows
+  the button on both sign-in pages and owns the way out and back (`/api/p/core/sign-in/{id}` and
+  its `/callback`): a signed cookie holds the state, a PKCE verifier and where the person was
+  headed for ten minutes. Core decides the account: the one the provider's id is linked to
+  (`cms_identities`), else the one with the address when the provider is the authority for it,
+  else a new one with the role the provider names. Then the sign-in goes on as after a password,
+  sign-in step included. A site without a provider runs nothing for it.
+- **The plugin**: a person's Google accounts (connect, reconnect, disconnect), a registry of
+  Google services so the next one is a folder, YouTube, Drive and Gmail, and the site's email
+  through Gmail.
+
 ## Later
 
 A community plugin (BuddyPress-style profiles, groups, activity) as the third proof, themes and

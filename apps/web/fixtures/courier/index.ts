@@ -1,4 +1,4 @@
-import { definePlugin } from '@otwdesign/sdk'
+import { ActionError, definePlugin } from '@otwdesign/sdk'
 
 // The e2e tests' second plugin: it needs the Library, as a payment plugin needs a shop, and its
 // key comes from the server environment.
@@ -63,6 +63,56 @@ export default definePlugin({
       rememberDays: () => 30,
       remember(user, device) {
         remembered.set(device, user.id)
+      },
+    })
+
+    // A sign-in provider for the e2e tests, in miniature. Its "service" is a page of this
+    // fixture that asks who you are and sends you back with that address as the code.
+    cms.auth.signInProvider({
+      id: 'courier',
+      label: 'Continue with Courier',
+      name: 'Courier',
+      start({ redirectUri, state }) {
+        const who = new URL(cms.routes.apiUrl('/who'), redirectUri)
+        who.searchParams.set('state', state)
+        who.searchParams.set('redirect_uri', redirectUri)
+        return who.href
+      },
+      finish({ params }) {
+        const email = params.get('code') ?? ''
+        if (params.get('error')) throw new ActionError('You didn’t allow it at Courier.')
+        return {
+          subject: `courier-${email}`,
+          email,
+          emailVerified: !email.startsWith('unverified'),
+          // The pretend service hosts example.com's mailboxes, and no others.
+          emailOwned: email.endsWith('@example.com'),
+          name: 'Courier Person',
+        }
+      },
+      newAccountRole: () => 'customer',
+    })
+    cms.routes.api({
+      method: 'GET',
+      path: '/who',
+      handler(request) {
+        const url = new URL(request.url)
+        const back = url.searchParams.get('redirect_uri') ?? ''
+        const state = url.searchParams.get('state') ?? ''
+        const text = (value: string) =>
+          value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
+        // Only back to this site: the page is a stand-in, not a redirector.
+        if (!back.startsWith(`${url.origin}/`)) return new Response('Bad address', { status: 400 })
+        return new Response(
+          `<!doctype html><title>Courier sign-in</title><h1>Courier</h1>
+<form method="get" action="${text(back)}">
+<input type="hidden" name="state" value="${text(state)}">
+<label>Your Courier address <input type="email" name="code" required></label>
+<button>Allow</button>
+<button name="error" value="access_denied" formnovalidate>Cancel</button>
+</form>`,
+          { headers: { 'content-type': 'text/html; charset=utf-8' } },
+        )
       },
     })
   },

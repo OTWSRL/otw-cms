@@ -322,8 +322,11 @@ export interface SignInMethod {
 
 /** What a sign-in step is told about the sign-in under way. */
 export interface SignInContext {
-  /** How they proved who they are: their `password`, or an emailed `link` to set a new one. */
-  via: 'password' | 'link'
+  /**
+   * How they proved who they are: their `password`, an emailed `link` to set a new one, or a
+   * sign-in `provider` such as Google.
+   */
+  via: 'password' | 'link' | 'provider'
   /**
    * This browser's id, from the cookie it got when a step last remembered it; `null` for one
    * that was never remembered. Keep only a hash of it.
@@ -366,6 +369,73 @@ export interface SignInStep {
   remember?(user: User, device: string, days: number): void | Promise<void>
 }
 
+/** Who a sign-in provider says came back from it. */
+export interface SignInIdentity {
+  /** The provider's own id for the person, which never changes: Google's `sub`. */
+  subject: string
+  /** Their email address at the provider. */
+  email: string
+  /**
+   * Whether the provider checked that the person reads that address. Without it nobody is signed
+   * in or given an account by address: only someone whose `subject` is linked already gets in.
+   */
+  emailVerified: boolean
+  /**
+   * Whether the provider is the authority for the address today, because it hosts the mailbox:
+   * a gmail.com address, or one in a Google Workspace domain. Only then does the person get the
+   * account that already has the address; a provider that merely checked the address once
+   * doesn't decide who owns it now.
+   */
+  emailOwned?: boolean
+  /** Their name, for a new account. */
+  name?: string
+}
+
+/** What a sign-in provider is given for one sign-in, when it starts and when the person is back. */
+export interface SignInProviderRequest {
+  /** Where the provider must send the person back: core's own address for this provider. */
+  redirectUri: string
+  /** Core checks this when the person comes back. Send it as OAuth's `state`, unchanged. */
+  state: string
+  /**
+   * A secret only this browser holds, for this sign-in only: PKCE's code verifier. Send its
+   * SHA-256 as the `code_challenge`, and the value itself when exchanging the code.
+   */
+  verifier: string
+}
+
+/**
+ * A way to sign in at another service, such as "Continue with Google". Core shows its button on
+ * the sign-in pages, keeps the sign-in's state in a cookie, finds or makes the account and signs
+ * the person in, sign-in step included. The provider only says where to send the person, and who
+ * came back.
+ */
+export interface SignInProvider {
+  /** Lowercase letters, digits and hyphens: `google`. It's in the address the provider calls back. */
+  id: string
+  /** The button's text: "Continue with Google". */
+  label: string
+  /** The service's name in messages: "Google". */
+  name: string
+  /** The button's mark: a `data:image/svg+xml;base64,` or `data:image/png;base64,` address. */
+  image?: string
+  /** The address at the provider to send the person to. */
+  start(request: SignInProviderRequest): string | Promise<string>
+  /**
+   * Who came back, from the callback's query (`code`, or the provider's `error`). Throw an
+   * `ActionError` to tell the person why it didn't work; anything else is logged and they're told
+   * to try again.
+   */
+  finish(
+    request: SignInProviderRequest & { params: URLSearchParams },
+  ): SignInIdentity | Promise<SignInIdentity>
+  /**
+   * The role someone without an account gets, or `null` to turn them away. Left out, only people
+   * who have an account can sign in this way.
+   */
+  newAccountRole?(identity: SignInIdentity): string | null
+}
+
 /**
  * `cms.auth`: roles, capabilities and checks, as in WordPress. Add and change roles and
  * capabilities in `setup()`, so every part of the site agrees on them; checks work anywhere.
@@ -403,6 +473,19 @@ export interface AuthApi {
    * `setup()` only, by one plugin at most.
    */
   signInStep(step: SignInStep): void
+  /**
+   * Adds a way to sign in at another service, such as Google. In `setup()` only. Its button
+   * shows on the admin's sign-in page and on the account page.
+   */
+  signInProvider(provider: SignInProvider): void
+  /**
+   * Lets the person with this id at one of this plugin's providers sign in as `user` from now
+   * on: for a signed-in person who has just proved, at the provider, that the id is theirs.
+   * Throws an `ActionError` when the id already signs in someone else.
+   */
+  linkIdentity(provider: string, user: User, subject: string): Promise<void>
+  /** Ends that: every id of the provider's that signs in as `user`, or only `subject`. */
+  unlinkIdentity(provider: string, user: User, subject?: string): Promise<void>
   /**
    * Whether `password` is the user's, like `wp_check_password()`: for a form that asks for it
    * again before a change that matters. Wrong ones count as failed sign-ins do, and past five
@@ -1225,6 +1308,17 @@ export interface AccountSignInStep {
   rememberDays: number
 }
 
+/** A sign-in provider's button, for a sign-in page: a plain link to `url`. */
+export interface SignInProviderLink {
+  id: string
+  /** "Continue with Google". */
+  label: string
+  /** The provider's mark, as a `data:` image address, or `null`. */
+  image: string | null
+  /** Where the link goes: core's address that sends the person to the provider. */
+  url: string
+}
+
 /** What the account pages' template receives: WooCommerce's My Account, by view. */
 export interface AccountTemplateProps {
   view: AccountView
@@ -1248,6 +1342,11 @@ export interface AccountTemplateProps {
   notice: { kind: 'notice' | 'error'; message: string } | null
   /** Where to go after signing in, from the `next` query; a path on the site. */
   next: string | null
+  /**
+   * On `sign-in`: the other services people can sign in at, as plugins add them. Each is a link
+   * to `url`; empty when there are none.
+   */
+  providers: readonly SignInProviderLink[]
   /**
    * On `verify`: the sign-in waiting for a code. `null` once it has run out, after ten minutes
    * or too many wrong codes: say so, and link back to `paths.account`.

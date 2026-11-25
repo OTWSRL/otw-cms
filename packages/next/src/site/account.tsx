@@ -186,6 +186,18 @@ export function AccountTemplate(props: AccountTemplateProps) {
       <section className="account account-sign-in">
         <h1>Sign in</h1>
         <Notice notice={notice} />
+        {props.providers.length > 0 && (
+          <p className="account-providers">
+            {props.providers.map((provider) => (
+              <a key={provider.id} className="account-provider" href={provider.url}>
+                {/* A data: address: there is nothing for next/image to fetch or resize. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {provider.image && <img src={provider.image} alt="" width={18} height={18} />}
+                {provider.label}
+              </a>
+            ))}
+          </p>
+        )}
         <Form action={actions.signIn} label="Sign in" submit="Sign in">
           {props.next && <input type="hidden" name="next" value={props.next} />}
           <Field

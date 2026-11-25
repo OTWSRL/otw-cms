@@ -1,6 +1,6 @@
 import type { Logger, PluginDefinition } from '@otwdesign/sdk'
 import { and, count, eq, gte, inArray, lt, sql } from 'drizzle-orm'
-import { cache, jobs, storedSettings } from './core-schema'
+import { cache, identities, jobs, storedSettings } from './core-schema'
 import type { DatabaseContext } from './database'
 import { cmsMigrations, MIGRATION_LOCK } from './migrations'
 import { declaredSettings } from './settings'
@@ -99,6 +99,8 @@ export async function uninstallPlugin(
     if (keys.length > 0) await tx.delete(storedSettings).where(inArray(storedSettings.key, keys))
     await tx.delete(jobs).where(owned(jobs.name, plugin.id, '.'))
     await tx.delete(cache).where(owned(cache.key, plugin.id, ':'))
+    // Who signed in through its providers: without the plugin nobody can use them.
+    await tx.delete(identities).where(eq(identities.plugin, plugin.id))
     // Its row in cms_plugins stays, switched off: a site with no rows at all is a new site,
     // whose first boot switches every plugin on.
   })

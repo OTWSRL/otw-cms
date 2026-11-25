@@ -504,4 +504,21 @@ export const coreMigrations: Migration[] = [
       `)
     },
   },
+  {
+    // Sign-in providers: who signs in as whom at another service, such as Google.
+    id: '0019_identities',
+    up: async (db) => {
+      await db.execute(sql`
+        CREATE TABLE cms_identities (
+          provider text NOT NULL,
+          subject text NOT NULL,
+          user_id uuid NOT NULL REFERENCES cms_users(id) ON DELETE CASCADE,
+          plugin text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (provider, subject)
+        )
+      `)
+      await db.execute(sql`CREATE INDEX cms_identities_user_idx ON cms_identities (user_id)`)
+    },
+  },
 ]

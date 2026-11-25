@@ -56,6 +56,11 @@ async function site(definitions: PluginDefinition[], extra: Partial<KernelOption
     )
     if (kernel.isActive(id)) await kernel.jobs.enqueue(`${id}.digest` as 'forum.digest', {})
     await kernel.db.execute(sql`INSERT INTO cms_cache (key, value) VALUES (${`${id}:count`}, '1')`)
+    // Someone who signs in through a provider of the plugin's.
+    await kernel.db.execute(
+      sql`INSERT INTO cms_identities (provider, subject, user_id, plugin)
+          SELECT ${id}, 'subject-1', id, ${id} FROM cms_users LIMIT 1`,
+    )
   }
   const post = (k: Kernel, name: string, pluginId: string) =>
     k.handleApi(formPost(`/api/p/core/actions/${name}`, { plugin: pluginId }, { cookie }))
@@ -75,6 +80,7 @@ const left = async (kernel: Kernel) => {
     settings: await query(`SELECT key AS v FROM cms_settings WHERE key LIKE 'forum%'`),
     jobs: await query(`SELECT name AS v FROM cms_jobs WHERE name LIKE 'forum%'`),
     cached: await query(`SELECT key AS v FROM cms_cache`),
+    identities: await query(`SELECT plugin AS v FROM cms_identities`),
     states: await query(`SELECT id AS v FROM cms_plugins`),
   }
 }
@@ -118,6 +124,7 @@ describe('deleting a plugin’s data', () => {
       settings: ['forum-extra.title'],
       jobs: ['forum-extra.digest'],
       cached: ['forum-extra:count'],
+      identities: ['forum-extra'],
       // Still listed, switched off: a site with no plugin on record is a new one.
       states: ['forum', 'forum-extra'],
     })
@@ -150,6 +157,7 @@ describe('deleting a plugin’s data', () => {
       settings: [],
       jobs: [],
       cached: [],
+      identities: [],
       states: ['forum'],
     })
     // Activating it again finds its table as it was.

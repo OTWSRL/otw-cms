@@ -1,4 +1,10 @@
-import type { AccountTemplateProps, AccountView, SearchParams, User } from '@otwdesign/sdk'
+import type {
+  AccountTemplateProps,
+  AccountView,
+  SearchParams,
+  SignInProviderLink,
+  User,
+} from '@otwdesign/sdk'
 import { safeRedirectPath } from './admin'
 import { ACCOUNT_PATH, type AccountService } from './accounts'
 import type { Flash } from './flash'
@@ -41,6 +47,8 @@ export interface AccountPagesOptions {
   accounts: AccountService
   signIns: Pick<SignInService, 'held'>
   users: UsersService
+  /** The other services people can sign in at, for a sign-in headed to `next`. */
+  providers(next: string | null): SignInProviderLink[]
   canUseAdmin(user: User): boolean
   actionUrl(name: string): string
   readFlash(value: string | string[] | undefined): Flash | null
@@ -90,6 +98,8 @@ export function createAccountPages(options: AccountPagesOptions) {
         newEmail: info?.newEmail ?? null,
         notice: flash ? { kind: flash.kind, message: flash.message } : null,
         next: safeRedirectPath(first(searchParams.next)),
+        providers:
+          view === 'sign-in' ? options.providers(safeRedirectPath(first(searchParams.next))) : [],
         signIn: held && {
           method: held.methods.find((method) => method.id === asked) ?? held.methods[0]!,
           methods: held.methods,

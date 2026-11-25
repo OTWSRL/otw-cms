@@ -67,13 +67,36 @@ export const signIns = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** Where the person goes once signed in: a path on the site. */
     next: text('next').notNull(),
-    via: text('via').$type<'password' | 'link'>().notNull(),
+    via: text('via').$type<'password' | 'link' | 'provider'>().notNull(),
     /** Wrong codes typed against this sign-in. */
     failures: integer('failures').notNull().default(0),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('cms_sign_ins_user_idx').on(table.userId, table.createdAt)],
+)
+
+/**
+ * Who signs in as whom through a sign-in provider: Google's id for a person, and their account.
+ * Found by the provider's id, never by address, once it's here.
+ */
+export const identities = pgTable(
+  'cms_identities',
+  {
+    provider: text('provider').notNull(),
+    /** The provider's id for the person, which never changes. */
+    subject: text('subject').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The plugin whose provider it is, for deleting its data. */
+    plugin: text('plugin').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.provider, table.subject] }),
+    index('cms_identities_user_idx').on(table.userId),
+  ],
 )
 
 export const loginFailures = pgTable(

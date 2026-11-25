@@ -17,6 +17,7 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
   const site = kernel.setting('site.title') ?? 'My Site'
   // As wp-login.php's logo says "Powered by WordPress" and links to wordpress.org.
   const { brand } = kernel
+  const providers = kernel.signInProviders('admin', next)
   const logo = brand.url
     ? { href: brand.url, label: `Powered by ${brand.name}` }
     : { href: '/', label: site }
@@ -32,6 +33,20 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
       <FlashNotice flash={kernel.readFlash(params.flash)} />
       <form method="post" action={kernel.actionUrl('core', 'login')}>
         <input type="hidden" name="next" value={next} />
+        {providers.length > 0 && (
+          <div className="login-providers">
+            {providers.map((provider) => (
+              // A plain link: it leaves for core's address, which sends the person on.
+              <a key={provider.id} className="button login-provider" href={provider.url}>
+                {/* A data: address: there is nothing for next/image to fetch or resize. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {provider.image && <img src={provider.image} alt="" width={18} height={18} />}
+                {provider.label}
+              </a>
+            ))}
+            <p className="login-or">or</p>
+          </div>
+        )}
         <label htmlFor="user-login">Email Address</label>
         <input
           id="user-login"

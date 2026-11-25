@@ -12,6 +12,7 @@ import type {
   ContentTypeDefinition,
   ContentView,
   MailTransport,
+  SignInProviderLink,
   SignInStep,
   MediaStorage,
   Database,
@@ -59,6 +60,7 @@ import { AdminMenu, type AdminMenuSection } from './admin-menu'
 import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
 import { AuthError, createAuthService, type AuthService } from './auth'
 import { createSignInService, type SignInService } from './sign-in'
+import { createSignInProviders } from './sign-in-providers'
 import { signInActions } from './sign-in-actions'
 import { DEFAULT_BRAND, type Brand } from './brand'
 import { CapabilityStore, type CapabilityInfo, type RoleInfo } from './capabilities'
@@ -314,6 +316,8 @@ export interface Kernel {
     user: User | null,
     cookies?: AccountCookies,
   ): Promise<AccountResolution | null>
+  /** The sign-in pages' buttons for other services, such as "Continue with Google"; often none. */
+  signInProviders(screen: 'admin' | 'account', next: string | null): SignInProviderLink[]
   /** The largest file one upload may be, in bytes. */
   readonly maxUploadBytes: number
   /**
@@ -371,6 +375,8 @@ interface Prepared {
   /** Who is told of which event, read with the generation. */
   webhookTopics: WebhookTopics
   flash: FlashCodec
+  /** The site's own secret, for what it signs: flash messages, a provider sign-in's cookie. */
+  secret: string
   configured: readonly string[]
   stored: ReadonlyMap<string, unknown>
   databaseUpdates: readonly string[]
@@ -412,13 +418,15 @@ async function startKernel(options: KernelOptions, start: StartOptions): Promise
   }
   // Read the generation before the state it guards, so a change in between triggers a reboot.
   const { generation, webhookTopics, pluginsInitialized } = await readBootState(db.root)
+  const secret = options.secret ?? (await ensureSecret(db.root))
   const prepared: Prepared = {
     options,
     logger,
     db,
     generation,
     webhookTopics,
-    flash: createFlashCodec(options.secret ?? (await ensureSecret(db.root))),
+    flash: createFlashCodec(secret),
+    secret,
     configured:
       options.active ??
       (await loadActiveIds(db.root, options.plugins, pluginsInitialized || undefined)),
@@ -569,6 +577,17 @@ async function boot(
     }
     signInStep = { pluginId, step }
   }
+  // Signing in at another service, such as Google: plugins add the providers.
+  const signInProviders = createSignInProviders({
+    db,
+    signIns,
+    flash: prepared.flash,
+    secret: prepared.secret,
+    origins,
+    logger,
+    roleExists: (role) => stores.capabilities.hasRole(role),
+    canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
+  })
   const contentTypes = new ContentTypeStore(assertOpen, stores.capabilities)
   const taxonomies = new TaxonomyStore(assertOpen, stores.capabilities)
   const metaFields = new MetaStore(assertOpen)
@@ -1066,6 +1085,7 @@ async function boot(
     registerAction(CORE, action)
   }
   for (const action of signInActions(signIns)) registerAction(CORE, action)
+  for (const route of signInProviders.routes()) registerApi(CORE, route)
   const userForms = userActions({
     auth,
     accounts,
@@ -1079,6 +1099,7 @@ async function boot(
     accounts,
     signIns,
     users,
+    providers: (next) => signInProviders.links('account', next),
     canUseAdmin: (user) => stores.capabilities.can(user, 'core.access_admin'),
     actionUrl: (name) => actionPath(CORE, name),
     readFlash: (value) => prepared.flash.decode(value),
@@ -1243,6 +1264,19 @@ async function boot(
           }
           provideSignInStep(plugin.id, step)
         },
+        signInProvider: (provider) => {
+          if (entry === 'admin') {
+            throw new Error(
+              `Add the sign-in provider in setup(): people sign in on the site too, where the admin entry isn't loaded`,
+            )
+          }
+          inSetup(`sign-in provider "${provider?.id}"`)
+          signInProviders.add(plugin.id, provider)
+        },
+        linkIdentity: (provider, user, subject) =>
+          signInProviders.link(plugin.id, provider, user, subject),
+        unlinkIdentity: (provider, user, subject) =>
+          signInProviders.unlink(plugin.id, provider, user, subject),
         checkPassword: async (user, password) => {
           try {
             return await auth.checkPassword(user.email, password)
@@ -1597,6 +1631,7 @@ async function boot(
     cache: cache.for(APP),
     accounts,
     resolveAccount,
+    signInProviders: (screen, next) => signInProviders.links(screen, next),
     users,
   })
 }
@@ -1661,6 +1696,7 @@ function buildKernel(input: {
   cache: Omit<CacheApi, 'store'>
   accounts: AccountService
   resolveAccount: ReturnType<typeof createAccountPages>
+  signInProviders: Kernel['signInProviders']
   users: UsersService
 }): Kernel {
   const { prepared, stores, values, installed, origins } = input
@@ -1826,6 +1862,7 @@ function buildKernel(input: {
     users: input.users,
     resolveAccount: (pathname, searchParams, user, cookies) =>
       input.resolveAccount(pathname, searchParams, user, cookies),
+    signInProviders: input.signInProviders,
     maxUploadBytes: input.maxUploadBytes,
     get directUploads() {
       return input.directUploads()

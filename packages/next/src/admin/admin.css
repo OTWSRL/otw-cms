@@ -1784,6 +1784,44 @@ body:has(> .cms-login) {
   margin: 0 0 4px;
 }
 
+/* Other services to sign in at, such as "Continue with Google", above the form's fields. */
+.cms-login .login-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 8px;
+  border-color: #747775;
+  background: #fff;
+  color: #1f1f1f;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.cms-login .login-provider:hover {
+  border-color: #1f1f1f;
+  background: #f6f7f7;
+  color: #1f1f1f;
+}
+
+.cms-login .login-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 16px;
+  color: var(--wp-muted);
+  font-size: 12px;
+}
+
+.cms-login .login-or::before,
+.cms-login .login-or::after {
+  flex: 1;
+  height: 1px;
+  background: #dcdcde;
+  content: '';
+}
+
 .cms-login .login-submit {
   display: flex;
   justify-content: flex-end;
