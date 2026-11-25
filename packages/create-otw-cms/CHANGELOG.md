@@ -1,5 +1,15 @@
 # create-otw-cms
 
+## 1.9.2
+
+### Patch Changes
+
+- The admin's links no longer ask the server about their pages before they're clicked. Next.js
+  fetches every link in view ahead of a click, and the admin's screens are made per request, so
+  each of those was a wasted request: 14 to 24 on every screen, and again after every save. A new
+  site's header links do the same; in an existing site, add `prefetch={false}` to the `<Link>`s in
+  `src/app/(site)/layout.tsx`.
+
 ## 1.9.1
 
 ### Patch Changes
