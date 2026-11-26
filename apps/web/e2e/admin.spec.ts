@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Request } from '@playwright/test'
 import { ADMIN, LIBRARIAN, mainMenu, notice, openSection, signIn, submenu } from './helpers'
 
 // One site, set up by the first test; the rest build on it.
@@ -190,13 +190,9 @@ test('the dashboard shows plugin widgets and notices', async ({ page }) => {
 test('a screen asks the server for nothing more until a link is clicked', async ({ page }) => {
   // Next.js would fetch every link in view ahead of a click, a request each: the menu alone has
   // more than a dozen, on every screen and after every save.
-  const asked: string[] = []
-  const answers: Promise<string>[] = []
+  const asked: Request[] = []
   page.on('request', (request) => {
-    if (new URL(request.url()).searchParams.has('_rsc')) asked.push(request.url())
-  })
-  page.on('response', (response) => {
-    if (new URL(response.url()).searchParams.has('_rsc')) answers.push(response.text())
+    if (new URL(request.url()).searchParams.has('_rsc')) asked.push(request)
   })
   await signIn(page, ADMIN, '/admin/settings')
   await expect(page.getByRole('heading', { name: 'General settings' })).toBeVisible()
@@ -209,9 +205,16 @@ test('a screen asks the server for nothing more until a link is clicked', async 
   // The same document, so there's no load to wait for: a moment for the new screen's links to
   // ask, if they were going to.
   await page.waitForTimeout(750)
-  expect(asked.map((url) => new URL(url).pathname)).toEqual(['/admin/users'])
-  // The screen alone: the bar and the menu are the layout's, drawn once with the page.
-  const [answer] = await Promise.all(answers)
+  expect(asked.map((request) => new URL(request.url()).pathname)).toEqual(['/admin/users'])
+  // The screen alone: the bar and the menu are the layout's, drawn once with the page. Asked
+  // again as the browser asked it: a page can't always read back what its router fetched.
+  const click = asked[0]!
+  const headers = Object.fromEntries(
+    Object.entries(await click.allHeaders()).filter(
+      ([name]) => name === 'rsc' || name.startsWith('next-'),
+    ),
+  )
+  const answer = await (await page.request.get(click.url(), { headers })).text()
   expect(answer).toContain(ADMIN.email)
   expect(answer).not.toContain('Installed Plugins')
   expect(answer).not.toContain('Howdy')
