@@ -268,7 +268,8 @@ describe('admin pages', () => {
       ['posts', 'post'],
       ['media', 'media'],
       ['pages', 'page'],
-      ['drawn', svg],
+      // Not the SVG itself: its address, which the browser fetches once and keeps.
+      ['drawn', expect.stringMatching(/^\/api\/p\/core\/icons\/drawn\?v=[0-9a-f]{12}$/)],
       ['shop', 'cart'],
       ['plugins', 'plugins'],
       ['users', 'users'],
@@ -279,6 +280,59 @@ describe('admin pages', () => {
       expect.objectContaining({ id: 'raw', reason: expect.stringContaining('icon must be') }),
       expect.objectContaining({ id: 'typo', reason: expect.stringContaining('icon must be') }),
     ])
+  })
+
+  it('serves a drawn icon at its address, kept a year, only to people who can open the admin', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M2 2h16v16H2z"/></svg>'
+    const drawn = plugin('drawn', {
+      icon: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
+    })
+    const named = plugin('named', { icon: 'cart' })
+    const home = (cms: PluginContext) =>
+      cms.admin.page({
+        name: 'home',
+        path: '/',
+        title: 'Home',
+        capability: 'core.access_admin',
+        menu: { label: 'Home' },
+        component: () => null,
+      })
+    const kernel = await bootKernel({
+      plugins: [drawn, named],
+      admin: [defineAdmin(drawn, home), defineAdmin(named, home)],
+    })
+    const { user, cookie } = await signIn(kernel)
+    const address = kernel.adminMenu(user).find((section) => section.id === 'drawn')!.icon
+    const get = (path: string, as = cookie) =>
+      kernel.handleApi(new Request(`${ORIGIN}${path}`, { headers: as ? { cookie: as } : {} }))
+
+    const response = await get(address)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe(svg)
+    expect(response.headers.get('content-type')).toBe('image/svg+xml')
+    expect(response.headers.get('cache-control')).toBe('private, max-age=31536000, immutable')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    // Opened on its own, an SVG is a page of this site: nothing in it may run.
+    expect(response.headers.get('content-security-policy')).toContain('sandbox')
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'none'")
+    // Opened directly, it's saved rather than shown; an <img> or a mask draws it all the same.
+    expect(response.headers.get('content-disposition')).toBe('attachment')
+
+    // An address from before the icon changed still draws, but isn't kept.
+    const stale = await get('/api/p/core/icons/drawn?v=000000000000')
+    expect(stale.status).toBe(200)
+    expect(stale.headers.get('cache-control')).toBe('private, no-cache')
+
+    // Nobody outside the admin learns which plugins a site has.
+    const customer = (await signIn(kernel, 'customer')).cookie
+    for (const [path, as] of [
+      [address, ''],
+      [address, customer],
+      ['/api/p/core/icons/named', cookie],
+      ['/api/p/core/icons/missing', cookie],
+    ] as const) {
+      expect({ path, as, status: (await get(path, as)).status }).toEqual({ path, as, status: 404 })
+    }
   })
 
   it('puts pages under the parent they name, falling back to their own section', async () => {

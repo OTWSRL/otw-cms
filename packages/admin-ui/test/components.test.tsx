@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  ADMIN_LINK,
   AdminIcon,
   Button,
   ButtonLink,
@@ -12,6 +13,7 @@ import {
   Notice,
   Postbox,
   TableNav,
+  Tabs,
   Views,
 } from '../src'
 import { ICONS } from '../src/icon-paths'
@@ -319,10 +321,53 @@ describe('AdminIcon', () => {
     expect(svg.querySelector('path')?.getAttribute('d')).toBe(ICONS.cart.d)
   })
 
-  it('tints a data URI icon with a mask in the text colour', () => {
+  it('tints a data URI icon in the text colour, writing it into the page once', () => {
     const icon = 'data:image/svg+xml;base64,PHN2Zy8+'
+    const markup = html(<AdminIcon icon={icon} />)
     const span = dom(<AdminIcon icon={icon} />).querySelector('span')!
-    expect(span.getAttribute('style')).toContain(`url("${icon}")`)
-    expect(span.getAttribute('style')).toContain('background:currentColor')
+    // The stylesheet's .cms-icon masks the text colour with --cms-icon, prefixed and not.
+    expect(span.classList.contains('cms-icon')).toBe(true)
+    expect(span.getAttribute('style')).toBe(`--cms-icon:url("${icon}")`)
+    expect(markup.split(icon)).toHaveLength(2)
+  })
+
+  it('draws an icon core serves from an address the same way', () => {
+    const icon = '/api/p/core/icons/drawn?v=0123456789ab'
+    const span = dom(<AdminIcon icon={icon} className="x" />).querySelector('span')!
+    expect(span.className).toBe('cms-icon x')
+    expect(span.getAttribute('style')).toBe(`--cms-icon:url("${icon}")`)
+  })
+
+  it('draws the gear for an address that could leave the CSS string', () => {
+    for (const icon of ['/a")', '/a b', '/a\\', "/a'", '/a(b)', '//evil.test/x']) {
+      const markup = html(<AdminIcon icon={icon as `/${string}`} />)
+      expect({ icon, gear: markup.includes(ICONS.admin.d) }).toEqual({ icon, gear: true })
+    }
+  })
+})
+
+describe('Tabs', () => {
+  it('are WordPress’s nav tabs, the current one marked, each opened as a menu link is', () => {
+    const nav = dom(
+      <Tabs
+        label="Google"
+        tabs={[
+          { label: 'Accounts', href: '/admin/google' },
+          { label: 'Drive', href: '/admin/google/drive', current: true },
+        ]}
+      />,
+    ).querySelector('nav')!
+    expect(nav.className).toBe('nav-tab-wrapper')
+    expect(nav.getAttribute('aria-label')).toBe('Google')
+    const links = [...nav.querySelectorAll('a')]
+    expect(
+      links.map((link) => [link.textContent, link.getAttribute('href'), link.className]),
+    ).toEqual([
+      ['Accounts', '/admin/google', 'nav-tab'],
+      ['Drive', '/admin/google/drive', 'nav-tab nav-tab-active'],
+    ])
+    expect(links.map((link) => link.getAttribute('aria-current'))).toEqual([null, 'page'])
+    // The admin's frame opens links with this attribute without loading the page again.
+    expect(links.every((link) => link.hasAttribute(ADMIN_LINK))).toBe(true)
   })
 })

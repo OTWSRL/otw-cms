@@ -1,4 +1,4 @@
-import type { AdminIcon, CapabilityName, User } from '@otwdesign/sdk'
+import type { AdminIcon, AdminIconName, CapabilityName, User } from '@otwdesign/sdk'
 
 /** Sections core owns. Plugin sections sit between the dashboard and these, in load order. */
 const CORE_SECTIONS = {
@@ -36,13 +36,19 @@ export interface AdminMenuItem {
 }
 
 /**
+ * A menu icon as the admin draws it: a built-in icon's name, or the address core serves a
+ * plugin's drawn icon from, so the page carries a short address rather than the SVG.
+ */
+export type MenuIcon = AdminIconName | `/${string}`
+
+/**
  * A top-level menu entry, linking to its first item. With more than one item, the items show as
  * its submenu, as in WordPress.
  */
 export interface AdminMenuSection {
   id: string
   label: string
-  icon: AdminIcon
+  icon: MenuIcon
   items: AdminMenuItem[]
 }
 
@@ -178,7 +184,7 @@ export const CORE_MENU: readonly MenuEntry[] = [
 export class AdminMenu {
   readonly #entries: MenuEntry[] = [...CORE_MENU]
   #placed: Placed[] = []
-  #sections: { id: string; label: string; icon: AdminIcon }[] = []
+  #sections: { id: string; label: string; icon: MenuIcon }[] = []
 
   add(entry: MenuEntry): void {
     this.#entries.push(entry)
@@ -189,7 +195,7 @@ export class AdminMenu {
     active: readonly string[]
     installed: ReadonlySet<string>
     label(pluginId: string): string
-    icon(pluginId: string): AdminIcon
+    icon(pluginId: string): MenuIcon
   }): string[] {
     const warnings: string[] = []
     const active = new Set(input.active)

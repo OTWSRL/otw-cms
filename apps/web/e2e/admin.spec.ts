@@ -191,8 +191,12 @@ test('a screen asks the server for nothing more until a link is clicked', async 
   // Next.js would fetch every link in view ahead of a click, a request each: the menu alone has
   // more than a dozen, on every screen and after every save.
   const asked: string[] = []
+  const answers: Promise<string>[] = []
   page.on('request', (request) => {
     if (new URL(request.url()).searchParams.has('_rsc')) asked.push(request.url())
+  })
+  page.on('response', (response) => {
+    if (new URL(response.url()).searchParams.has('_rsc')) answers.push(response.text())
   })
   await signIn(page, ADMIN, '/admin/settings')
   await expect(page.getByRole('heading', { name: 'General settings' })).toBeVisible()
@@ -206,6 +210,60 @@ test('a screen asks the server for nothing more until a link is clicked', async 
   // ask, if they were going to.
   await page.waitForTimeout(750)
   expect(asked.map((url) => new URL(url).pathname)).toEqual(['/admin/users'])
+  // The screen alone: the bar and the menu are the layout's, drawn once with the page.
+  const [answer] = await Promise.all(answers)
+  expect(answer).toContain(ADMIN.email)
+  expect(answer).not.toContain('Installed Plugins')
+  expect(answer).not.toContain('Howdy')
+  // The menu still follows: Users is now the current section.
+  await expect(mainMenu(page).getByRole('link', { name: 'All Users' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+})
+
+test('a plugin’s tabs open the next screen as the menu does, without loading the page', async ({
+  page,
+}) => {
+  await signIn(page, ADMIN, '/admin/library/loans')
+  await expect(page).toHaveURL('/admin/library/loans')
+  const tabs = page.getByRole('navigation', { name: 'Library' })
+  await expect(tabs.getByRole('link', { name: 'Loans' })).toHaveAttribute('aria-current', 'page')
+  await page.evaluate(() => Object.assign(window, { kept: true }))
+  const asked: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (request.resourceType() === 'document') asked.push(`page ${url.pathname}`)
+    else if (url.searchParams.has('_rsc')) asked.push(url.pathname)
+  })
+
+  await tabs.getByRole('link', { name: 'Books' }).click()
+  await expect(page).toHaveURL('/admin/library/books')
+  await expect(page.getByRole('table', { name: 'Books' })).toBeVisible()
+  await expect(tabs.getByRole('link', { name: 'Books' })).toHaveAttribute('aria-current', 'page')
+  // The same page, so the same window: only the screen was asked for.
+  expect(await page.evaluate(() => (window as { kept?: boolean }).kept)).toBe(true)
+  expect(asked).toEqual(['/admin/library/books'])
+})
+
+test('a session that ends while the admin is open leads to sign-in, without the admin around it', async ({
+  page,
+  context,
+}) => {
+  await signIn(page, ADMIN, '/admin/settings')
+  await expect(page.getByRole('heading', { name: 'General settings' })).toBeVisible()
+  await context.clearCookies()
+  await openSection(page, 'Users')
+  await expect(page).toHaveURL('/admin/login?next=%2Fadmin%2Fusers')
+  await expect(page.getByRole('button', { name: 'Log In' })).toBeVisible()
+  await expect(mainMenu(page)).toHaveCount(0)
+  await expect(page.getByText(/^Howdy/)).toHaveCount(0)
+
+  await page.getByLabel('Email').fill(ADMIN.email)
+  await page.getByLabel('Password').fill(ADMIN.password)
+  await page.getByRole('button', { name: 'Log In' }).click()
+  await expect(page).toHaveURL('/admin/users')
+  await expect(mainMenu(page)).toBeVisible()
 })
 
 test('a plugin’s role reaches its own screens but not the site’s settings or plugins', async ({
@@ -250,6 +308,9 @@ test('a plugin’s role reaches its own screens but not the site’s settings or
   await expect(
     librarian.getByRole('heading', { name: 'Sorry, you are not allowed to access this page.' }),
   ).toBeVisible()
+  // Inside the admin, as one of its screens: the menu takes them somewhere they may go.
+  await expect(mainMenu(librarian).getByRole('link', { name: 'Library' })).toBeVisible()
+  await expect(librarian.getByRole('main')).toHaveCount(1)
 })
 
 test('signing out ends the session', async ({ page }) => {

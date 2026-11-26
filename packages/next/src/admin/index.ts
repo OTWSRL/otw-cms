@@ -2,3 +2,4 @@
 export { AdminForbidden, AdminNotFound } from './forbidden'
 export { AdminRootLayout } from './root-layout'
 export { AdminPage, generateAdminMetadata, type AdminRouteProps } from './router'
+export { AdminLayout } from './shell'

@@ -72,6 +72,8 @@ export default definePlugin({
       id: 'courier',
       label: 'Continue with Courier',
       name: 'Courier',
+      // A parcel, in a square.
+      image: `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18"><path d="M2 2h14v14H2z"/></svg>').toString('base64')}`,
       start({ redirectUri, state }) {
         const who = new URL(cms.routes.apiUrl('/who'), redirectUri)
         who.searchParams.set('state', state)

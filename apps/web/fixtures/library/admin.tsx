@@ -1,9 +1,20 @@
-import { ListTable, Postbox } from '@otwdesign/admin-ui'
+import { ListTable, Postbox, Tabs } from '@otwdesign/admin-ui'
 import { defineAdmin } from '@otwdesign/sdk'
 import library, { BOOKS, LOANS } from './index'
 
 // The Library's admin: a section of two screens, Settings › Library, and a dashboard widget.
 export default defineAdmin(library, (cms) => {
+  // Each screen also has tabs to the other, as a plugin with one menu link would.
+  const tabs = (current: 'loans' | 'books') => (
+    <Tabs
+      label="Library"
+      tabs={[
+        { label: 'Loans', href: cms.admin.url('library.loans'), current: current === 'loans' },
+        { label: 'Books', href: cms.admin.url('library.books'), current: current === 'books' },
+      ]}
+    />
+  )
+
   cms.admin.page({
     name: 'loans',
     path: '/loans',
@@ -11,26 +22,29 @@ export default defineAdmin(library, (cms) => {
     capability: 'library.manage_loans',
     menu: { label: 'Loans', order: 10 },
     component: () => (
-      <ListTable
-        caption="Loans"
-        rows={LOANS}
-        rowKey={(loan) => loan.id}
-        empty="No books on loan."
-        columns={[
-          {
-            key: 'loan',
-            label: 'Loan',
-            render: (loan) => (
-              <strong>
-                <a href={cms.admin.url('library.books')}>{loan.id}</a>
-              </strong>
-            ),
-          },
-          { key: 'book', label: 'Book', render: (loan) => loan.book },
-          { key: 'borrower', label: 'Borrower', render: (loan) => loan.borrower },
-          { key: 'due', label: 'Due', render: (loan) => loan.due },
-        ]}
-      />
+      <>
+        {tabs('loans')}
+        <ListTable
+          caption="Loans"
+          rows={LOANS}
+          rowKey={(loan) => loan.id}
+          empty="No books on loan."
+          columns={[
+            {
+              key: 'loan',
+              label: 'Loan',
+              render: (loan) => (
+                <strong>
+                  <a href={cms.admin.url('library.books')}>{loan.id}</a>
+                </strong>
+              ),
+            },
+            { key: 'book', label: 'Book', render: (loan) => loan.book },
+            { key: 'borrower', label: 'Borrower', render: (loan) => loan.borrower },
+            { key: 'due', label: 'Due', render: (loan) => loan.due },
+          ]}
+        />
+      </>
     ),
   })
 
@@ -41,16 +55,19 @@ export default defineAdmin(library, (cms) => {
     capability: 'library.manage_loans',
     menu: { label: 'Books', order: 20 },
     component: () => (
-      <ListTable
-        caption="Books"
-        rows={BOOKS}
-        rowKey={(book) => book.slug}
-        empty="No books."
-        columns={[
-          { key: 'title', label: 'Title', render: (book) => <strong>{book.title}</strong> },
-          { key: 'author', label: 'Author', render: (book) => book.author },
-        ]}
-      />
+      <>
+        {tabs('books')}
+        <ListTable
+          caption="Books"
+          rows={BOOKS}
+          rowKey={(book) => book.slug}
+          empty="No books."
+          columns={[
+            { key: 'title', label: 'Title', render: (book) => <strong>{book.title}</strong> },
+            { key: 'author', label: 'Author', render: (book) => book.author },
+          ]}
+        />
+      </>
     ),
   })
 

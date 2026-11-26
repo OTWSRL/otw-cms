@@ -16,6 +16,7 @@ import { AuthError, normalizeEmail } from './auth'
 import { identities, users } from './core-schema'
 import type { DatabaseContext } from './database'
 import { withFlash, type FlashCodec } from './flash'
+import { imageAddress, imageFile, imageResponse, type ImageFile } from './image-files'
 import { publicOrigin, type OriginPolicy } from './origins'
 import { cookieValue, DEVICE_COOKIE_NAMES, parseCookies } from './session-cookie'
 import type { SignInService } from './sign-in'
@@ -180,6 +181,8 @@ function cleanIdentity(identity: SignInIdentity): CleanIdentity {
 interface Registered {
   pluginId: string
   provider: SignInProvider
+  /** Its image, served at an address of its own: see `image-files.ts`. */
+  image: ImageFile | null
 }
 
 export interface SignInProviderOptions {
@@ -223,6 +226,7 @@ export function createSignInProviders(options: SignInProviderOptions): SignInPro
     return { origin: url.origin, secure: url.protocol === 'https:' }
   }
   const callbackPath = (id: string) => apiPath(CORE, `/sign-in/${id}/callback`)
+  const imagePath = (id: string) => apiPath(CORE, `/sign-in/${id}/image`)
 
   const redirect = (location: string, cookies: readonly string[] = []): Response => {
     const headers = new Headers({
@@ -326,6 +330,13 @@ export function createSignInProviders(options: SignInProviderOptions): SignInPro
       await link(created.id)
       return created
     })
+
+  // The sign-in pages show the button to everyone, so its image is public.
+  const image: ApiRoute['handler'] = (request, { params }) => {
+    const file = providers.get(params.provider ?? '')?.image
+    if (!file) return Response.json({ error: 'Not found' }, { status: 404 })
+    return imageResponse(request, file, 'public')
+  }
 
   const start: ApiRoute['handler'] = async (request, { params }) => {
     const registered = providers.get(params.provider ?? '')
@@ -455,7 +466,8 @@ export function createSignInProviders(options: SignInProviderOptions): SignInPro
           `The sign-in provider "${provider.id}" needs its image as a base64 data: address of an SVG or PNG, up to ${MAX_IMAGE_LENGTH} characters`,
         )
       }
-      providers.set(provider.id, { pluginId, provider })
+      const image = provider.image === undefined ? null : imageFile(provider.image)
+      providers.set(provider.id, { pluginId, provider, image })
     },
 
     links(screen, next) {
@@ -463,10 +475,10 @@ export function createSignInProviders(options: SignInProviderOptions): SignInPro
       const query = new URLSearchParams({ screen })
       const path = next && next.length <= MAX_NEXT_LENGTH ? safeRedirectPath(next) : null
       if (path) query.set('next', path)
-      return [...providers.values()].map(({ provider }) => ({
+      return [...providers.values()].map(({ provider, image }) => ({
         id: provider.id,
         label: provider.label,
-        image: provider.image ?? null,
+        image: image && imageAddress(imagePath(provider.id), image),
         url: `${apiPath(CORE, `/sign-in/${provider.id}`)}?${query}`,
       }))
     },
@@ -475,6 +487,7 @@ export function createSignInProviders(options: SignInProviderOptions): SignInPro
       return [
         { method: 'GET', path: '/sign-in/:provider', handler: start },
         { method: 'GET', path: '/sign-in/:provider/callback', handler: callback },
+        { method: 'GET', path: '/sign-in/:provider/image', handler: image },
       ]
     },
 

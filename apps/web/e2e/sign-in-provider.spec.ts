@@ -27,9 +27,23 @@ test('the admin’s sign-in page offers the provider, and its owner’s address 
   await signInAsAdmin(page)
   await context.clearCookies()
 
-  await page.goto('/admin/plugins')
+  const login = await page.goto('/admin/plugins')
   await expect(page).toHaveURL(/\/admin\/login\?next=/)
   const button = page.getByRole('link', { name: 'Continue with Courier' })
+  // Its mark comes from an address the browser keeps, not written into every sign-in page.
+  expect(await login!.text()).not.toContain('data:image')
+  const mark = button.locator('img')
+  await expect(mark).toHaveAttribute(
+    'src',
+    /^\/api\/p\/core\/sign-in\/courier\/image\?v=[0-9a-f]{12}$/,
+  )
+  // Drawn: the browser fetched it.
+  await expect
+    .poll(() => mark.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true)
+  const image = await page.request.get((await mark.getAttribute('src'))!)
+  expect(image.headers()['content-type']).toBe('image/svg+xml')
+  expect(image.headers()['cache-control']).toBe('public, max-age=31536000, immutable')
   // A plain link, with no script behind it.
   await expect(button).toHaveAttribute(
     'href',

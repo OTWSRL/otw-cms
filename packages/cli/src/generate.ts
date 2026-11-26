@@ -221,6 +221,11 @@ export function managedFiles(
       "export { AdminRootLayout as default } from '@otwdesign/next/admin'",
       dynamic,
     ]),
+    // The admin's frame: a layout, so a click between screens fetches the screen alone.
+    adminRoute('app/(cms)/admin/layout.tsx', [
+      "export { AdminLayout as default } from '@otwdesign/next/admin'",
+      dynamic,
+    ]),
     // Wrapped as Prettier would, so a site's format check passes on the files written here.
     adminRoute('app/(cms)/admin/[[...segments]]/page.tsx', [
       'export {',

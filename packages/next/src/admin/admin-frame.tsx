@@ -2,7 +2,7 @@
 
 import { AdminIcon, cx } from '@otwdesign/admin-ui'
 import type { AdminMenuSection } from '@otwdesign/core'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   createContext,
   useContext,
@@ -13,8 +13,10 @@ import {
   type MouseEvent,
 } from 'react'
 import { AdminLink } from './admin-link'
+import { adminLinkTarget } from './admin-links'
 import { MENU_COOKIE, type MenuPreference } from './admin-menu-preference'
 import { cancelNavigationProgress, NavigationProgress } from './navigation-progress'
+import { isSignedOutPath } from './signed-out-paths'
 
 interface Frame {
   menuOpen: boolean
@@ -30,23 +32,50 @@ function useFrame(): Frame {
   return frame
 }
 
+/** Whether this is drawn inside the admin's frame, with its bar and menu around it. */
+export function useInAdminFrame(): boolean {
+  return useContext(FrameContext) !== null
+}
+
 /** WordPress folds the menu to icons from 960px down to 783px, and hides it below that. */
 const AUTO_FOLD = '(max-width: 960px)'
 
 /**
- * The admin's outer frame. Holds what WordPress keeps in body classes: `folded` (collapsed by
- * the user, remembered in a cookie as WordPress's `mfold` user setting is), `auto-fold`
- * (collapsed by screen width) and `wp-responsive-open` (the phone menu is showing).
+ * The admin's outer frame, drawn by the admin's layout: `chrome` (the bar and the menu) and
+ * `footer` stay as the screen in `children` changes. Holds what WordPress keeps in body classes:
+ * `folded` (collapsed by the user, remembered in a cookie as WordPress's `mfold` user setting
+ * is), `auto-fold` (collapsed by screen width) and `wp-responsive-open` (the phone menu is
+ * showing).
  */
 export function AdminFrame({
   preference: initial,
+  chrome,
+  footer,
   children,
 }: {
   preference: MenuPreference
+  chrome: ReactNode
+  footer: ReactNode
   children: ReactNode
 }) {
   const [preference, setPreference] = useState(initial)
   const [menuOpen, setMenuOpen] = useState(false)
+  // A session that ends while the admin is open sends the next click to sign-in, and a layout
+  // stays as the screens under it change: that screen shows on its own, as it would on a load.
+  const signedOut = isSignedOutPath(usePathname())
+  const router = useRouter()
+
+  // A screen's marked plain links (admin-ui's Tabs) open as the menu's do: the screen alone.
+  useEffect(() => {
+    const onClick = (event: globalThis.MouseEvent) => {
+      const target = adminLinkTarget(event)
+      if (!target) return
+      event.preventDefault()
+      router.push(target)
+    }
+    document.addEventListener('click', onClick)
+    return () => document.removeEventListener('click', onClick)
+  }, [router])
 
   const toggleFolded = () => {
     // Between 783px and 960px the menu folds by itself, so the button there means "keep it open".
@@ -65,6 +94,7 @@ export function AdminFrame({
         : `${MENU_COOKIE}=${next}; path=/admin; max-age=31536000; samesite=lax`
   }
 
+  if (signedOut) return children
   return (
     <FrameContext.Provider value={{ menuOpen, setMenuOpen, toggleFolded }}>
       <div
@@ -79,10 +109,31 @@ export function AdminFrame({
         }}
       >
         <NavigationProgress />
-        {children}
+        {chrome}
+        <div id="wpcontent">
+          <main id="wpbody-content" tabIndex={-1}>
+            {children}
+          </main>
+        </div>
+        {footer}
       </div>
     </FrameContext.Provider>
   )
+}
+
+/**
+ * The admin's layout for someone it isn't for yet: the sign-in screens, bare. Signing in loads
+ * the next page, which draws the frame; if a script takes them on without a load, this asks the
+ * server for the layout again, so the frame appears.
+ */
+export function SignedOutFrame({ children }: { children: ReactNode }) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const first = useRef(pathname)
+  useEffect(() => {
+    if (pathname !== first.current && !isSignedOutPath(pathname)) router.refresh()
+  }, [pathname, router])
+  return children
 }
 
 /** The admin bar's hamburger, shown below 783px. */

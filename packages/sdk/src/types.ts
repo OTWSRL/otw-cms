@@ -417,7 +417,10 @@ export interface SignInProvider {
   label: string
   /** The service's name in messages: "Google". */
   name: string
-  /** The button's mark: a `data:image/svg+xml;base64,` or `data:image/png;base64,` address. */
+  /**
+   * The button's mark: a `data:image/svg+xml;base64,` or `data:image/png;base64,` address. Core
+   * serves it from an address of its own that browsers keep, so pages carry only that address.
+   */
   image?: string
   /** The address at the provider to send the person to. */
   start(request: SignInProviderRequest): string | Promise<string>
@@ -1313,7 +1316,7 @@ export interface SignInProviderLink {
   id: string
   /** "Continue with Google". */
   label: string
-  /** The provider's mark, as a `data:` image address, or `null`. */
+  /** Where the provider's mark is served, for an `<img src>`, or `null` without one. */
   image: string | null
   /** Where the link goes: core's address that sends the person to the provider. */
   url: string
@@ -2292,7 +2295,10 @@ export interface PluginDefinition {
   migrations?: readonly Migration[]
   /** Declared up front so the admin can show them and values resolve before `setup()` runs. */
   settings?: SettingDefinitions
-  /** Beside the plugin's section in the admin menu. Defaults to `admin`, a gear. */
+  /**
+   * Beside the plugin's section in the admin menu. Defaults to `admin`, a gear. Core serves a
+   * data: SVG from an address of its own that browsers keep, so pages carry only that address.
+   */
   icon?: AdminIcon
   /**
    * Registers what every part of the site needs: hooks, services, routes, site slots, roles,

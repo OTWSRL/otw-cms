@@ -36,7 +36,7 @@ import { WebhooksScreen } from './screens/webhooks'
 import { ProfileScreen } from './screens/profile'
 import { UserEditScreen } from './screens/user-edit'
 import { SettingsForm } from './settings-form'
-import { AdminShell } from './shell'
+import { Slot } from '../site/slot'
 
 /** What Next.js passes the admin's catch-all route. */
 export interface AdminRouteProps {
@@ -275,7 +275,10 @@ const resolveScreen = cache(async (path: string, query: string): Promise<Resolve
   return { kernel, user, title: resolution.title, body }
 })
 
-/** Every page under /admin: core screens, plugin screens, settings pages, sign-in and setup. */
+/**
+ * Every page under /admin: core screens, plugin screens, settings pages, sign-in and setup. The
+ * frame around them is the admin's layout (`AdminLayout`).
+ */
 export async function AdminPage(props: AdminRouteProps) {
   const { path, query } = await location(props)
   const login = Object.hasOwn(LOGIN_SCREENS, path) ? LOGIN_SCREENS[path] : undefined
@@ -286,11 +289,14 @@ export async function AdminPage(props: AdminRouteProps) {
       </LoginShell>
     )
   }
-  const { kernel, user, body } = await resolveScreen(path, query)
+  const { user, body } = await resolveScreen(path, query)
   return (
-    <AdminShell kernel={kernel} user={user}>
+    <>
       {body}
-    </AdminShell>
+      {/* Each screen's, as WordPress's admin_footer: a fill may show this request, as the
+          performance bar does, so it can't stay in the layout. */}
+      <Slot name="admin.footer" props={{ user }} />
+    </>
   )
 }
 

@@ -164,7 +164,8 @@ describe('the sign-in pages', () => {
       {
         id: 'pretend',
         label: 'Continue with Pretend',
-        image: IMAGE,
+        // Its address, not the image: the browser fetches it once and keeps it.
+        image: expect.stringMatching(/^\/api\/p\/core\/sign-in\/pretend\/image\?v=[0-9a-f]{12}$/),
         url: '/api/p/core/sign-in/pretend?screen=admin&next=%2Fadmin%2Fposts%3Fx%3D1',
       },
     ])
@@ -179,6 +180,37 @@ describe('the sign-in pages', () => {
     // Only the sign-in view lists them.
     const { user } = await signIn(kernel, 'customer')
     expect((await kernel.resolveAccount('/account', {}, user))!.props.providers).toEqual([])
+  })
+})
+
+describe('a provider’s image', () => {
+  it('is served at its address to anyone, kept a year, and nothing in it runs', async () => {
+    const { kernel } = await site()
+    const address = kernel.signInProviders('admin', null)[0]!.image!
+    const response = await get(kernel, address)
+    expect(response.status).toBe(200)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(
+      Buffer.from(IMAGE.split(',')[1]!, 'base64'),
+    )
+    expect(response.headers.get('content-type')).toBe('image/svg+xml')
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(response.headers.get('content-security-policy')).toContain('sandbox')
+    expect(response.headers.get('content-disposition')).toBe('attachment')
+    const stale = await get(kernel, '/api/p/core/sign-in/pretend/image?v=000000000000')
+    expect(stale.headers.get('cache-control')).toBe('public, no-cache')
+  })
+
+  it('keeps a PNG a PNG, and answers 404 for a provider without one', async () => {
+    const png =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    const { kernel } = await site({ image: png })
+    const response = await get(kernel, kernel.signInProviders('admin', null)[0]!.image!)
+    expect(response.headers.get('content-type')).toBe('image/png')
+    const bare = await site({ image: undefined })
+    expect(bare.kernel.signInProviders('admin', null)[0]!.image).toBeNull()
+    expect((await get(bare.kernel, '/api/p/core/sign-in/pretend/image')).status).toBe(404)
+    expect((await get(kernel, '/api/p/core/sign-in/nobody/image')).status).toBe(404)
   })
 })
 

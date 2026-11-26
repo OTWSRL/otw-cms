@@ -5,7 +5,7 @@ export {
   type AdminResolution,
   type SettingsResolution,
 } from './admin'
-export type { AdminMenuItem, AdminMenuSection } from './admin-menu'
+export type { AdminMenuItem, AdminMenuSection, MenuIcon } from './admin-menu'
 export { API_PREFIX } from './api'
 export {
   AuthError,

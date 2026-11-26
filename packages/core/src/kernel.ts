@@ -1,4 +1,5 @@
 import type {
+  AdminIconName,
   ActionName,
   Actions,
   AdminDefinition,
@@ -56,8 +57,9 @@ import {
   type SettingsResolution,
 } from './admin'
 import { resolve as resolvePath } from 'node:path'
-import { AdminMenu, type AdminMenuSection } from './admin-menu'
+import { AdminMenu, type AdminMenuSection, type MenuIcon } from './admin-menu'
 import { apiPath, dispatchApi, HTTP_METHODS, type ApiEntry } from './api'
+import { imageAddress, imageFile, imageResponse, type ImageFile } from './image-files'
 import { AuthError, createAuthService, type AuthService } from './auth'
 import { createSignInService, type SignInService } from './sign-in'
 import { createSignInProviders } from './sign-in-providers'
@@ -1039,6 +1041,20 @@ async function boot(
     },
   })
   for (const action of actions) registerAction(CORE, action)
+  // Plugins' drawn menu icons, at the addresses the menu gives them once the plugins are known.
+  const menuIcons = new Map<string, ImageFile>()
+  registerApi(CORE, {
+    method: 'GET',
+    path: '/icons/:plugin',
+    handler: async (request, { params, user }) => {
+      const file = menuIcons.get(params.plugin ?? '')
+      // Only the admin shows the menu, and nobody outside it learns which plugins a site has.
+      if (!file || !stores.capabilities.can(await user(), 'core.access_admin')) {
+        return Response.json({ error: 'Not found' }, { status: 404 })
+      }
+      return imageResponse(request, file, 'private')
+    },
+  })
   // Where nothing runs between requests, a cron request runs the jobs that are due.
   registerApi(CORE, {
     method: 'GET',
@@ -1556,7 +1572,14 @@ async function boot(
     active: resolution.order.map((plugin) => plugin.id),
     installed: new Set(installed.keys()),
     label,
-    icon: (pluginId) => installed.get(pluginId)?.icon ?? 'admin',
+    icon: (pluginId) => {
+      const icon = installed.get(pluginId)?.icon ?? 'admin'
+      if (!icon.startsWith('data:')) return icon as AdminIconName
+      const file = imageFile(icon)
+      if (!file) return 'admin'
+      menuIcons.set(pluginId, file)
+      return imageAddress(apiPath(CORE, `/icons/${pluginId}`), file) as MenuIcon
+    },
   })
 
   contentRoutes = new ContentRoutes({

@@ -154,6 +154,7 @@ export const site = defineSite({
       'src/cms/site.generated.ts',
       'src/cms/admin.generated.ts',
       'src/app/(cms)/layout.tsx',
+      'src/app/(cms)/admin/layout.tsx',
       'src/app/(cms)/admin/[[...segments]]/page.tsx',
       'src/app/(cms)/admin/forbidden.tsx',
       'src/app/(cms)/admin/not-found.tsx',
@@ -174,6 +175,12 @@ export const dynamic = 'force-dynamic'
 `)
     const imports = (path: string) => files.find((managed) => managed.path === path)!.content
     expect(imports('src/app/(cms)/layout.tsx')).toContain("import '../../cms/admin.generated'")
+    // The admin's frame, kept as a click changes the screen under it.
+    expect(imports('src/app/(cms)/admin/layout.tsx')).toBe(`${MARKER}
+import '../../../cms/admin.generated'
+export { AdminLayout as default } from '@otwdesign/next/admin'
+export const dynamic = 'force-dynamic'
+`)
     expect(imports('src/app/(cms)/api/p/[...path]/route.ts')).toContain(
       "import '../../../../../cms/admin.generated'",
     )
@@ -216,12 +223,12 @@ describe('generate', () => {
     Object.fromEntries((await generate({ root })).files.map((f) => [f.path, f.status]))
 
   it('writes every file, then leaves them alone until something changes', async () => {
-    expect(Object.values(await statuses())).toEqual(Array(11).fill('written'))
+    expect(Object.values(await statuses())).toEqual(Array(12).fill('written'))
     const site = join(root, 'src/cms/site.generated.ts')
     expect(await readFile(site, 'utf8')).toContain('import plugin0 from "@acme/lms"')
     const written = (await stat(site)).mtimeMs
 
-    expect(Object.values(await statuses())).toEqual(Array(11).fill('unchanged'))
+    expect(Object.values(await statuses())).toEqual(Array(12).fill('unchanged'))
     expect((await stat(site)).mtimeMs).toBe(written)
 
     await writeFile(join(root, 'cms.config.json'), JSON.stringify({ plugins: [] }))

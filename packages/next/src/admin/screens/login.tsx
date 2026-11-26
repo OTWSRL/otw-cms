@@ -38,7 +38,7 @@ export async function LoginScreen({ searchParams: params }: { searchParams: Sear
             {providers.map((provider) => (
               // A plain link: it leaves for core's address, which sends the person on.
               <a key={provider.id} className="button login-provider" href={provider.url}>
-                {/* A data: address: there is nothing for next/image to fetch or resize. */}
+                {/* An 18px mark core serves and browsers keep: nothing for next/image to resize. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {provider.image && <img src={provider.image} alt="" width={18} height={18} />}
                 {provider.label}
