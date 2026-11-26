@@ -1,5 +1,14 @@
 # @otwdesign/cli
 
+## 1.10.0
+
+### Patch Changes
+
+- Updated dependencies [35e9bba]
+  - @otwdesign/sdk@1.10.0
+  - @otwdesign/core@1.10.0
+  - @otwdesign/next@1.10.0
+
 ## 1.9.2
 
 ### Patch Changes
