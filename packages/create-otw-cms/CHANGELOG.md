@@ -1,5 +1,9 @@
 # create-otw-cms
 
+## 1.11.0
+
+No changes in this release.
+
 ## 1.10.0
 
 ### Minor Changes
