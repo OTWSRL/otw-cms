@@ -381,8 +381,11 @@ describe('coming back', () => {
     expect(await back(kernel, { cookie: left.cookie, state: null, code: 'ada' })).toMatchObject(ran)
     expect(await back(kernel, { cookie: left.cookie, state: '', code: 'ada' })).toMatchObject(ran)
     expect(await back(kernel, { cookie: null, state: left.state, code: 'ada' })).toMatchObject(ran)
-    // A cookie this site didn't sign: the same payload with its last character changed.
-    const forged = left.cookie!.slice(0, -1) + (left.cookie!.endsWith('A') ? 'B' : 'A')
+    // A cookie this site didn't sign: the signature's first character changed, which changes its
+    // bytes whatever it was (the last character alone may not).
+    const at = left.cookie!.lastIndexOf('.') + 1
+    const swapped = left.cookie![at] === 'A' ? 'Q' : 'A'
+    const forged = left.cookie!.slice(0, at) + swapped + left.cookie!.slice(at + 1)
     expect(await back(kernel, { cookie: forged, state: left.state, code: 'ada' })).toMatchObject(
       ran,
     )
@@ -670,4 +673,24 @@ describe('the cookie', () => {
     const asFlash = createHmac('sha256', 'secret').update(payload).digest('base64url')
     expect(codec.open(`${payload}.${asFlash}`)).toBeNull()
   })
+
+  it('takes a signature only as it was written', () => {
+    const codec = createPendingCodec('secret', () => 1_000)
+    const sealed = codec.seal(pending)
+    const respelled = respell(sealed)
+    expect(Buffer.from(respelled.split('.')[1]!, 'base64url')).toEqual(
+      Buffer.from(sealed.split('.')[1]!, 'base64url'),
+    )
+    expect(codec.open(respelled)).toBeNull()
+    expect(codec.open(`${sealed}=`)).toBeNull()
+  })
 })
+
+/**
+ * The same value with its signature's last character swapped for its neighbour in the
+ * alphabet. 32 bytes are 43 characters and the last carries only 4 bits, so both decode alike.
+ */
+function respell(value: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return value.slice(0, -1) + alphabet[alphabet.indexOf(value.at(-1)!) ^ 1]
+}

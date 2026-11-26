@@ -20,6 +20,18 @@ describe('flash messages', () => {
     expect(codec.decode(`${forged.toString('base64url')}.${signature}`)).toBeNull()
   })
 
+  it('takes a signature only as it was written', () => {
+    const encoded = codec.encode({ kind: 'notice', message: 'Saved' })
+    // 32 bytes are 43 characters and the last carries only 4 bits: its neighbour in the
+    // alphabet decodes to the same bytes.
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    const respelled = encoded.slice(0, -1) + alphabet[alphabet.indexOf(encoded.at(-1)!) ^ 1]
+    expect(Buffer.from(respelled.split('.')[1]!, 'base64url')).toEqual(
+      Buffer.from(encoded.split('.')[1]!, 'base64url'),
+    )
+    expect(codec.decode(respelled)).toBeNull()
+  })
+
   it.each([undefined, '', 'x', 'a.b.c', ['a', 'b'], 'a'.repeat(2000)])(
     'ignores malformed input %#',
     (value) => {

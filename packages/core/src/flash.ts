@@ -38,8 +38,9 @@ export function createFlashCodec(secret: string, now: () => number = Date.now): 
       if (typeof value !== 'string' || value.length > MAX_ENCODED_LENGTH) return null
       const [payload, signature, ...rest] = value.split('.')
       if (!payload || !signature || rest.length > 0) return null
-      const expected = sign(payload)
-      const actual = Buffer.from(signature, 'base64url')
+      // Compared as written: decoding first would let one signature pass in two spellings.
+      const expected = Buffer.from(sign(payload).toString('base64url'))
+      const actual = Buffer.from(signature)
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null
 
       let data: unknown

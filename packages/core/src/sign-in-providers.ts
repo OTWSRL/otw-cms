@@ -83,9 +83,8 @@ export function createPendingCodec(secret: string, now: () => number = Date.now)
       if (!value || value.length > MAX_COOKIE_LENGTH) return null
       const [payload, signature, ...rest] = value.split('.')
       if (!payload || !signature || rest.length > 0) return null
-      const expected = sign(payload)
-      const actual = Buffer.from(signature, 'base64url')
-      if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null
+      // Compared as written: decoding first would let one signature pass in two spellings.
+      if (!sameText(signature, sign(payload).toString('base64url'))) return null
       let data: unknown
       try {
         data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
